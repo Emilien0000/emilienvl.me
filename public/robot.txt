@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://emilienvl-me.vercel.app/sitemap.xml
