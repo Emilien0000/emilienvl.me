@@ -143,6 +143,23 @@ function ImageGallery({ images, imageFit, title }) {
   );
 }
 
+async function downloadCV() {
+  try {
+    const response = await fetch('/cv.pdf');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'CV_Emilien_VITRY-LHOTTE.pdf';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch {
+    window.open('/cv.pdf', '_blank');
+  }
+}
+
 function App() {
   const [modalOpen, setModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
@@ -214,7 +231,7 @@ function App() {
               </motion.p>
               <motion.div className="hero-buttons" variants={itemVariants}>
                 <button onClick={() => setActiveTab('contact')} className="cta-button">Me contacter</button>
-                <a href="/cv.pdf" download="CV_Emilien_VITRY-LHOTTE.pdf" className="cv-button">📄 Télécharger CV</a>
+                <button onClick={downloadCV} className="cv-button">📄 Télécharger CV</button>
               </motion.div>
             </div>
             <motion.div className="hero-right" variants={itemVariants}>
@@ -414,7 +431,7 @@ function App() {
                   <span>CV — <strong>Émilien Vitry-Lhotte</strong></span>
                 </div>
                 <div className="cv-modal-actions">
-                  <a href="/cv.pdf" download="CV_Emilien_VITRY-LHOTTE.pdf" className="modal-dl-btn">↓ Télécharger</a>
+                  <button onClick={downloadCV} className="modal-dl-btn">↓ Télécharger</button>
                   <button className="modal-close-btn" onClick={() => setModalOpen(false)}>✕</button>
                 </div>
               </div>
