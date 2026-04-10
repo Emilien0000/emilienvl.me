@@ -148,25 +148,54 @@ function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedSkill, setSelectedSkill] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const linkedProjects = selectedSkill
     ? projects.filter(p => selectedSkill.projectIds.includes(p.id))
     : [];
 
+  const navigate = (tab) => {
+    setActiveTab(tab);
+    setMenuOpen(false);
+  };
+
   return (
     <div className="app-container">
       {/* --- HEADER --- */}
       <header className="app-header">
-        <div className="logo" onClick={() => setActiveTab('home')} style={{cursor: 'pointer'}}>
+        <div className="logo" onClick={() => navigate('home')} style={{cursor: 'pointer'}}>
           EVL.
         </div>
-        <nav>
-          <a className={activeTab === 'home' ? 'active' : ''} onClick={() => setActiveTab('home')}>Accueil</a>
-          <a className={activeTab === 'about' ? 'active' : ''} onClick={() => setActiveTab('about')}>Qui suis-je</a>
-          <a className={activeTab === 'projects' ? 'active' : ''} onClick={() => setActiveTab('projects')}>Projets</a>
-          <a className={activeTab === 'skills' ? 'active' : ''} onClick={() => setActiveTab('skills')}>Compétences</a>
-          <a className={activeTab === 'contact' ? 'active' : ''} onClick={() => setActiveTab('contact')}>Contact</a>
+        {/* Hamburger button (mobile only) */}
+        <button className={`hamburger${menuOpen ? ' open' : ''}`} onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu">
+          <span /><span /><span />
+        </button>
+        {/* Nav desktop */}
+        <nav className="nav-desktop">
+          <a className={activeTab === 'home' ? 'active' : ''} onClick={() => navigate('home')}>Accueil</a>
+          <a className={activeTab === 'about' ? 'active' : ''} onClick={() => navigate('about')}>Qui suis-je</a>
+          <a className={activeTab === 'projects' ? 'active' : ''} onClick={() => navigate('projects')}>Projets</a>
+          <a className={activeTab === 'skills' ? 'active' : ''} onClick={() => navigate('skills')}>Compétences</a>
+          <a className={activeTab === 'contact' ? 'active' : ''} onClick={() => navigate('contact')}>Contact</a>
         </nav>
+        {/* Nav mobile (drawer) */}
+        <AnimatePresence>
+          {menuOpen && (
+            <motion.nav
+              className="nav-mobile"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <a className={activeTab === 'home' ? 'active' : ''} onClick={() => navigate('home')}>Accueil</a>
+              <a className={activeTab === 'about' ? 'active' : ''} onClick={() => navigate('about')}>Qui suis-je</a>
+              <a className={activeTab === 'projects' ? 'active' : ''} onClick={() => navigate('projects')}>Projets</a>
+              <a className={activeTab === 'skills' ? 'active' : ''} onClick={() => navigate('skills')}>Compétences</a>
+              <a className={activeTab === 'contact' ? 'active' : ''} onClick={() => navigate('contact')}>Contact</a>
+            </motion.nav>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* --- CONTENU DYNAMIQUE --- */}
