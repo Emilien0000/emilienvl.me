@@ -186,8 +186,8 @@ function LinksPage() {
     },
     {
       label: 'Email',
-      sublabel: 'emilien.vitry.lhotte@gmail.com',
-      href: 'mailto:emilien.vitry.lhotte@gmail.com',
+      sublabel: 'emilien.vitry.lhotte1@gmail.com',
+      href: 'mailto:emilien.vitry.lhotte1@gmail.com',
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/>
@@ -464,7 +464,7 @@ function MainLayout() {
             <h2>UNE QUESTION ?</h2>
             <p>Actuellement à la recherche d'un contrat d'apprentissage en cybersécurité pour septembre 2026.</p>
             <div className="contact-cards">
-              <motion.a href="mailto:emilien.vitry.lhotte@gmail.com" className="contact-card" variants={itemVariants} whileHover={{ y: -6, boxShadow: '0 12px 32px rgba(19,201,237,0.18)' }}>
+              <motion.a href="mailto:emilien.vitry.lhotte1@gmail.com" className="contact-card" variants={itemVariants} whileHover={{ y: -6, boxShadow: '0 12px 32px rgba(19,201,237,0.18)' }}>
                 <div className="contact-card-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/>
@@ -472,7 +472,7 @@ function MainLayout() {
                 </div>
                 <div className="contact-card-body">
                   <span className="contact-card-label">Email</span>
-                  <span className="contact-card-value">emilien.vitry.lhotte@gmail.com</span>
+                  <span className="contact-card-value">emilien.vitry.lhotte1@gmail.com</span>
                 </div>
                 <span className="contact-card-arrow">→</span>
               </motion.a>
