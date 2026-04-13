@@ -268,11 +268,14 @@ function MainLayout() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedSkill, setSelectedSkill] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  // Dérive l'onglet actif depuis l'URL
   const pathTab = location.pathname.replace('/', '') || 'home';
 
-  const goTo = (tab) => navigate(`/${tab}`);
+  const goTo = (tab) => {
+    navigate(`/${tab}`);
+    setMenuOpen(false);
+  };
 
   const linkedProjects = selectedSkill
     ? projects.filter(p => selectedSkill.projectIds.includes(p.id))
@@ -285,13 +288,31 @@ function MainLayout() {
         <div className="logo" onClick={() => goTo('home')} style={{cursor: 'pointer'}}>
           EVL.
         </div>
-        <nav>
+
+        {/* Nav desktop */}
+        <nav className="nav-desktop">
           <a className={pathTab === 'home' ? 'active' : ''} onClick={() => goTo('home')}>Accueil</a>
           <a className={pathTab === 'about' ? 'active' : ''} onClick={() => goTo('about')}>Qui suis-je</a>
           <a className={pathTab === 'projects' ? 'active' : ''} onClick={() => goTo('projects')}>Projets</a>
           <a className={pathTab === 'skills' ? 'active' : ''} onClick={() => goTo('skills')}>Compétences</a>
           <a className={pathTab === 'contact' ? 'active' : ''} onClick={() => goTo('contact')}>Contact</a>
         </nav>
+
+        {/* Hamburger mobile */}
+        <button className={`hamburger${menuOpen ? ' open' : ''}`} onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu">
+          <span /><span /><span />
+        </button>
+
+        {/* Nav mobile drawer */}
+        {menuOpen && (
+          <nav className="nav-mobile">
+            <a className={pathTab === 'home' ? 'active' : ''} onClick={() => goTo('home')}>Accueil</a>
+            <a className={pathTab === 'about' ? 'active' : ''} onClick={() => goTo('about')}>Qui suis-je</a>
+            <a className={pathTab === 'projects' ? 'active' : ''} onClick={() => goTo('projects')}>Projets</a>
+            <a className={pathTab === 'skills' ? 'active' : ''} onClick={() => goTo('skills')}>Compétences</a>
+            <a className={pathTab === 'contact' ? 'active' : ''} onClick={() => goTo('contact')}>Contact</a>
+          </nav>
+        )}
       </header>
 
       {/* --- CONTENU DYNAMIQUE --- */}
@@ -563,20 +584,13 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Page cachée linktree */}
         <Route path="/links" element={<LinksPage />} />
-
-        {/* Routes principales du portfolio */}
         <Route path="/home"     element={<MainLayout />} />
         <Route path="/about"    element={<MainLayout />} />
         <Route path="/projects" element={<MainLayout />} />
         <Route path="/skills"   element={<MainLayout />} />
         <Route path="/contact"  element={<MainLayout />} />
-
-        {/* Redirect racine → /home */}
         <Route path="/" element={<Navigate to="/home" replace />} />
-
-        {/* Fallback */}
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </BrowserRouter>
