@@ -224,7 +224,7 @@ function LinksPage() {
             <img src="/cv.webp" alt="Émilien Vitry-Lhotte" />
           </div>
           <h1 className="links-name">Émilien <span className="highlight">Vitry-Lhotte</span></h1>
-          <p className="links-bio">Apprenti ingénieur · Réseaux & Cybersécurité</p>
+          <p className="links-bio">Etudiant ingénieur · Réseaux & Cybersécurité</p>
           <div className="links-badge">UniLaSalle Amiens</div>
         </motion.div>
 
@@ -327,7 +327,7 @@ function MainLayout() {
                 <span className="highlight">Vitry-Lhotte</span>
               </motion.h1>
               <motion.p className="hero-subtitle" variants={itemVariants}>
-                Apprenti ingénieur en <span className="highlight">Réseaux Informatiques</span> & Objets connectés — Intéressé par la <span className="highlight">Cybersécurité</span>.
+                Etudiant ingénieur en <span className="highlight">Réseaux Informatiques</span> & Objets connectés — Intéressé par la <span className="highlight">Cybersécurité</span>.
               </motion.p>
               <motion.div className="hero-buttons" variants={itemVariants}>
                 <button onClick={() => goTo('contact')} className="cta-button">Me contacter</button>
