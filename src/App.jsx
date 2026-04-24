@@ -186,8 +186,8 @@ function LinksPage() {
     },
     {
       label: 'Email',
-      sublabel: 'emilien.vitry.lhotte1@gmail.com',
-      href: 'mailto:emilien.vitry.lhotte1@gmail.com',
+      sublabel: 'emilien.vitry.lhotte@gmail.com',
+      href: 'mailto:emilien.vitry.lhotte@gmail.com',
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/>
@@ -224,7 +224,7 @@ function LinksPage() {
             <img src="/cv.webp" alt="Émilien Vitry-Lhotte" />
           </div>
           <h1 className="links-name">Émilien <span className="highlight">Vitry-Lhotte</span></h1>
-          <p className="links-bio">Etudiant ingénieur · Réseaux & Cybersécurité</p>
+          <p className="links-bio">Apprenti ingénieur · Réseaux & Cybersécurité</p>
           <div className="links-badge">UniLaSalle Amiens</div>
         </motion.div>
 
@@ -268,14 +268,11 @@ function MainLayout() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedSkill, setSelectedSkill] = useState(null);
-  const [menuOpen, setMenuOpen] = useState(false);
 
+  // Dérive l'onglet actif depuis l'URL
   const pathTab = location.pathname.replace('/', '') || 'home';
 
-  const goTo = (tab) => {
-    navigate(`/${tab}`);
-    setMenuOpen(false);
-  };
+  const goTo = (tab) => navigate(`/${tab}`);
 
   const linkedProjects = selectedSkill
     ? projects.filter(p => selectedSkill.projectIds.includes(p.id))
@@ -288,31 +285,13 @@ function MainLayout() {
         <div className="logo" onClick={() => goTo('home')} style={{cursor: 'pointer'}}>
           EVL.
         </div>
-
-        {/* Nav desktop */}
-        <nav className="nav-desktop">
+        <nav>
           <a className={pathTab === 'home' ? 'active' : ''} onClick={() => goTo('home')}>Accueil</a>
           <a className={pathTab === 'about' ? 'active' : ''} onClick={() => goTo('about')}>Qui suis-je</a>
           <a className={pathTab === 'projects' ? 'active' : ''} onClick={() => goTo('projects')}>Projets</a>
           <a className={pathTab === 'skills' ? 'active' : ''} onClick={() => goTo('skills')}>Compétences</a>
           <a className={pathTab === 'contact' ? 'active' : ''} onClick={() => goTo('contact')}>Contact</a>
         </nav>
-
-        {/* Hamburger mobile */}
-        <button className={`hamburger${menuOpen ? ' open' : ''}`} onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu">
-          <span /><span /><span />
-        </button>
-
-        {/* Nav mobile drawer */}
-        {menuOpen && (
-          <nav className="nav-mobile">
-            <a className={pathTab === 'home' ? 'active' : ''} onClick={() => goTo('home')}>Accueil</a>
-            <a className={pathTab === 'about' ? 'active' : ''} onClick={() => goTo('about')}>Qui suis-je</a>
-            <a className={pathTab === 'projects' ? 'active' : ''} onClick={() => goTo('projects')}>Projets</a>
-            <a className={pathTab === 'skills' ? 'active' : ''} onClick={() => goTo('skills')}>Compétences</a>
-            <a className={pathTab === 'contact' ? 'active' : ''} onClick={() => goTo('contact')}>Contact</a>
-          </nav>
-        )}
       </header>
 
       {/* --- CONTENU DYNAMIQUE --- */}
@@ -323,11 +302,10 @@ function MainLayout() {
           <motion.section className="hero-section" initial="hidden" animate="visible" variants={containerVariants}>
             <div className="hero-left">
               <motion.h1 className="hero-title" variants={itemVariants}>
-                Emilien <br />
-                <span className="highlight">Vitry-Lhotte</span>
+                Emilien <span className="highlight">Vitry-Lhotte</span>
               </motion.h1>
               <motion.p className="hero-subtitle" variants={itemVariants}>
-                Etudiant ingénieur en <span className="highlight">Réseaux Informatiques</span> & Objets connectés — Intéressé par la <span className="highlight">Cybersécurité</span>.
+                Apprenti ingénieur en <span className="highlight">Réseaux Informatiques</span> & Objets connectés — Intéressé par la <span className="highlight">Cybersécurité</span>.
               </motion.p>
               <motion.div className="hero-buttons" variants={itemVariants}>
                 <button onClick={() => goTo('contact')} className="cta-button">Me contacter</button>
@@ -464,7 +442,7 @@ function MainLayout() {
             <h2>UNE QUESTION ?</h2>
             <p>Actuellement à la recherche d'un contrat d'apprentissage en cybersécurité pour septembre 2026.</p>
             <div className="contact-cards">
-              <motion.a href="mailto:emilien.vitry.lhotte1@gmail.com" className="contact-card" variants={itemVariants} whileHover={{ y: -6, boxShadow: '0 12px 32px rgba(19,201,237,0.18)' }}>
+              <motion.a href="mailto:emilien.vitry.lhotte@gmail.com" className="contact-card" variants={itemVariants} whileHover={{ y: -6, boxShadow: '0 12px 32px rgba(19,201,237,0.18)' }}>
                 <div className="contact-card-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/>
@@ -472,7 +450,7 @@ function MainLayout() {
                 </div>
                 <div className="contact-card-body">
                   <span className="contact-card-label">Email</span>
-                  <span className="contact-card-value">emilien.vitry.lhotte1@gmail.com</span>
+                  <span className="contact-card-value">emilien.vitry.lhotte@gmail.com</span>
                 </div>
                 <span className="contact-card-arrow">→</span>
               </motion.a>
@@ -584,13 +562,20 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Page cachée linktree */}
         <Route path="/links" element={<LinksPage />} />
+
+        {/* Routes principales du portfolio */}
         <Route path="/home"     element={<MainLayout />} />
         <Route path="/about"    element={<MainLayout />} />
         <Route path="/projects" element={<MainLayout />} />
         <Route path="/skills"   element={<MainLayout />} />
         <Route path="/contact"  element={<MainLayout />} />
+
+        {/* Redirect racine → /home */}
         <Route path="/" element={<Navigate to="/home" replace />} />
+
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </BrowserRouter>

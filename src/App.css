@@ -818,7 +818,11 @@ h2 {
   .hero-title { font-size: 2.2rem; }
   .hero-subtitle { font-size: 1rem; }
 
-  .cta-button, .cv-button { padding: 12px 24px; font-size: 0.95rem; }
+  .cta-button, .cv-button { padding: 12px 18px; font-size: 0.88rem; }
+
+  .hero-buttons { flex-wrap: nowrap; justify-content: center; gap: 10px; }
+
+  .hero-title { white-space: nowrap; font-size: 2rem; }
 
   /* Modales plein écran sur mobile */
   .cv-modal-overlay { padding: 0; align-items: flex-end; }
