@@ -85,6 +85,7 @@ const experiences = [
         tags: ['API', 'Nmap', 'Réseau'],
         desc: "Création d'automatisations via Make (gestion d'API), paramétrage de caméras et switchs, initiation à Nmap.",
         icon: '🏢',
+        details: "Durant ce stage au sein de CITYPROTECT, j'ai eu l'occasion de travailler sur plusieurs missions techniques complémentaires :\n\n• Automatisation de flux via Make (ex-Integromat) : conception de scénarios d'automatisation reliant différentes APIs (webhooks, alertes, notifications).\n\n• Paramétrage réseau : configuration de switchs managés et de caméras IP sur des infrastructures client, intégration dans des NVR.\n\n• Initiation à Nmap : découverte du scan réseau pour cartographier les équipements et identifier les ports ouverts sur des périmètres définis.\n\n• Support technique client : assistance à la mise en service et aux tests de bon fonctionnement des installations de vidéosurveillance.",
       },
       {
         title: 'Développeur fullstack — Activité personnelle',
@@ -92,6 +93,7 @@ const experiences = [
         tags: ['React', 'Python', 'OVH'],
         desc: "Création et déploiement de sites web fullstack pour mon activité de commerce en ligne via OVH.",
         icon: '💻',
+        details: "Dans le cadre de mon activité de commerce en ligne, j'ai conçu et déployé de A à Z plusieurs applications web :\n\n• Frontend React : interfaces modernes avec routing, gestion d'état, composants réutilisables et animations fluides.\n\n• Backend Python / Flask : API REST sécurisées, gestion des sessions, authentification JWT, intégration de bases de données SQL.\n\n• Déploiement OVH : configuration de serveurs VPS, mise en place de reverse proxy Nginx, certificats SSL, gestion des DNS et des domaines.\n\n• Maintenance continue : monitoring, corrections de bugs, évolutions fonctionnelles selon les besoins de l'activité.",
       },
       {
         title: 'Outils Python & Scraping',
@@ -99,6 +101,7 @@ const experiences = [
         tags: ['Python', 'Scraping', 'Automatisation'],
         desc: "Développement d'outils Python, d'extensions et de scripts de scraping pour automatiser mon activité de commerce.",
         icon: '🐍',
+        details: "Pour automatiser et optimiser mon activité de revente, j'ai développé un ensemble d'outils Python sur mesure :\n\n• Scripts de scraping : extraction automatique de prix, stocks et descriptions depuis des marketplaces japonaises (Mercari, Yahoo Auctions) en utilisant BeautifulSoup et Selenium.\n\n• Alertes en temps réel : scripts de surveillance qui envoient des notifications (Telegram, email) lors de nouvelles opportunités d'achat.\n\n• Automatisation de tâches répétitives : import/export de catalogues, gestion de fichiers CSV, renommage et traitement d'images en masse.\n\n• Extensions navigateur : injection de scripts pour enrichir l'interface des marketplaces directement en navigation.",
       },
     ],
   },
@@ -111,6 +114,7 @@ const experiences = [
         tags: ['SNU', 'Gendarmerie', 'Mission d\'intérêt général'],
         desc: "Phase 1 : séjour de cohésion (10 jours). Phase 2 : mission d'intérêt général en tant que Cadet à la gendarmerie nationale d'Amiens.",
         icon: '🛡️',
+        details: "Participation au Service National Universel (SNU) avec deux phases distinctes :\n\n• Phase 1 — Séjour de cohésion (10 jours) : vie en collectivité, activités civiques et sportives, sensibilisation aux valeurs républicaines et à l'engagement citoyen.\n\n• Phase 2 — Mission d'intérêt général à la Gendarmerie Nationale d'Amiens : intégration au sein d'une brigade, observation et participation aux activités quotidiennes des gendarmes, sensibilisation aux missions de sécurité publique et de maintien de l'ordre.\n\n• Obtention du statut de Cadet de la République, avec remise officielle du diplôme.",
       },
       {
         title: 'Animateur Vacataire — Amiens Métropole',
@@ -118,6 +122,7 @@ const experiences = [
         tags: ['Animation', 'Encadrement'],
         desc: "Encadrement de groupes d'enfants, responsable d'attractions estivales dans le cadre de la mission « Un été à Amiens ».",
         icon: '☀️',
+        details: "Dans le cadre de la mission estivale « Un été à Amiens » portée par Amiens Métropole :\n\n• Encadrement de groupes d'enfants de 6 à 14 ans lors d'animations et d'activités en plein air.\n\n• Responsable d'une attraction estivale : gestion de la sécurité, accueil du public, coordination avec l'équipe.\n\n• Organisation et animation d'ateliers créatifs, jeux collectifs et activités sportives adaptées aux différents groupes d'âge.\n\n• Expérience enrichissante en communication, gestion de groupe et sens des responsabilités.",
       },
     ],
   },
@@ -130,6 +135,7 @@ const experiences = [
         tags: ['Drone', 'Catégorie A1/A3', 'AlphaTango'],
         desc: "Certifié pilote en catégorie ouverte A1/A3, passionné par la prise de vue aérienne.",
         icon: '🚁',
+        details: "Passionné par la photographie et la vidéographie aérienne :\n\n• Certification officielle pilote de drone en catégorie ouverte A1/A3 (formation en ligne + QCU réglementaire).\n\n• Enregistrement sur la plateforme AlphaTango (DGAC) et respect de la réglementation en vigueur.\n\n• Réalisation de prises de vue cinématographiques : paysages, événements, propriétés — avec post-production vidéo (DaVinci Resolve).\n\n• Intérêt pour l'intégration du drone dans des projets créatifs et commerciaux (reportages, immobilier, événementiel).",
       },
       {
         title: 'Membre d\'une association de magie',
@@ -137,6 +143,7 @@ const experiences = [
         tags: ['Magie', 'Association'],
         desc: "Membre actif d'une association de magie, pratique de tours de cartes et de close-up.",
         icon: '🎩',
+        details: "Membre actif d'une association de magie depuis plus de 6 ans :\n\n• Spécialisation dans la magie de close-up : manipulations de cartes, pièces, objets du quotidien.\n\n• Participation régulière aux réunions de l'association : partage de techniques, apprentissage collectif, critiques constructives.\n\n• Performances lors d'événements associatifs et familiaux : développement de la présence scénique et de la communication non-verbale.\n\n• La magie m'a appris la rigueur, la patience et la créativité — des qualités transposables dans tous les domaines.",
       },
       {
         title: 'Commerce & vente en ligne',
@@ -144,6 +151,7 @@ const experiences = [
         tags: ['E-commerce', 'Business', 'Japon'],
         desc: "Gestion d'une activité personnelle de commerce sur catalogue en ligne, spécialisé dans l'import de produits japonais.",
         icon: '🛍️',
+        details: "Gestion autonome d'une activité de commerce en ligne depuis 2023 :\n\n• Sourcing de produits japonais (sneakers, streetwear, objets de collection) via des marketplaces spécialisées (Mercari JP, Yahoo Auctions JP).\n\n• Développement d'outils d'automatisation sur mesure pour surveiller les prix et automatiser les achats au meilleur moment.\n\n• Gestion complète de la chaîne : achat, logistique internationale, revente sur plateformes européennes.\n\n• Cette activité est à l'origine de la création de ZenTracker.online et de l'extension navigateur associée.",
       },
     ],
   },
@@ -680,10 +688,13 @@ function MainLayout({ dark, onToggleDark }) {
                           <span className="exp-period">{item.period}</span>
                         </div>
                         <p className="exp-desc">{item.desc}</p>
-                        <div className="exp-tags">
-                          {item.tags.map((tag, ti) => (
-                            <span key={ti} className="exp-tag">{tag}</span>
-                          ))}
+                        <div className="exp-footer-row">
+                          <div className="exp-tags">
+                            {item.tags.map((tag, ti) => (
+                              <span key={ti} className="exp-tag">{tag}</span>
+                            ))}
+                          </div>
+                          <span className="exp-see-more">Voir les missions →</span>
                         </div>
                       </div>
                     </motion.div>
@@ -875,10 +886,21 @@ function MainLayout({ dark, onToggleDark }) {
                 </div>
               </div>
               <div className="exp-modal-body">
-                <div className="exp-modal-icon">{selectedExp.icon}</div>
-                <h2 className="exp-modal-title">{selectedExp.title}</h2>
-                <span className="exp-modal-period">{selectedExp.period}</span>
-                <p className="exp-modal-desc">{selectedExp.desc}</p>
+                <div className="exp-modal-top">
+                  <span className="exp-modal-icon">{selectedExp.icon}</span>
+                  <div>
+                    <h2 className="exp-modal-title">{selectedExp.title}</h2>
+                    <span className="exp-modal-period">📅 {selectedExp.period}</span>
+                  </div>
+                </div>
+                <div className="exp-modal-divider" />
+                <div className="exp-modal-details">
+                  {(selectedExp.details || selectedExp.desc).split('\n\n').map((block, i) => (
+                    <p key={i} className={block.startsWith('•') ? 'exp-modal-bullet' : 'exp-modal-intro'}>
+                      {block}
+                    </p>
+                  ))}
+                </div>
                 <div className="exp-modal-tags">
                   {selectedExp.tags.map((tag, ti) => (
                     <span key={ti} className="exp-tag">{tag}</span>
