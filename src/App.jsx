@@ -302,7 +302,8 @@ function MainLayout() {
           <motion.section className="hero-section" initial="hidden" animate="visible" variants={containerVariants}>
             <div className="hero-left">
               <motion.h1 className="hero-title" variants={itemVariants}>
-                Emilien <span className="highlight">Vitry-Lhotte</span>
+                Emilien <br />
+                <span className="highlight">Vitry-Lhotte</span>
               </motion.h1>
               <motion.p className="hero-subtitle" variants={itemVariants}>
                 Apprenti ingénieur en <span className="highlight">Réseaux Informatiques</span> & Objets connectés — Intéressé par la <span className="highlight">Cybersécurité</span>.
