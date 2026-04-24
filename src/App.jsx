@@ -891,6 +891,7 @@ function MainLayout({ dark, onToggleDark }) {
       </AnimatePresence>
 
       {/* --- FOOTER --- */}
+      <footer className="app-footer">
         <p>© 2026 Émilien Vitry-Lhotte. Tous droits réservés.</p>
       </footer>
     </div>
