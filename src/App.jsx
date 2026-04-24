@@ -283,15 +283,15 @@ function MainLayout() {
       {/* --- HEADER --- */}
       <header className="app-header">
         <div className="logo" onClick={() => goTo('home')} style={{cursor: 'pointer'}}>
-          EVL.
+          EVL<span className="logo-dot">.</span>
         </div>
         <nav className="nav-links">
           {[
-            { id: 'home', label: 'Accueil' },
-            { id: 'about', label: 'Qui suis-je' },
+            { id: 'home',     label: 'Accueil' },
+            { id: 'about',    label: 'Qui suis-je' },
             { id: 'projects', label: 'Projets' },
-            { id: 'skills', label: 'Compétences' },
-            { id: 'contact', label: 'Contact' },
+            { id: 'skills',   label: 'Compétences' },
+            { id: 'contact',  label: 'Contact' },
           ].map(n => (
             <a key={n.id} className={pathTab === n.id ? 'active' : ''} onClick={() => goTo(n.id)}>
               {n.label}

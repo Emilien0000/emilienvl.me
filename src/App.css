@@ -75,11 +75,13 @@ h2 {
   color: var(--text-main);
 }
 
-/* Nav desktop */
+/* Nav */
+.logo-dot { color: var(--highlight-color); }
+
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: 36px;
 }
 
 .nav-links a {
@@ -88,16 +90,14 @@ h2 {
   font-weight: 500;
   cursor: pointer;
   color: var(--text-secondary);
-  letter-spacing: 0.01em;
-  padding-bottom: 2px;
+  padding-bottom: 3px;
   transition: color 0.2s ease;
 }
 
-/* Trait animé au survol */
 .nav-links a::after {
   content: '';
   position: absolute;
-  bottom: -2px;
+  bottom: 0;
   left: 0;
   width: 0;
   height: 1.5px;
@@ -106,21 +106,17 @@ h2 {
   transition: width 0.25s ease;
 }
 
-.nav-links a:hover {
-  color: var(--text-main);
-}
-
-.nav-links a:hover::after {
-  width: 100%;
-}
+.nav-links a:hover { color: var(--text-main); }
+.nav-links a:hover::after { width: 100%; }
 
 .nav-links a.active {
   color: var(--text-main);
   font-weight: 600;
 }
+.nav-links a.active::after { width: 100%; }
 
-.nav-links a.active::after {
-  width: 100%;
+@media (max-width: 700px) {
+  .nav-links { display: none; }
 }
 
 /* Hamburger — caché sur desktop */
@@ -1056,10 +1052,4 @@ h2 {
   font-size: 0.8rem;
   color: var(--text-secondary);
   text-align: center;
-}
-
-/* ── Responsive ── */
-@media (max-width: 700px) {
-  .nav-links { display: none; }
-  .hamburger { display: flex; }
 }
