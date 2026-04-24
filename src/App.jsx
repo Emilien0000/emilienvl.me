@@ -1,12 +1,15 @@
 // src/App.jsx
-import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
+
+// ─── Données ──────────────────────────────────────────────────────────────────
 
 const projects = [
   { 
     id: 3, 
+    slug: 'zentracker',
     title: 'ZenTracker.online', 
     date: 'Janvier 2026 - Avril 2026',
     dateSort: 2025,
@@ -20,6 +23,7 @@ const projects = [
   },
   { 
     id: 4, 
+    slug: 'extension-zentracker',
     title: 'Extension ZenTracker', 
     date: 'Mars 2026',
     dateSort: 20250302,
@@ -33,6 +37,7 @@ const projects = [
   },
   { 
     id: 1, 
+    slug: 'pacman-c',
     title: 'Pacman en C', 
     date: 'Novembre 2025',
     dateSort: 20241201,
@@ -46,6 +51,7 @@ const projects = [
   },
   { 
     id: 2, 
+    slug: 'echecs-c',
     title: "Jeu d'Échecs en C", 
     date: 'Octobre 2024',
     dateSort: 20241001,
@@ -69,11 +75,86 @@ const skills = [
   { id: 'Pack Adobe',    label: 'Pack Adobe',       desc: 'Photoshop, Illustrator, Premiere Pro.',                         projectIds: [] },
 ];
 
+const experiences = [
+  {
+    category: 'Informatique',
+    items: [
+      {
+        title: 'Technicien Polyvalent — CITYPROTECT',
+        period: '2025 · Stage 1 mois',
+        tags: ['API', 'Nmap', 'Réseau'],
+        desc: "Création d'automatisations via Make (gestion d'API), paramétrage de caméras et switchs, initiation à Nmap.",
+        icon: '🏢',
+      },
+      {
+        title: 'Développeur fullstack — Activité personnelle',
+        period: '2026',
+        tags: ['React', 'Python', 'OVH'],
+        desc: "Création et déploiement de sites web fullstack pour mon activité de commerce en ligne via OVH.",
+        icon: '💻',
+      },
+      {
+        title: 'Outils Python & Scraping',
+        period: '2023 – 2024',
+        tags: ['Python', 'Scraping', 'Automatisation'],
+        desc: "Développement d'outils Python, d'extensions et de scripts de scraping pour automatiser mon activité de commerce.",
+        icon: '🐍',
+      },
+    ],
+  },
+  {
+    category: 'Engagement & Bénévolat',
+    items: [
+      {
+        title: 'Cadet de la Gendarmerie Nationale — SNU',
+        period: 'Sept. 2023 – Juil. 2024',
+        tags: ['SNU', 'Gendarmerie', 'Mission d\'intérêt général'],
+        desc: "Phase 1 : séjour de cohésion (10 jours). Phase 2 : mission d'intérêt général en tant que Cadet à la gendarmerie nationale d'Amiens.",
+        icon: '🛡️',
+      },
+      {
+        title: 'Animateur Vacataire — Amiens Métropole',
+        period: '2024 & 2025 · 1 mois/an',
+        tags: ['Animation', 'Encadrement'],
+        desc: "Encadrement de groupes d'enfants, responsable d'attractions estivales dans le cadre de la mission « Un été à Amiens ».",
+        icon: '☀️',
+      },
+    ],
+  },
+  {
+    category: 'Centres d\'intérêt',
+    items: [
+      {
+        title: 'Pilote de drone cinématographique',
+        period: 'Depuis 2025',
+        tags: ['Drone', 'Catégorie A1/A3', 'AlphaTango'],
+        desc: "Certifié pilote en catégorie ouverte A1/A3, passionné par la prise de vue aérienne.",
+        icon: '🚁',
+      },
+      {
+        title: 'Membre d\'une association de magie',
+        period: 'Depuis 2018',
+        tags: ['Magie', 'Association'],
+        desc: "Membre actif d'une association de magie, pratique de tours de cartes et de close-up.",
+        icon: '🎩',
+      },
+      {
+        title: 'Commerce & vente en ligne',
+        period: 'Depuis 2023',
+        tags: ['E-commerce', 'Business', 'Japon'],
+        desc: "Gestion d'une activité personnelle de commerce sur catalogue en ligne, spécialisé dans l'import de produits japonais.",
+        icon: '🛍️',
+      },
+    ],
+  },
+];
+
+// ─── Variants animations ───────────────────────────────────────────────────────
+
 const containerVariants = {
   hidden: { opacity: 0, y: 30 },
   visible: {
-    opacity: 1,
-    y: 0,
+    opacity: 1, y: 0,
     transition: { duration: 0.6, when: 'beforeChildren', staggerChildren: 0.15 },
   },
 };
@@ -99,6 +180,8 @@ const modalVariants = {
   exit: { opacity: 0, transition: { duration: 0.15 } }
 };
 
+// ─── Composant galerie ─────────────────────────────────────────────────────────
+
 function ImageGallery({ images, imageFit, title }) {
   const [current, setCurrent] = useState(0);
   const [animating, setAnimating] = useState(false);
@@ -109,10 +192,7 @@ function ImageGallery({ images, imageFit, title }) {
     if (animating || index === current) return;
     setDirection(dir);
     setAnimating(true);
-    setTimeout(() => {
-      setCurrent(index);
-      setAnimating(false);
-    }, 300);
+    setTimeout(() => { setCurrent(index); setAnimating(false); }, 300);
   };
 
   const prev = () => goTo((current - 1 + images.length) % images.length, -1);
@@ -144,19 +224,141 @@ function ImageGallery({ images, imageFit, title }) {
   );
 }
 
-// ─── Page Linktree (cachée) ───────────────────────────────────────────────────
+// ─── Scroll Progress Bar ───────────────────────────────────────────────────────
+
+function ScrollProgressBar() {
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    const onScroll = () => {
+      const el = document.documentElement;
+      const scrolled = el.scrollTop || document.body.scrollTop;
+      const max = el.scrollHeight - el.clientHeight;
+      setProgress(max > 0 ? (scrolled / max) * 100 : 0);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  return (
+    <div className="scroll-progress-track">
+      <div className="scroll-progress-bar" style={{ width: `${progress}%` }} />
+    </div>
+  );
+}
+
+// ─── Dark Mode Toggle ──────────────────────────────────────────────────────────
+
+function DarkModeToggle({ dark, onToggle }) {
+  return (
+    <button className="darkmode-toggle" onClick={onToggle} aria-label="Toggle dark mode" title={dark ? 'Mode clair' : 'Mode sombre'}>
+      <span className="darkmode-icon">{dark ? '☀️' : '🌙'}</span>
+    </button>
+  );
+}
+
+// ─── Page Admin (compteur de visites) ─────────────────────────────────────────
+
+function AdminPage() {
+  const [authed, setAuthed] = useState(false);
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState(false);
+  const [visits, setVisits] = useState(0);
+  const [history, setHistory] = useState([]);
+
+  const tryLogin = () => {
+    if (pw === 'CV') {
+      setAuthed(true);
+      setErr(false);
+      const v = parseInt(localStorage.getItem('portfolio_visits') || '0', 10);
+      const h = JSON.parse(localStorage.getItem('portfolio_visit_history') || '[]');
+      setVisits(v);
+      setHistory(h);
+    } else {
+      setErr(true);
+    }
+  };
+
+  const resetVisits = () => {
+    localStorage.setItem('portfolio_visits', '0');
+    localStorage.setItem('portfolio_visit_history', '[]');
+    setVisits(0);
+    setHistory([]);
+  };
+
+  return (
+    <div className="admin-page">
+      <div className="admin-box">
+        {!authed ? (
+          <div className="admin-login">
+            <div className="admin-lock">🔐</div>
+            <h1 className="admin-title">Zone Admin</h1>
+            <p className="admin-sub">Accès restreint — Portfolio EVL</p>
+            <div className="admin-input-row">
+              <input
+                type="password"
+                className={`admin-input${err ? ' admin-input--err' : ''}`}
+                placeholder="Mot de passe"
+                value={pw}
+                onChange={e => { setPw(e.target.value); setErr(false); }}
+                onKeyDown={e => e.key === 'Enter' && tryLogin()}
+                autoFocus
+              />
+              <button className="admin-btn" onClick={tryLogin}>Entrer</button>
+            </div>
+            {err && <p className="admin-err">Mot de passe incorrect.</p>}
+          </div>
+        ) : (
+          <div className="admin-dashboard">
+            <div className="admin-header-row">
+              <h1 className="admin-title">Dashboard</h1>
+              <span className="admin-badge">● En ligne</span>
+            </div>
+            <div className="admin-stat-cards">
+              <div className="admin-stat-card">
+                <span className="admin-stat-label">Visites totales</span>
+                <span className="admin-stat-value">{visits}</span>
+              </div>
+              <div className="admin-stat-card">
+                <span className="admin-stat-label">Sessions enregistrées</span>
+                <span className="admin-stat-value">{history.length}</span>
+              </div>
+              <div className="admin-stat-card">
+                <span className="admin-stat-label">Dernière visite</span>
+                <span className="admin-stat-value admin-stat-value--sm">
+                  {history.length > 0 ? history[history.length - 1] : '—'}
+                </span>
+              </div>
+            </div>
+            {history.length > 0 && (
+              <div className="admin-history">
+                <h2 className="admin-history-title">Historique</h2>
+                <div className="admin-history-list">
+                  {[...history].reverse().slice(0, 20).map((date, i) => (
+                    <div key={i} className="admin-history-item">
+                      <span className="admin-history-dot" />
+                      <span>{date}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button className="admin-reset-btn" onClick={resetVisits}>🗑️ Réinitialiser les données</button>
+            <a href="/" className="admin-back-link">← Retour au portfolio</a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Page Linktree (cachée) ────────────────────────────────────────────────────
+
 function LinksPage() {
   const links = [
     {
       label: 'Portfolio',
       sublabel: 'emilienvl.me',
       href: 'https://emilienvl.me',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="3"/>
-          <path d="M3 9h18M9 21V9"/>
-        </svg>
-      ),
+      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>),
       accent: 'var(--highlight-color)',
       bg: 'rgba(19,201,237,0.08)',
     },
@@ -164,11 +366,7 @@ function LinksPage() {
       label: 'LinkedIn',
       sublabel: 'Emilien Vitry-Lhotte',
       href: 'https://www.linkedin.com/in/emilien-vitry-lhotte-0ba17336a/',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-        </svg>
-      ),
+      icon: (<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>),
       accent: '#0a66c2',
       bg: 'rgba(10,102,194,0.08)',
     },
@@ -176,11 +374,7 @@ function LinksPage() {
       label: 'GitHub',
       sublabel: 'Emilien0000',
       href: 'https://github.com/Emilien0000',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
-        </svg>
-      ),
+      icon: (<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>),
       accent: 'var(--text-main)',
       bg: 'rgba(6,57,92,0.07)',
     },
@@ -188,11 +382,7 @@ function LinksPage() {
       label: 'Email',
       sublabel: 'emilien.vitry.lhotte@gmail.com',
       href: 'mailto:emilien.vitry.lhotte@gmail.com',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/>
-        </svg>
-      ),
+      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>),
       accent: 'var(--highlight-color)',
       bg: 'rgba(19,201,237,0.08)',
     },
@@ -200,11 +390,7 @@ function LinksPage() {
       label: 'ZenTracker',
       sublabel: 'zentracker.online',
       href: 'https://zentracker.online',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
-        </svg>
-      ),
+      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>),
       accent: 'var(--highlight-color)',
       bg: 'rgba(19,201,237,0.08)',
     },
@@ -212,23 +398,13 @@ function LinksPage() {
 
   return (
     <div className="links-page">
-      <motion.div
-        className="links-container"
-        initial="hidden"
-        animate="visible"
-        variants={containerVariants}
-      >
-        {/* Avatar / identité */}
+      <motion.div className="links-container" initial="hidden" animate="visible" variants={containerVariants}>
         <motion.div className="links-identity" variants={itemVariants}>
-          <div className="links-avatar">
-            <img src="/cv.webp" alt="Émilien Vitry-Lhotte" />
-          </div>
+          <div className="links-avatar"><img src="/cv.webp" alt="Émilien Vitry-Lhotte" /></div>
           <h1 className="links-name">Émilien <span className="highlight">Vitry-Lhotte</span></h1>
           <p className="links-bio">Apprenti ingénieur · Réseaux & Cybersécurité</p>
           <div className="links-badge">UniLaSalle Amiens</div>
         </motion.div>
-
-        {/* Liste de liens */}
         <motion.div className="links-list" variants={containerVariants}>
           {links.map((link, i) => (
             <motion.a
@@ -241,9 +417,7 @@ function LinksPage() {
               whileHover={{ y: -4, boxShadow: `0 12px 32px rgba(19,201,237,0.15)` }}
               transition={{ duration: 0.2 }}
             >
-              <div className="link-card-icon" style={{ background: link.bg, color: link.accent }}>
-                {link.icon}
-              </div>
+              <div className="link-card-icon" style={{ background: link.bg, color: link.accent }}>{link.icon}</div>
               <div className="link-card-body">
                 <span className="link-card-label">{link.label}</span>
                 <span className="link-card-sub">{link.sublabel}</span>
@@ -252,91 +426,120 @@ function LinksPage() {
             </motion.a>
           ))}
         </motion.div>
-
-        <motion.p className="links-footer-text" variants={itemVariants}>
-          © 2026 Émilien Vitry-Lhotte
-        </motion.p>
+        <motion.p className="links-footer-text" variants={itemVariants}>© 2026 Émilien Vitry-Lhotte</motion.p>
       </motion.div>
     </div>
   );
 }
 
-// ─── Layout principal (header + nav) ─────────────────────────────────────────
-function MainLayout() {
+// ─── Layout principal ──────────────────────────────────────────────────────────
+
+function MainLayout({ dark, onToggleDark }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { projectSlug } = useParams();
+
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedSkill, setSelectedSkill] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeTechFilter, setActiveTechFilter] = useState(null);
 
   // Dérive l'onglet actif depuis l'URL
-  const pathTab = location.pathname.replace('/', '') || 'home';
+  const pathSegments = location.pathname.split('/').filter(Boolean);
+  const pathTab = pathSegments[0] || 'home';
 
   const goTo = (tab) => { navigate(`/${tab}`); setMenuOpen(false); };
+
+  // Ouvrir un projet depuis l'URL /projects/:slug
+  useEffect(() => {
+    if (pathTab === 'projects' && projectSlug) {
+      const found = projects.find(p => p.slug === projectSlug);
+      if (found) setSelectedProject(found);
+    }
+  }, [projectSlug, pathTab]);
+
+  // Fermer modale projet → nettoyer URL
+  const closeProject = useCallback(() => {
+    setSelectedProject(null);
+    if (projectSlug) navigate('/projects', { replace: true });
+  }, [projectSlug, navigate]);
+
+  // Ouvrir un projet → mettre à jour l'URL
+  const openProject = useCallback((project) => {
+    setSelectedProject(project);
+    navigate(`/projects/${project.slug}`, { replace: true });
+  }, [navigate]);
+
+  // Fermer avec Échap
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'Escape') {
+        if (selectedProject) closeProject();
+        if (modalOpen) setModalOpen(false);
+        if (menuOpen) setMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedProject, modalOpen, menuOpen, closeProject]);
 
   const linkedProjects = selectedSkill
     ? projects.filter(p => selectedSkill.projectIds.includes(p.id))
     : [];
 
-  const navItems = [
-    { key: 'home', label: 'Accueil' },
-    { key: 'about', label: 'Qui suis-je' },
-    { key: 'projects', label: 'Projets' },
-    { key: 'skills', label: 'Compétences' },
-    { key: 'contact', label: 'Contact' },
+  // Toutes les technos distinctes des projets
+  const allTechs = [...new Set(projects.flatMap(p => p.skillIds))];
+
+  const filteredProjects = activeTechFilter
+    ? projects.filter(p => p.skillIds.includes(activeTechFilter))
+    : projects;
+
+  const navLinks = [
+    { id: 'home', label: 'Accueil' },
+    { id: 'about', label: 'Qui suis-je' },
+    { id: 'projects', label: 'Projets' },
+    { id: 'experiences', label: 'Expériences' },
+    { id: 'skills', label: 'Compétences' },
+    { id: 'contact', label: 'Contact' },
   ];
 
   return (
     <div className="app-container">
+      <ScrollProgressBar />
+
       {/* --- HEADER --- */}
       <header className="app-header">
-        <div className="logo" onClick={() => goTo('home')} style={{cursor: 'pointer'}}>
-          EVL.
-        </div>
+        <div className="logo" onClick={() => goTo('home')} style={{ cursor: 'pointer' }}>EVL.</div>
 
-        {/* Nav desktop */}
         <nav className="nav-desktop">
-          {navItems.map(({ key, label }) => (
-            <a
-              key={key}
-              className={pathTab === key ? 'active' : ''}
-              onClick={() => goTo(key)}
-            >
-              {label}
-            </a>
+          {navLinks.map(n => (
+            <a key={n.id} className={pathTab === n.id ? 'active' : ''} onClick={() => goTo(n.id)}>{n.label}</a>
           ))}
         </nav>
 
-        {/* Bouton hamburger */}
-        <button
-          className={`hamburger${menuOpen ? ' open' : ''}`}
-          onClick={() => setMenuOpen(o => !o)}
-          aria-label="Menu"
-        >
-          <span />
-          <span />
-          <span />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <DarkModeToggle dark={dark} onToggle={onToggleDark} />
+          <button
+            className={`hamburger${menuOpen ? ' open' : ''}`}
+            onClick={() => setMenuOpen(v => !v)}
+            aria-label="Menu"
+          >
+            <span /><span /><span />
+          </button>
+        </div>
 
-        {/* Nav mobile drawer */}
         <AnimatePresence>
           {menuOpen && (
             <motion.nav
               className="nav-mobile"
-              initial={{ opacity: 0, y: -10 }}
+              initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
             >
-              {navItems.map(({ key, label }) => (
-                <a
-                  key={key}
-                  className={pathTab === key ? 'active' : ''}
-                  onClick={() => goTo(key)}
-                >
-                  {label}
-                </a>
+              {navLinks.map(n => (
+                <a key={n.id} className={pathTab === n.id ? 'active' : ''} onClick={() => goTo(n.id)}>{n.label}</a>
               ))}
             </motion.nav>
           )}
@@ -351,15 +554,14 @@ function MainLayout() {
           <motion.section className="hero-section" initial="hidden" animate="visible" variants={containerVariants}>
             <div className="hero-left">
               <motion.h1 className="hero-title" variants={itemVariants}>
-                Emilien <br />
-                <span className="highlight">Vitry-Lhotte</span>
+                Emilien <br /><span className="highlight">Vitry-Lhotte</span>
               </motion.h1>
               <motion.p className="hero-subtitle" variants={itemVariants}>
                 Apprenti ingénieur en <span className="highlight">Réseaux Informatiques</span> & Objets connectés — Intéressé par la <span className="highlight">Cybersécurité</span>.
               </motion.p>
               <motion.div className="hero-buttons" variants={itemVariants}>
-                <button onClick={() => goTo('contact')} className="cta-button">Me contacter</button>
-                <a href="/cv.pdf" download="CV_Emilien_VITRY-LHOTTE.pdf" className="cv-button">📄 Télécharger CV</a>
+                <button onClick={() => goTo('contact')} className="cta-button liquid-glass">Me contacter</button>
+                <a href="/cv.pdf" download="CV_Emilien_VITRY-LHOTTE.pdf" className="cv-button liquid-glass-outline">📄 Télécharger CV</a>
               </motion.div>
             </div>
             <motion.div className="hero-right" variants={itemVariants}>
@@ -390,35 +592,101 @@ function MainLayout() {
         {pathTab === 'projects' && (
           <motion.section className="projects-section" initial="hidden" animate="visible" variants={containerVariants}>
             <h2>MES PROJETS</h2>
-            <div className="projects-grid">
-              {projects.map((project) => (
-                <motion.div 
-                  key={project.id} 
-                  className="project-card" 
-                  variants={cardVariants} 
-                  whileHover="hover"
-                  onClick={() => setSelectedProject(project)}
-                  style={{ cursor: 'pointer' }}
+
+            {/* Filtres technos */}
+            <div className="project-filters">
+              <button
+                className={`filter-btn${!activeTechFilter ? ' filter-btn--active' : ''}`}
+                onClick={() => setActiveTechFilter(null)}
+              >
+                Tous
+              </button>
+              {allTechs.map(tech => (
+                <button
+                  key={tech}
+                  className={`filter-btn${activeTechFilter === tech ? ' filter-btn--active' : ''}`}
+                  onClick={() => setActiveTechFilter(activeTechFilter === tech ? null : tech)}
                 >
-                  {project.images && project.images[0] ? (
-                    <img
-                      src={project.images[0]}
-                      alt={project.title}
-                      className="project-card-img"
-                      style={{ objectFit: project.imageFit || 'cover' }}
-                    />
-                  ) : (
-                    <div className="project-image-placeholder">VOIR LE PROJET</div>
-                  )}
-                  <div className="project-card-meta">
-                    <span className="project-date">📅 {project.date}</span>
-                  </div>
-                  <h3>{project.title}</h3>
-                  <p>{project.desc}</p>
-                  <span className="tech-stack">{project.tech}</span>
-                </motion.div>
+                  {tech}
+                </button>
               ))}
             </div>
+
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTechFilter || 'all'}
+                className="projects-grid"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.25 }}
+              >
+                {filteredProjects.map((project) => (
+                  <motion.div
+                    key={project.id}
+                    className="project-card"
+                    variants={cardVariants}
+                    whileHover="hover"
+                    onClick={() => openProject(project)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    {project.images && project.images[0] ? (
+                      <img src={project.images[0]} alt={project.title} className="project-card-img" style={{ objectFit: project.imageFit || 'cover' }} />
+                    ) : (
+                      <div className="project-image-placeholder">VOIR LE PROJET</div>
+                    )}
+                    <div className="project-card-meta">
+                      <span className="project-date">📅 {project.date}</span>
+                    </div>
+                    <h3>{project.title}</h3>
+                    <p>{project.desc}</p>
+                    <span className="tech-stack">{project.tech}</span>
+                  </motion.div>
+                ))}
+              </motion.div>
+            </AnimatePresence>
+
+            {filteredProjects.length === 0 && (
+              <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: '40px' }}>
+                Aucun projet pour ce filtre.
+              </p>
+            )}
+          </motion.section>
+        )}
+
+        {/* ONGLET EXPÉRIENCES */}
+        {pathTab === 'experiences' && (
+          <motion.section className="experiences-section" initial="hidden" animate="visible" variants={containerVariants}>
+            <h2>EXPÉRIENCES</h2>
+            {experiences.map((cat, ci) => (
+              <motion.div key={ci} className="exp-category" variants={itemVariants}>
+                <h3 className="exp-category-title">{cat.category}</h3>
+                <div className="exp-list">
+                  {cat.items.map((item, ii) => (
+                    <motion.div
+                      key={ii}
+                      className="exp-card"
+                      variants={itemVariants}
+                      whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(19,201,237,0.15)' }}
+                    >
+                      <div className="exp-icon">{item.icon}</div>
+                      <div className="exp-body">
+                        <div className="exp-header">
+                          <strong className="exp-title">{item.title}</strong>
+                          <span className="exp-period">{item.period}</span>
+                        </div>
+                        <p className="exp-desc">{item.desc}</p>
+                        <div className="exp-tags">
+                          {item.tags.map((tag, ti) => (
+                            <span key={ti} className="exp-tag">{tag}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            ))}
           </motion.section>
         )}
 
@@ -451,30 +719,19 @@ function MainLayout() {
                   transition={{ duration: 0.3 }}
                 >
                   <div className="skill-projects-panel-header">
-                    <span className="skill-projects-panel-title">
-                      Projets illustrant <strong>{selectedSkill.label}</strong>
-                    </span>
+                    <span className="skill-projects-panel-title">Projets illustrant <strong>{selectedSkill.label}</strong></span>
                     <p className="skill-projects-panel-desc">{selectedSkill.desc}</p>
                   </div>
                   <div className="skill-projects-list">
                     {linkedProjects.map(p => (
-                      <div
-                        key={p.id}
-                        className="skill-project-item"
-                        onClick={() => { setSelectedProject(p); setSelectedSkill(null); }}
-                      >
+                      <div key={p.id} className="skill-project-item" onClick={() => { openProject(p); setSelectedSkill(null); }}>
                         {p.images?.[0] && (
-                          <img
-                            src={p.images[0]}
-                            alt={p.title}
-                            className="skill-project-thumb"
-                            style={{ objectFit: p.imageFit || 'cover' }}
-                          />
+                          <img src={p.images[0]} alt={p.title} className="skill-project-thumb" style={{ objectFit: p.imageFit || 'cover' }} />
                         )}
                         <div className="skill-project-info">
                           <strong>{p.title}</strong>
                           <span>{p.date}</span>
-                          <span className="tech-stack" style={{fontSize:'0.75rem', padding:'3px 10px'}}>{p.tech}</span>
+                          <span className="tech-stack" style={{ fontSize: '0.75rem', padding: '3px 10px' }}>{p.tech}</span>
                         </div>
                         <span className="skill-project-arrow">→</span>
                       </div>
@@ -494,9 +751,7 @@ function MainLayout() {
             <div className="contact-cards">
               <motion.a href="mailto:emilien.vitry.lhotte@gmail.com" className="contact-card" variants={itemVariants} whileHover={{ y: -6, boxShadow: '0 12px 32px rgba(19,201,237,0.18)' }}>
                 <div className="contact-card-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/>
-                  </svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>
                 </div>
                 <div className="contact-card-body">
                   <span className="contact-card-label">Email</span>
@@ -507,9 +762,7 @@ function MainLayout() {
 
               <motion.a href="tel:+33748614162" className="contact-card" variants={itemVariants} whileHover={{ y: -6, boxShadow: '0 12px 32px rgba(19,201,237,0.18)' }}>
                 <div className="contact-card-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 16.92v3a2 2 0 01-2.18 2A19.79 19.79 0 013.09 4.18 2 2 0 015.09 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L9.09 9.91a16 16 0 006.95 6.95l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
-                  </svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.79 19.79 0 013.09 4.18 2 2 0 015.09 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L9.09 9.91a16 16 0 006.95 6.95l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
                 </div>
                 <div className="contact-card-body">
                   <span className="contact-card-label">Téléphone</span>
@@ -520,9 +773,7 @@ function MainLayout() {
 
               <motion.a href="https://github.com/Emilien0000" target="_blank" rel="noopener noreferrer" className="contact-card" variants={itemVariants} whileHover={{ y: -6, boxShadow: '0 12px 32px rgba(19,201,237,0.18)' }}>
                 <div className="contact-card-icon contact-card-icon--github">
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
-                  </svg>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
                 </div>
                 <div className="contact-card-body">
                   <span className="contact-card-label">GitHub</span>
@@ -533,9 +784,7 @@ function MainLayout() {
 
               <motion.a href="https://www.linkedin.com/in/emilien-vitry-lhotte-0ba17336a/" target="_blank" rel="noopener noreferrer" className="contact-card" variants={itemVariants} whileHover={{ y: -6, boxShadow: '0 12px 32px rgba(19,201,237,0.18)' }}>
                 <div className="contact-card-icon contact-card-icon--linkedin">
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                  </svg>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                 </div>
                 <div className="contact-card-body">
                   <span className="contact-card-label">LinkedIn</span>
@@ -571,7 +820,7 @@ function MainLayout() {
         )}
 
         {selectedProject && (
-          <motion.div className="cv-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} onClick={() => setSelectedProject(null)}>
+          <motion.div className="cv-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} onClick={closeProject}>
             <motion.div className="project-modal-box" variants={modalVariants} initial="hidden" animate="visible" exit="exit" onClick={e => e.stopPropagation()}>
               <div className="cv-modal-header">
                 <div className="cv-modal-title">
@@ -579,8 +828,17 @@ function MainLayout() {
                   <span>Projet — <strong>{selectedProject.title}</strong></span>
                 </div>
                 <div className="cv-modal-actions">
+                  <button
+                    className="modal-share-btn"
+                    title="Copier le lien"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/projects/${selectedProject.slug}`);
+                    }}
+                  >
+                    🔗
+                  </button>
                   <a href={selectedProject.link} target="_blank" rel="noopener noreferrer" className="modal-dl-btn">Voir le lien</a>
-                  <button className="modal-close-btn" onClick={() => setSelectedProject(null)}>✕</button>
+                  <button className="modal-close-btn" onClick={closeProject}>✕</button>
                 </div>
               </div>
               <div className="project-modal-body">
@@ -607,27 +865,60 @@ function MainLayout() {
   );
 }
 
-// ─── Root App avec Router ─────────────────────────────────────────────────────
+// ─── Compteur de visites (enregistre à chaque chargement) ────────────────────
+
+function VisitTracker({ children }) {
+  useEffect(() => {
+    const count = parseInt(localStorage.getItem('portfolio_visits') || '0', 10) + 1;
+    localStorage.setItem('portfolio_visits', String(count));
+    const history = JSON.parse(localStorage.getItem('portfolio_visit_history') || '[]');
+    history.push(new Date().toLocaleString('fr-FR'));
+    if (history.length > 200) history.shift();
+    localStorage.setItem('portfolio_visit_history', JSON.stringify(history));
+  }, []);
+  return children;
+}
+
+// ─── Root App avec Router ──────────────────────────────────────────────────────
+
 function App() {
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem('portfolio_dark');
+    if (saved !== null) return saved === 'true';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    localStorage.setItem('portfolio_dark', String(dark));
+  }, [dark]);
+
+  const toggleDark = () => setDark(v => !v);
+
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Page cachée linktree */}
-        <Route path="/links" element={<LinksPage />} />
+      <VisitTracker>
+        <Routes>
+          {/* Page cachée linktree */}
+          <Route path="/links" element={<LinksPage />} />
 
-        {/* Routes principales du portfolio */}
-        <Route path="/home"     element={<MainLayout />} />
-        <Route path="/about"    element={<MainLayout />} />
-        <Route path="/projects" element={<MainLayout />} />
-        <Route path="/skills"   element={<MainLayout />} />
-        <Route path="/contact"  element={<MainLayout />} />
+          {/* Page admin */}
+          <Route path="/admin" element={<AdminPage />} />
 
-        {/* Redirect racine → /home */}
-        <Route path="/" element={<Navigate to="/home" replace />} />
+          {/* Routes principales du portfolio */}
+          <Route path="/home"     element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
+          <Route path="/about"    element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
+          <Route path="/projects" element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
+          <Route path="/projects/:projectSlug" element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
+          <Route path="/experiences" element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
+          <Route path="/skills"   element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
+          <Route path="/contact"  element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
 
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/home" replace />} />
-      </Routes>
+          {/* Redirect racine → /home */}
+          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="*" element={<Navigate to="/home" replace />} />
+        </Routes>
+      </VisitTracker>
     </BrowserRouter>
   );
 }
