@@ -520,15 +520,30 @@ function MainLayout({ dark, onToggleDark }) {
 
       {/* --- HEADER --- */}
       <header className="app-header">
-        <div className="logo" onClick={() => goTo('home')} style={{ cursor: 'pointer' }}>EVL.</div>
+        {/* Logo */}
+        <div className="logo" onClick={() => goTo('home')} style={{ cursor: 'pointer' }}>
+          <span className="logo-initials">EVL</span>
+          <span className="logo-dot">.</span>
+        </div>
 
+        {/* Nav desktop */}
         <nav className="nav-desktop">
           {navLinks.map(n => (
-            <a key={n.id} className={pathTab === n.id ? 'active' : ''} onClick={() => goTo(n.id)}>{n.label}</a>
+            <a key={n.id} className={pathTab === n.id ? 'active' : ''} onClick={() => goTo(n.id)}>
+              {n.label}
+              {pathTab === n.id && <span className="nav-active-dot" />}
+            </a>
           ))}
         </nav>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* Actions droite */}
+        <div className="nav-actions">
+          <a href="/cv.pdf" download="CV_Emilien_VITRY-LHOTTE.pdf" className="nav-cv-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            CV
+          </a>
           <DarkModeToggle dark={dark} onToggle={onToggleDark} />
           <button
             className={`hamburger${menuOpen ? ' open' : ''}`}
@@ -543,14 +558,26 @@ function MainLayout({ dark, onToggleDark }) {
           {menuOpen && (
             <motion.nav
               className="nav-mobile"
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0, y: -8, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.97 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
             >
-              {navLinks.map(n => (
-                <a key={n.id} className={pathTab === n.id ? 'active' : ''} onClick={() => goTo(n.id)}>{n.label}</a>
+              <div className="nav-mobile-header">
+                <span className="nav-mobile-title">Navigation</span>
+              </div>
+              {navLinks.map((n, i) => (
+                <a key={n.id} className={pathTab === n.id ? 'active' : ''} onClick={() => goTo(n.id)}
+                   style={{ animationDelay: `${i * 40}ms` }}>
+                  <span className="nav-mobile-label">{n.label}</span>
+                  {pathTab === n.id && <span className="nav-mobile-active-badge">•</span>}
+                </a>
               ))}
+              <div className="nav-mobile-footer">
+                <a href="/cv.pdf" download="CV_Emilien_VITRY-LHOTTE.pdf" className="nav-mobile-cv">
+                  📄 Télécharger CV
+                </a>
+              </div>
             </motion.nav>
           )}
         </AnimatePresence>
