@@ -1005,48 +1005,11 @@ h2 {
 }
 
   .cv-modal-header {
-    padding: 12px 14px;
-    gap: 8px;
+    padding: 14px 16px;
   }
 
-  /* "Émilien Vitry-Lhotte" reste sur une seule ligne */
-  .cv-modal-title {
-    white-space: nowrap;
-    font-size: 0.74rem;
-    gap: 6px;
-    overflow: hidden;
-    min-width: 0;
-    flex: 1;
-  }
-
-  .cv-modal-title span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: block;
-  }
-
-  .cv-modal-dot {
-    width: 8px;
-    height: 8px;
-    flex-shrink: 0;
-  }
-
-  /* Les boutons ne rétrécissent jamais */
-  .cv-modal-actions {
-    gap: 8px;
-    flex-shrink: 0;
-  }
-
-  /* "↓ Télécharger" reste sur une seule ligne */
   .modal-dl-btn {
-    padding: 7px 12px;
-    font-size: 0.76rem;
-    white-space: nowrap;
-  }
-
-  .modal-close-btn {
-    width: 30px;
-    height: 30px;
+    padding: 7px 14px;
     font-size: 0.78rem;
   }
 }
