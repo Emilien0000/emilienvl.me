@@ -1004,15 +1004,15 @@ h2 {
     box-shadow: 0 32px 80px rgba(6, 57, 92, 0.3);
   }
 
-  /* ✅ FIX : empêche le titre "CV — Émilien Vitry-Lhotte" de passer sur 2 lignes */
   .cv-modal-header {
     padding: 12px 14px;
     gap: 8px;
   }
 
+  /* Empêche "Émilien Vitry-Lhotte" de passer sur 2 lignes */
   .cv-modal-title {
     white-space: nowrap;
-    font-size: 0.76rem;
+    font-size: 0.74rem;
     gap: 6px;
     overflow: hidden;
     min-width: 0;
@@ -1028,18 +1028,20 @@ h2 {
   .cv-modal-dot {
     width: 8px;
     height: 8px;
+    flex-shrink: 0;
   }
 
-  /* ✅ FIX : les boutons actions ne rétrécissent jamais */
+  /* Les boutons ne rétrécissent jamais */
   .cv-modal-actions {
     gap: 8px;
     flex-shrink: 0;
   }
 
+  /* "↓ Télécharger" reste sur une seule ligne */
   .modal-dl-btn {
     padding: 7px 12px;
     font-size: 0.76rem;
-    white-space: nowrap; /* "↓ Télécharger" reste sur une ligne */
+    white-space: nowrap;
   }
 
   .modal-close-btn {
@@ -1069,99 +1071,4 @@ h2 {
 .about-content strong {
   color: var(--highlight-color);
   font-weight: 700;
-}
-/* ===================================
-   AMÉLIORATIONS SUPPLÉMENTAIRES
-   =================================== */
-
-/* ✅ Navigation mobile : scroll horizontal si trop large */
-@media (max-width: 600px) {
-  .app-header nav {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  .app-header nav::-webkit-scrollbar {
-    display: none;
-  }
-  .app-header nav a {
-    margin-left: 16px;
-    font-size: 0.82rem;
-    white-space: nowrap;
-  }
-  .app-header nav a:first-child {
-    margin-left: 0;
-  }
-  .logo {
-    font-size: 1.1rem;
-  }
-}
-
-/* ✅ Hero section mobile : colonne au lieu de 2 colonnes */
-@media (max-width: 900px) {
-  .hero-section {
-    flex-direction: column;
-    gap: 32px;
-    padding: 24px 0;
-    justify-content: flex-start;
-  }
-  .hero-left {
-    width: 100%;
-  }
-}
-
-/* ✅ Modale projet : ajustement sur mobile */
-@media (max-width: 600px) {
-  .project-modal-box {
-    max-height: 92vh;
-    border-radius: 18px;
-  }
-  .gallery-main {
-    height: 220px;
-  }
-  .project-modal-content {
-    padding: 24px 20px;
-  }
-  .project-modal-content h2 {
-    font-size: 1.5rem;
-  }
-  .project-modal-content p {
-    font-size: 0.97rem;
-  }
-}
-
-/* ✅ Skill panel : thumbnail plus compact sur mobile */
-@media (max-width: 480px) {
-  .skill-project-thumb {
-    width: 48px;
-    height: 36px;
-  }
-  .skill-project-item {
-    padding: 14px 18px;
-    gap: 12px;
-  }
-}
-
-/* ✅ Focus visible pour l'accessibilité clavier */
-button:focus-visible,
-a:focus-visible {
-  outline: 2px solid var(--highlight-color);
-  outline-offset: 3px;
-  border-radius: 6px;
-}
-
-/* ✅ Empêche le texte de déborder dans les cards projets */
-.project-card h3,
-.project-card p {
-  word-break: break-word;
-}
-
-/* ✅ Contact cards : 1 colonne sur mobile */
-@media (max-width: 480px) {
-  .contact-cards {
-    grid-template-columns: 1fr;
-  }
-  .contact-card-value {
-    font-size: 0.82rem;
-  }
 }
