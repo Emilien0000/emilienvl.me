@@ -75,17 +75,48 @@ h2 {
   color: var(--text-main);
 }
 
-/* Nav desktop */
-.nav-desktop a {
-  margin-left: 25px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
+/* Nav */
+.logo-dot { color: var(--highlight-color); }
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 36px;
 }
 
-.nav-desktop a:hover,
-.nav-desktop a.active {
-  color: var(--highlight-color);
+.nav-links a {
+  position: relative;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding-bottom: 3px;
+  transition: color 0.2s ease;
+}
+
+.nav-links a::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 1.5px;
+  background: var(--highlight-color);
+  border-radius: 2px;
+  transition: width 0.25s ease;
+}
+
+.nav-links a:hover { color: var(--text-main); }
+.nav-links a:hover::after { width: 100%; }
+
+.nav-links a.active {
+  color: var(--text-main);
+  font-weight: 600;
+}
+.nav-links a.active::after { width: 100%; }
+
+@media (max-width: 700px) {
+  .nav-links { display: none; }
 }
 
 /* Hamburger — caché sur desktop */
