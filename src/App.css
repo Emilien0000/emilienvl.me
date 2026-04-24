@@ -76,16 +76,37 @@ h2 {
 }
 
 /* Nav desktop */
-.nav-desktop a {
-  margin-left: 25px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
+.nav-desktop {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(6, 57, 92, 0.04);
+  border: 1px solid rgba(173, 185, 202, 0.25);
+  border-radius: var(--radius-pill);
+  padding: 5px 8px;
 }
 
-.nav-desktop a:hover,
-.nav-desktop a.active {
+.nav-desktop a {
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 7px 16px;
+  border-radius: var(--radius-pill);
+  transition: all 0.22s ease;
+  color: var(--text-main);
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.nav-desktop a:hover {
   color: var(--highlight-color);
+  background: rgba(19, 201, 237, 0.08);
+}
+
+.nav-desktop a.active {
+  background: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(6, 57, 92, 0.22);
 }
 
 /* Hamburger — caché sur desktop */
@@ -835,8 +856,31 @@ h2 {
     height: 92vh;
   }
 
-  .cv-modal-header { padding: 14px 16px; }
-  .modal-dl-btn { padding: 7px 14px; font-size: 0.78rem; }
+  /* Header modal CV : titre + download sur 1 ligne, wrap si besoin */
+  .cv-modal-header {
+    padding: 12px 14px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .cv-modal-title {
+    font-size: 0.82rem;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .cv-modal-title span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cv-modal-actions {
+    flex-shrink: 0;
+    gap: 8px;
+  }
+
+  .modal-dl-btn { padding: 7px 12px; font-size: 0.76rem; }
 
   /* Gallery plus compacte */
   .gallery-main { height: 220px; }

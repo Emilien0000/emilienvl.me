@@ -268,15 +268,24 @@ function MainLayout() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedSkill, setSelectedSkill] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Dérive l'onglet actif depuis l'URL
   const pathTab = location.pathname.replace('/', '') || 'home';
 
-  const goTo = (tab) => navigate(`/${tab}`);
+  const goTo = (tab) => { navigate(`/${tab}`); setMenuOpen(false); };
 
   const linkedProjects = selectedSkill
     ? projects.filter(p => selectedSkill.projectIds.includes(p.id))
     : [];
+
+  const navItems = [
+    { key: 'home', label: 'Accueil' },
+    { key: 'about', label: 'Qui suis-je' },
+    { key: 'projects', label: 'Projets' },
+    { key: 'skills', label: 'Compétences' },
+    { key: 'contact', label: 'Contact' },
+  ];
 
   return (
     <div className="app-container">
@@ -285,13 +294,53 @@ function MainLayout() {
         <div className="logo" onClick={() => goTo('home')} style={{cursor: 'pointer'}}>
           EVL.
         </div>
-        <nav>
-          <a className={pathTab === 'home' ? 'active' : ''} onClick={() => goTo('home')}>Accueil</a>
-          <a className={pathTab === 'about' ? 'active' : ''} onClick={() => goTo('about')}>Qui suis-je</a>
-          <a className={pathTab === 'projects' ? 'active' : ''} onClick={() => goTo('projects')}>Projets</a>
-          <a className={pathTab === 'skills' ? 'active' : ''} onClick={() => goTo('skills')}>Compétences</a>
-          <a className={pathTab === 'contact' ? 'active' : ''} onClick={() => goTo('contact')}>Contact</a>
+
+        {/* Nav desktop */}
+        <nav className="nav-desktop">
+          {navItems.map(({ key, label }) => (
+            <a
+              key={key}
+              className={pathTab === key ? 'active' : ''}
+              onClick={() => goTo(key)}
+            >
+              {label}
+            </a>
+          ))}
         </nav>
+
+        {/* Bouton hamburger */}
+        <button
+          className={`hamburger${menuOpen ? ' open' : ''}`}
+          onClick={() => setMenuOpen(o => !o)}
+          aria-label="Menu"
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+
+        {/* Nav mobile drawer */}
+        <AnimatePresence>
+          {menuOpen && (
+            <motion.nav
+              className="nav-mobile"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              {navItems.map(({ key, label }) => (
+                <a
+                  key={key}
+                  className={pathTab === key ? 'active' : ''}
+                  onClick={() => goTo(key)}
+                >
+                  {label}
+                </a>
+              ))}
+            </motion.nav>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* --- CONTENU DYNAMIQUE --- */}
