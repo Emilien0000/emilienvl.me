@@ -444,6 +444,7 @@ function MainLayout({ dark, onToggleDark }) {
   const [selectedSkill, setSelectedSkill] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeTechFilter, setActiveTechFilter] = useState(null);
+  const [selectedExp, setSelectedExp] = useState(null);
 
   // Dérive l'onglet actif depuis l'URL
   const pathSegments = location.pathname.split('/').filter(Boolean);
@@ -478,6 +479,7 @@ function MainLayout({ dark, onToggleDark }) {
         if (selectedProject) closeProject();
         if (modalOpen) setModalOpen(false);
         if (menuOpen) setMenuOpen(false);
+        if (selectedExp) setSelectedExp(null);
       }
     };
     window.addEventListener('keydown', handler);
@@ -566,7 +568,7 @@ function MainLayout({ dark, onToggleDark }) {
             </div>
             <motion.div className="hero-right" variants={itemVariants}>
               <div className="cv-preview-wrapper">
-                <img src="/cv.webp" alt="Aperçu du CV d'Émilien" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={dark ? "/cv-nuit.webp" : "/cv.webp"} alt="Aperçu du CV d'Émilien" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
               <button className="expand-btn" onClick={() => setModalOpen(true)}>
                 <span className="expand-icon">⛶</span>
@@ -668,6 +670,8 @@ function MainLayout({ dark, onToggleDark }) {
                       className="exp-card"
                       variants={itemVariants}
                       whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(19,201,237,0.15)' }}
+                      onClick={() => setSelectedExp(item)}
+                      style={{ cursor: 'pointer' }}
                     >
                       <div className="exp-icon">{item.icon}</div>
                       <div className="exp-body">
@@ -813,7 +817,7 @@ function MainLayout({ dark, onToggleDark }) {
                 </div>
               </div>
               <div className="cv-modal-body">
-                <img src="/cv.webp" alt="CV d'Émilien en plein écran" className="cv-modal-img" />
+                <img src={dark ? "/cv-nuit.webp" : "/cv.webp"} alt="CV d'Émilien en plein écran" className="cv-modal-img" />
               </div>
             </motion.div>
           </motion.div>
@@ -857,8 +861,36 @@ function MainLayout({ dark, onToggleDark }) {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {selectedExp && (
+          <motion.div className="cv-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} onClick={() => setSelectedExp(null)}>
+            <motion.div className="exp-modal-box" variants={modalVariants} initial="hidden" animate="visible" exit="exit" onClick={e => e.stopPropagation()}>
+              <div className="cv-modal-header">
+                <div className="cv-modal-title">
+                  <div className="cv-modal-dot" />
+                  <span><strong>{selectedExp.title}</strong></span>
+                </div>
+                <div className="cv-modal-actions">
+                  <button className="modal-close-btn" onClick={() => setSelectedExp(null)}>✕</button>
+                </div>
+              </div>
+              <div className="exp-modal-body">
+                <div className="exp-modal-icon">{selectedExp.icon}</div>
+                <h2 className="exp-modal-title">{selectedExp.title}</h2>
+                <span className="exp-modal-period">{selectedExp.period}</span>
+                <p className="exp-modal-desc">{selectedExp.desc}</p>
+                <div className="exp-modal-tags">
+                  {selectedExp.tags.map((tag, ti) => (
+                    <span key={ti} className="exp-tag">{tag}</span>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* --- FOOTER --- */}
-      <footer className="app-footer">
         <p>© 2026 Émilien Vitry-Lhotte. Tous droits réservés.</p>
       </footer>
     </div>
