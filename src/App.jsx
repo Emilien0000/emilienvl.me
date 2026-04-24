@@ -570,8 +570,8 @@ function MainLayout({ dark, onToggleDark }) {
                 Apprenti ingénieur en <span className="highlight">Réseaux Informatiques</span> & Objets connectés — Intéressé par la <span className="highlight">Cybersécurité</span>.
               </motion.p>
               <motion.div className="hero-buttons" variants={itemVariants}>
-                <button onClick={() => goTo('contact')} className="cta-button liquid-glass">Me contacter</button>
-                <a href="/cv.pdf" download="CV_Emilien_VITRY-LHOTTE.pdf" className="cv-button liquid-glass-outline">📄 Télécharger CV</a>
+                <button onClick={() => goTo('contact')} className="cta-button">Me contacter</button>
+                <a href="/cv.pdf" download="CV_Emilien_VITRY-LHOTTE.pdf" className="cv-button">📄 Télécharger CV</a>
               </motion.div>
             </div>
             <motion.div className="hero-right" variants={itemVariants}>
