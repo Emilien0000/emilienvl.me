@@ -80,6 +80,7 @@ const experiences = [
     category: 'Informatique',
     items: [
       {
+        slug: 'cityprotect',
         title: 'Technicien Polyvalent — CITYPROTECT',
         period: '2025 · Stage 1 mois',
         tags: ['API', 'Nmap', 'Réseau'],
@@ -88,6 +89,7 @@ const experiences = [
         details: "Durant ce stage au sein de CITYPROTECT, j'ai eu l'occasion de travailler sur plusieurs missions techniques complémentaires :\n\n• Automatisation de flux via Make (ex-Integromat) : conception de scénarios d'automatisation reliant différentes APIs (webhooks, alertes, notifications).\n\n• Paramétrage réseau : configuration de switchs managés et de caméras IP sur des infrastructures client, intégration dans des NVR.\n\n• Initiation à Nmap : découverte du scan réseau pour cartographier les équipements et identifier les ports ouverts sur des périmètres définis.\n\n• Support technique client : assistance à la mise en service et aux tests de bon fonctionnement des installations de vidéosurveillance.",
       },
       {
+        slug: 'dev-fullstack',
         title: 'Développeur fullstack — Activité personnelle',
         period: '2026',
         tags: ['React', 'Python', 'OVH'],
@@ -96,6 +98,7 @@ const experiences = [
         details: "Dans le cadre de mon activité de commerce en ligne, j'ai conçu et déployé de A à Z plusieurs applications web :\n\n• Frontend React : interfaces modernes avec routing, gestion d'état, composants réutilisables et animations fluides.\n\n• Backend Python / Flask : API REST sécurisées, gestion des sessions, authentification JWT, intégration de bases de données SQL.\n\n• Déploiement OVH : configuration de serveurs VPS, mise en place de reverse proxy Nginx, certificats SSL, gestion des DNS et des domaines.\n\n• Maintenance continue : monitoring, corrections de bugs, évolutions fonctionnelles selon les besoins de l'activité.",
       },
       {
+        slug: 'python-scraping',
         title: 'Outils Python & Scraping',
         period: '2023 – 2024',
         tags: ['Python', 'Scraping', 'Automatisation'],
@@ -109,6 +112,7 @@ const experiences = [
     category: 'Engagement & Bénévolat',
     items: [
       {
+        slug: 'snu-gendarmerie',
         title: 'Cadet de la Gendarmerie Nationale — SNU',
         period: 'Sept. 2023 – Juil. 2024',
         tags: ['SNU', 'Gendarmerie', 'Mission d\'intérêt général'],
@@ -116,7 +120,13 @@ const experiences = [
         icon: '🛡️',
         details: "Participation au Service National Universel (SNU) avec deux phases distinctes :\n\n• Phase 1 — Séjour de cohésion (10 jours) : vie en collectivité, activités civiques et sportives, sensibilisation aux valeurs républicaines et à l'engagement citoyen.\n\n• Phase 2 — Mission d'intérêt général à la Gendarmerie Nationale d'Amiens : intégration au sein d'une brigade, observation et participation aux activités quotidiennes des gendarmes, sensibilisation aux missions de sécurité publique et de maintien de l'ordre.\n\n• Obtention du statut de Cadet de la République, avec remise officielle du diplôme.",
       },
+    ],
+  },
+  {
+    category: 'Emploi Vacataire',
+    items: [
       {
+        slug: 'animateur-vacataire',
         title: 'Animateur Vacataire — Amiens Métropole',
         period: '2024 & 2025 · 1 mois/an',
         tags: ['Animation', 'Encadrement'],
@@ -130,6 +140,7 @@ const experiences = [
     category: 'Centres d\'intérêt',
     items: [
       {
+        slug: 'drone',
         title: 'Pilote de drone cinématographique',
         period: 'Depuis 2025',
         tags: ['Drone', 'Catégorie A1/A3', 'AlphaTango'],
@@ -138,6 +149,7 @@ const experiences = [
         details: "Passionné par la photographie et la vidéographie aérienne :\n\n• Certification officielle pilote de drone en catégorie ouverte A1/A3 (formation en ligne + QCU réglementaire).\n\n• Enregistrement sur la plateforme AlphaTango (DGAC) et respect de la réglementation en vigueur.\n\n• Réalisation de prises de vue cinématographiques : paysages, événements, propriétés — avec post-production vidéo (DaVinci Resolve).\n\n• Intérêt pour l'intégration du drone dans des projets créatifs et commerciaux (reportages, immobilier, événementiel).",
       },
       {
+        slug: 'magie',
         title: 'Membre d\'une association de magie',
         period: 'Depuis 2018',
         tags: ['Magie', 'Association'],
@@ -146,6 +158,7 @@ const experiences = [
         details: "Membre actif d'une association de magie depuis plus de 6 ans :\n\n• Spécialisation dans la magie de close-up : manipulations de cartes, pièces, objets du quotidien.\n\n• Participation régulière aux réunions de l'association : partage de techniques, apprentissage collectif, critiques constructives.\n\n• Performances lors d'événements associatifs et familiaux : développement de la présence scénique et de la communication non-verbale.\n\n• La magie m'a appris la rigueur, la patience et la créativité — des qualités transposables dans tous les domaines.",
       },
       {
+        slug: 'commerce',
         title: 'Commerce & vente en ligne',
         period: 'Depuis 2023',
         tags: ['E-commerce', 'Business', 'Japon'],
@@ -445,7 +458,7 @@ function LinksPage() {
 function MainLayout({ dark, onToggleDark }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { projectSlug } = useParams();
+  const { projectSlug, expSlug } = useParams();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
@@ -468,6 +481,27 @@ function MainLayout({ dark, onToggleDark }) {
     }
   }, [projectSlug, pathTab]);
 
+  // Ouvrir une expérience depuis l'URL /experiences/:slug
+  const allExpItems = experiences.flatMap(cat => cat.items);
+  useEffect(() => {
+    if (pathTab === 'experiences' && expSlug) {
+      const found = allExpItems.find(e => e.slug === expSlug);
+      if (found) setSelectedExp(found);
+    }
+  }, [expSlug, pathTab]);
+
+  // Fermer modale expérience → nettoyer URL
+  const closeExp = useCallback(() => {
+    setSelectedExp(null);
+    if (expSlug) navigate('/experiences', { replace: true });
+  }, [expSlug, navigate]);
+
+  // Ouvrir une expérience → mettre à jour l'URL
+  const openExp = useCallback((exp) => {
+    setSelectedExp(exp);
+    if (exp.slug) navigate(`/experiences/${exp.slug}`, { replace: true });
+  }, [navigate]);
+
   // Fermer modale projet → nettoyer URL
   const closeProject = useCallback(() => {
     setSelectedProject(null);
@@ -487,12 +521,12 @@ function MainLayout({ dark, onToggleDark }) {
         if (selectedProject) closeProject();
         if (modalOpen) setModalOpen(false);
         if (menuOpen) setMenuOpen(false);
-        if (selectedExp) setSelectedExp(null);
+        if (selectedExp) closeExp();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [selectedProject, modalOpen, menuOpen, closeProject]);
+  }, [selectedProject, modalOpen, menuOpen, closeProject, selectedExp, closeExp]);
 
   const linkedProjects = selectedSkill
     ? projects.filter(p => selectedSkill.projectIds.includes(p.id))
@@ -678,7 +712,7 @@ function MainLayout({ dark, onToggleDark }) {
                       className="exp-card"
                       variants={itemVariants}
                       whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(19,201,237,0.15)' }}
-                      onClick={() => setSelectedExp(item)}
+                      onClick={() => openExp(item)}
                       style={{ cursor: 'pointer' }}
                     >
                       <div className="exp-icon">{item.icon}</div>
@@ -874,7 +908,7 @@ function MainLayout({ dark, onToggleDark }) {
 
       <AnimatePresence>
         {selectedExp && (
-          <motion.div className="cv-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} onClick={() => setSelectedExp(null)}>
+          <motion.div className="cv-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} onClick={closeExp}>
             <motion.div className="exp-modal-box" variants={modalVariants} initial="hidden" animate="visible" exit="exit" onClick={e => e.stopPropagation()}>
               <div className="cv-modal-header">
                 <div className="cv-modal-title">
@@ -882,7 +916,14 @@ function MainLayout({ dark, onToggleDark }) {
                   <span><strong>{selectedExp.title}</strong></span>
                 </div>
                 <div className="cv-modal-actions">
-                  <button className="modal-close-btn" onClick={() => setSelectedExp(null)}>✕</button>
+                  {selectedExp.slug && (
+                    <button
+                      className="modal-share-btn"
+                      title="Copier le lien"
+                      onClick={() => navigator.clipboard.writeText(`${window.location.origin}/experiences/${selectedExp.slug}`)}
+                    >🔗</button>
+                  )}
+                  <button className="modal-close-btn" onClick={closeExp}>✕</button>
                 </div>
               </div>
               <div className="exp-modal-body">
@@ -966,6 +1007,7 @@ function App() {
           <Route path="/projects" element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
           <Route path="/projects/:projectSlug" element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
           <Route path="/experiences" element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
+          <Route path="/experiences/:expSlug" element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
           <Route path="/skills"   element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
           <Route path="/contact"  element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
 

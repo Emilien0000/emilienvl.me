@@ -61,6 +61,14 @@ html, body {
   -webkit-font-smoothing: antialiased;
   scroll-behavior: smooth;
   transition: background-color 0.35s ease, color 0.35s ease;
+  /* Empêche l'activation du mode édition au clic */
+  -webkit-user-modify: read-only;
+}
+
+/* Désactiver la sélection de texte sur les éléments interactifs */
+button, a, nav, .nav-desktop, .nav-mobile, .logo, .hamburger {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 a {
@@ -304,29 +312,14 @@ h2 {
   font-weight: 500;
   cursor: pointer;
   color: var(--text-secondary);
-  padding-bottom: 4px;
   white-space: nowrap;
   line-height: 1;
   transition: color 0.2s ease;
 }
 
-.nav-desktop a::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 0;
-  height: 1.5px;
-  background: var(--highlight-color);
-  border-radius: 2px;
-  transition: width 0.25s ease;
-}
+.nav-desktop a:hover { color: var(--highlight-color); }
 
-.nav-desktop a:hover { color: var(--text-main); }
-.nav-desktop a:hover::after { width: 100%; }
-
-.nav-desktop a.active { color: var(--text-main); font-weight: 600; }
-.nav-desktop a.active::after { width: 100%; }
+.nav-desktop a.active { color: var(--primary); font-weight: 700; }
 
 /* Hamburger */
 .hamburger {
