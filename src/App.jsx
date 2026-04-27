@@ -596,7 +596,7 @@ function MainLayout({ dark, onToggleDark }) {
         const formattedProjects = (projRes.data || []).map(p => {
           const linkedSkillTags = formattedSkills
             .filter(skill => skill.projectIds.includes(p.id))
-            .map(skill => skill.id);
+            .map(skill => skill.label);
           return { ...p, desc: p.desc_short, skillIds: linkedSkillTags };
         });
         setProjects(formattedProjects);
