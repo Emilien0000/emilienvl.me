@@ -498,7 +498,8 @@ function MainLayout({ dark, onToggleDark }) {
     { id: 'skills', label: 'Compétences' },
     { id: 'contact', label: 'Contact' },
   ];
-
+  console.log("Données reçues de Supabase :", { skills, projects, experiences });
+  
   return (
     <div className="app-container">
       <ScrollProgressBar />
