@@ -178,9 +178,8 @@ function AdminPage() {
     }
 
     if (res.error) {
-      if (res.error.code === '23505') alert("Erreur : Ce slug ou nom existe déjà.");
-      else alert("Erreur : " + res.error.message);
-    } else { 
+    alert("Code: " + res.error.code + "\nMessage: " + res.error.message + "\nDétails: " + res.error.details + "\nHint: " + res.error.hint);
+    }  else { 
       setEditItem(null); 
       setPreviewItem(null);
       fetchAll(); 
