@@ -161,7 +161,9 @@ function AdminPage() {
   const saveItem = async () => {
     setLoading(true);
     const table = activeTab === 'projects' ? 'projets' : activeTab === 'exp' ? 'experiences' : 'skills';
-    const { isDuplicate, ...cleanItem } = editItem;
+    
+    // CORRECTION ICI : on a ajouté "id" pour l'extraire correctement
+    const { isDuplicate, id, ...cleanItem } = editItem;
 
     // Formatage des tags/images pour Supabase
     if (typeof cleanItem.tags === 'string') cleanItem.tags = cleanItem.tags.split(',').map(s => s.trim()).filter(Boolean);
@@ -185,7 +187,7 @@ function AdminPage() {
     }
     setLoading(false);
   };
-
+  
   const togglePublish = async (item) => {
     const table = activeTab === 'projects' ? 'projets' : 'experiences';
     await supabase.from(table).update({ is_published: !item.is_published }).eq('id', item.id);
