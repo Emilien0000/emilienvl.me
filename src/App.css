@@ -1764,19 +1764,37 @@ h2 {
 .status-published { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
 .status-draft { background: rgba(173, 185, 202, 0.15); color: var(--text-secondary); }
 
-.adm-actions-row { display: flex; gap: 8px; margin-top: 15px; }
+/* --- Boutons Cartes Admin --- */
+.adm-actions-row { 
+  display: flex; 
+  flex-wrap: wrap; 
+  gap: 8px; 
+  margin-top: 24px; 
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
 .adm-mini-btn {
-  padding: 8px 12px;
-  font-size: 0.75rem;
+  padding: 8px 14px;
+  font-size: 0.8rem;
   border-radius: 8px;
-  border: 1px solid var(--border-subtle);
-  background: transparent;
-  color: var(--text-secondary);
+  border: none;
+  background: rgba(6, 57, 92, 0.05);
+  color: var(--text-main);
   cursor: pointer;
   font-weight: 600;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-.adm-mini-btn:hover { border-color: var(--highlight-color); color: var(--highlight-color); }
-.adm-mini-btn--del:hover { border-color: #e74c3c; color: #e74c3c; }
+.adm-mini-btn:hover { background: rgba(19, 201, 237, 0.15); color: var(--highlight-color); }
+
+.adm-mini-btn--del { background: rgba(231, 76, 60, 0.08); color: #e74c3c; }
+.adm-mini-btn--del:hover { background: #e74c3c; color: white; }
+
+.adm-mini-btn--preview { background: rgba(46, 204, 113, 0.1); color: #27ae60; border: 1px solid rgba(46, 204, 113, 0.2); }
+.adm-mini-btn--preview:hover { background: #2ecc71; color: white; }
 
 /* --- Dropzone Upload Images --- */
 .adm-dropzone {

@@ -114,7 +114,7 @@ function DarkModeToggle({ dark, onToggle }) {
 function AdminPage() {
   const [authed, setAuthed] = useState(() => localStorage.getItem('adm_auth') === 'true');
   const [pw, setPw] = useState(() => localStorage.getItem('adm_pw') || '');
-  const [activeTab, setActiveTab] = useState('projects'); // 'projects', 'exp', 'skills'
+  const [activeTab, setActiveTab] = useState('projects'); 
   
   const [projectsList, setProjectsList] = useState([]);
   const [expList, setExpList] = useState([]);
@@ -122,18 +122,24 @@ function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [editItem, setEditItem] = useState(null);
+  const [previewItem, setPreviewItem] = useState(null);
 
   const fetchAll = async () => {
     setLoading(true);
-    const [p, e, s] = await Promise.all([
-      supabase.from('projets').select('*').order('id', { ascending: false }),
-      supabase.from('experiences').select('*').order('id', { ascending: false }),
-      supabase.from('skills').select('*').order('id', { ascending: false })
-    ]);
-    setProjectsList(p.data || []);
-    setExpList(e.data || []);
-    setSkillsList(s.data || []);
-    setLoading(false);
+    try {
+      const [p, e, s] = await Promise.all([
+        supabase.from('projets').select('*').order('id', { ascending: false }),
+        supabase.from('experiences').select('*').order('id', { ascending: false }),
+        supabase.from('skills').select('*').order('id', { ascending: false })
+      ]);
+      setProjectsList(p.data || []);
+      setExpList(e.data || []);
+      setSkillsList(s.data || []);
+    } catch (err) {
+      console.error("Erreur de chargement:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { if (authed) fetchAll(); }, [authed]);
@@ -152,29 +158,34 @@ function AdminPage() {
     localStorage.removeItem('adm_pw');
   };
 
-  // --- ACTIONS BDD ---
   const saveItem = async () => {
     setLoading(true);
     const table = activeTab === 'projects' ? 'projets' : activeTab === 'exp' ? 'experiences' : 'skills';
-    const { isDuplicate, id, ...cleanItem } = editItem;
+    const { isDuplicate, ...cleanItem } = editItem;
 
+    // Formatage des tags/images pour Supabase
     if (typeof cleanItem.tags === 'string') cleanItem.tags = cleanItem.tags.split(',').map(s => s.trim()).filter(Boolean);
+    if (typeof cleanItem.images === 'string') cleanItem.images = cleanItem.images.split(',').map(s => s.trim()).filter(Boolean);
 
-    const res = id && !isDuplicate 
-      ? await supabase.from(table).update(cleanItem).eq('id', id)
-      : await supabase.from(table).insert([cleanItem]);
+    let res;
+    if (id && !isDuplicate) {
+      res = await supabase.from(table).update(cleanItem).eq('id', id);
+    } else {
+      // Pour une création ou duplication, on ne fournit PAS l'ID
+      res = await supabase.from(table).insert([cleanItem]);
+    }
 
     if (res.error) {
       if (res.error.code === '23505') alert("Erreur : Ce slug ou nom existe déjà.");
       else alert("Erreur : " + res.error.message);
     } else { 
       setEditItem(null); 
+      setPreviewItem(null);
       fetchAll(); 
     }
     setLoading(false);
   };
 
-  // Quick Publish depuis la galerie
   const togglePublish = async (item) => {
     const table = activeTab === 'projects' ? 'projets' : 'experiences';
     await supabase.from(table).update({ is_published: !item.is_published }).eq('id', item.id);
@@ -182,16 +193,22 @@ function AdminPage() {
   };
 
   const duplicate = (item) => {
-    setEditItem({ ...item, title: item.title + " (Copie)", slug: item.slug ? item.slug + "-copy" : '', is_published: false, isDuplicate: true });
+    const { id, ...rest } = item;
+    setEditItem({ 
+      ...rest, 
+      title: item.title ? item.title + " (Copie)" : item.label + " (Copie)", 
+      slug: item.slug ? item.slug + "-copy" : undefined, 
+      is_published: false, 
+      isDuplicate: true 
+    });
   };
 
   const initNew = () => {
-    if (activeTab === 'projects') setEditItem({ title: '', slug: '', is_published: true, details: '', date: '', tech: '', link: '', images: [], desc_short: '' });
+    if (activeTab === 'projects') setEditItem({ title: '', slug: '', is_published: true, details: '', date: '', tech: '', link: '', images: [], desc_short: '', image_fit: 'cover' });
     else if (activeTab === 'exp') setEditItem({ title: '', slug: '', is_published: true, details: '', period: '', category: '', icon: '💼', tags: [], desc_text: '' });
     else setEditItem({ label: '', desc_text: '', project_ids: [], experience_ids: [] });
   };
 
-  // --- UPLOAD D'IMAGES (DRAG & DROP) ---
   const handleFiles = async (files) => {
     if (!files || files.length === 0) return;
     setUploading(true);
@@ -200,10 +217,8 @@ function AdminPage() {
       for (const file of files) {
         const fileExt = file.name.split('.').pop();
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
-        
         const { error } = await supabase.storage.from('images').upload(fileName, file);
         if (error) throw error;
-        
         const { data } = supabase.storage.from('images').getPublicUrl(fileName);
         uploadedUrls.push(data.publicUrl);
       }
@@ -217,13 +232,16 @@ function AdminPage() {
 
   if (!authed) {
     return (
-      <div className="admin-page"><div className="admin-login">
-        <h1 className="admin-title">Panel Admin</h1>
-        <div className="admin-input-row">
-          <input type="password" placeholder="Mdp" className="admin-input" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && tryLogin()} />
-          <button className="admin-btn" onClick={tryLogin}>Entrer</button>
+      <div className="admin-page">
+        <div className="admin-login">
+          <div className="admin-lock">🔐</div>
+          <h1 className="admin-title">Panel Admin</h1>
+          <div className="admin-input-row">
+            <input type="password" placeholder="Mdp" className="admin-input" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && tryLogin()} />
+            <button className="admin-btn" onClick={tryLogin}>Entrer</button>
+          </div>
         </div>
-      </div></div>
+      </div>
     );
   }
 
@@ -246,15 +264,14 @@ function AdminPage() {
       <main className="adm-main">
         <header className="adm-header-row">
           <h1 className="admin-title">
-            {activeTab === 'projects' ? 'Projets' : activeTab === 'exp' ? 'Expériences' : 'Compétences'}
+            {activeTab === 'projects' ? 'Gestion Projets' : activeTab === 'exp' ? 'Gestion Expériences' : 'Gestion Compétences'}
           </h1>
           {!editItem && <button className="adm-primary-btn" onClick={initNew}>+ Nouveau</button>}
         </header>
 
         {editItem ? (
           <div className="adm-form-container">
-            {/* 1. FORMULAIRE PROJETS & EXPERIENCES */}
-            {activeTab !== 'skills' && (
+            {activeTab !== 'skills' ? (
               <div className="adm-form-grid">
                 <div className="adm-input-group">
                   <label>Titre</label>
@@ -275,13 +292,11 @@ function AdminPage() {
                       <label>Lien du projet</label>
                       <input className="adm-field" value={editItem.link || ''} onChange={e=>setEditItem({...editItem, link: e.target.value})} />
                     </div>
-                    
-                    {/* DRAG & DROP IMAGES */}
                     <div className="adm-input-group full-width">
-                      <label>Images du projet</label>
+                      <label>Images du projet (Drag & Drop)</label>
                       <label className="adm-dropzone" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}>
                         <span className="adm-dropzone-icon">📥</span>
-                        <span>{uploading ? 'Upload en cours...' : 'Glissez-déposez vos images ici ou cliquez pour parcourir'}</span>
+                        <span>{uploading ? 'Upload en cours...' : 'Dépose tes fichiers ici ou clique'}</span>
                         <input type="file" multiple accept="image/*" style={{display:'none'}} onChange={e => handleFiles(e.target.files)} />
                       </label>
                       {editItem.images?.length > 0 && (
@@ -295,9 +310,8 @@ function AdminPage() {
                         </div>
                       )}
                     </div>
-
                     <div className="adm-input-group full-width">
-                      <label>Technologies (Texte)</label>
+                      <label>Technologies (Texte brut)</label>
                       <input className="adm-field" value={editItem.tech || ''} onChange={e=>setEditItem({...editItem, tech: e.target.value})} />
                     </div>
                   </>
@@ -316,39 +330,35 @@ function AdminPage() {
 
                 <div className="adm-input-group full-width">
                   <label>Description Courte</label>
-                  <textarea className="adm-field" rows="2" value={editItem.desc_short || editItem.desc_text || ''} onChange={e=>setEditItem({...editItem, [activeTab === 'projects' ? 'desc_short' : 'desc_text']: e.target.value})} />
+                  <textarea className="adm-field" rows="2" value={editItem.desc_short || editItem.desc_text || ''} 
+                    onChange={e=>setEditItem({...editItem, [activeTab === 'projects' ? 'desc_short' : 'desc_text']: e.target.value})} />
                 </div>
                 <div className="adm-input-group full-width">
-                  <label>Détails complets (Missions)</label>
-                  <textarea className="adm-field" rows="5" value={editItem.details || ''} onChange={e=>setEditItem({...editItem, details: e.target.value})} />
+                  <label>Missions détaillées (Modale)</label>
+                  <textarea className="adm-field" rows="5" placeholder="Utilise • pour les listes" value={editItem.details || ''} onChange={e=>setEditItem({...editItem, details: e.target.value})} />
                 </div>
               </div>
-            )}
-
-            {/* 2. FORMULAIRE COMPÉTENCES */}
-            {activeTab === 'skills' && (
+            ) : (
               <div className="adm-form-grid">
                 <div className="adm-input-group full-width">
-                  <label>Nom de la compétence (ex: React, Python)</label>
+                  <label>Nom de la compétence</label>
                   <input className="adm-field" value={editItem.label || ''} onChange={e=>setEditItem({...editItem, label: e.target.value})} />
                 </div>
                 <div className="adm-input-group full-width">
                   <label>Description</label>
                   <textarea className="adm-field" rows="2" value={editItem.desc_text || ''} onChange={e=>setEditItem({...editItem, desc_text: e.target.value})} />
                 </div>
-                
-                {/* LIAISON AVEC LES PROJETS */}
                 <div className="adm-input-group full-width">
-                  <label>Attribuer aux projets :</label>
+                  <label>Lier aux projets :</label>
                   <div className="adm-checkbox-grid">
                     {projectsList.map(p => (
                       <label key={p.id} className="adm-checkbox-label">
                         <input type="checkbox" checked={editItem.project_ids?.includes(p.id)} 
                           onChange={e => {
-                            const newIds = e.target.checked 
+                            const ids = e.target.checked 
                               ? [...(editItem.project_ids || []), p.id] 
                               : (editItem.project_ids || []).filter(id => id !== p.id);
-                            setEditItem({...editItem, project_ids: newIds});
+                            setEditItem({...editItem, project_ids: ids});
                           }} />
                         {p.title}
                       </label>
@@ -362,11 +372,14 @@ function AdminPage() {
               {activeTab !== 'skills' ? (
                 <label className="adm-publish-toggle">
                   <input type="checkbox" checked={editItem.is_published} onChange={e=>setEditItem({...editItem, is_published: e.target.checked})} />
-                  <span>Rendre public sur le site</span>
+                  <span>Public sur le site</span>
                 </label>
-              ) : <div></div>}
+              ) : <div />}
               <div className="adm-form-actions">
-                <button className="adm-primary-btn" onClick={saveItem} disabled={loading || uploading}>{loading ? '...' : 'Enregistrer'}</button>
+                {activeTab !== 'skills' && (
+                  <button className="adm-mini-btn adm-mini-btn--preview" onClick={() => setPreviewItem(editItem)}>👁️ Prévisualiser</button>
+                )}
+                <button className="adm-primary-btn" onClick={saveItem} disabled={loading || uploading}>Enregistrer</button>
                 <button className="adm-mini-btn" onClick={() => setEditItem(null)}>Annuler</button>
               </div>
             </div>
@@ -384,22 +397,62 @@ function AdminPage() {
                   <span className="adm-card-id">#{item.id}</span>
                 </div>
                 <h3 className="adm-card-title">{item.title || item.label}</h3>
-                
                 <div className="adm-actions-row">
-                  <button className="adm-mini-btn" onClick={() => setEditItem(item)}>Modifier</button>
+                  <button className="adm-mini-btn" onClick={() => setEditItem(item)}>✏️ Modifier</button>
                   {activeTab !== 'skills' && (
                     <>
-                      <button className="adm-mini-btn" onClick={() => togglePublish(item)}>{item.is_published ? 'Masquer' : 'Publier'}</button>
-                      <button className="adm-mini-btn" onClick={() => duplicate(item)}>Dupliquer</button>
+                      <button className="adm-mini-btn" onClick={() => togglePublish(item)}>{item.is_published ? '👁️‍🗨️ Masquer' : '🚀 Publier'}</button>
+                      <button className="adm-mini-btn" onClick={() => duplicate(item)}>📄 Dupliquer</button>
                     </>
                   )}
-                  <button className="adm-mini-btn adm-mini-btn--del" onClick={async () => { if(window.confirm("Supprimer ?")) { await supabase.from(activeTab === 'projects' ? 'projets' : activeTab === 'exp' ? 'experiences' : 'skills').delete().eq('id', item.id); fetchAll(); } }}>Supprimer</button>
+                  <button className="adm-mini-btn adm-mini-btn--del" onClick={async () => { if(window.confirm("Supprimer ?")) { await supabase.from(activeTab === 'projects' ? 'projets' : activeTab === 'exp' ? 'experiences' : 'skills').delete().eq('id', item.id); fetchAll(); } }}>🗑️ Supprimer</button>
                 </div>
               </div>
             ))}
           </div>
         )}
       </main>
+
+      <AnimatePresence>
+        {previewItem && (
+          <motion.div className="cv-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ zIndex: 99999 }} onClick={() => setPreviewItem(null)}>
+            <motion.div className={activeTab === 'projects' ? "project-modal-box" : "exp-modal-box"} onClick={e => e.stopPropagation()}>
+              <div className="cv-modal-header">
+                <div className="cv-modal-title"><div className="cv-modal-dot" /><span><strong>{previewItem.title}</strong></span></div>
+                <button className="modal-close-btn" onClick={() => setPreviewItem(null)}>✕</button>
+              </div>
+              <div className={activeTab === 'projects' ? "project-modal-body" : "exp-modal-body"}>
+                {activeTab === 'projects' ? (
+                  <>
+                    <ImageGallery images={previewItem.images} imageFit={previewItem.imageFit} title={previewItem.title} />
+                    <div className="project-modal-content">
+                      <h2>{previewItem.title}</h2>
+                      <div className="project-modal-meta">
+                        <span className="tech-stack">{previewItem.tech}</span>
+                        <span className="project-date-modal">📅 {previewItem.date}</span>
+                      </div>
+                      <p style={{ whiteSpace: 'pre-line' }}>{previewItem.details || previewItem.desc_short}</p>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{padding: '30px'}}>
+                    <div className="exp-modal-top">
+                      <span className="exp-modal-icon">{previewItem.icon}</span>
+                      <div><h2>{previewItem.title}</h2><span className="exp-modal-period">📅 {previewItem.period}</span></div>
+                    </div>
+                    <div className="exp-modal-divider" />
+                    <div className="exp-modal-details">
+                      {(previewItem.details || previewItem.desc_text || '').split('\n\n').map((block, i) => (
+                        <p key={i} className={block.startsWith('•') ? 'exp-modal-bullet' : 'exp-modal-intro'}>{block}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
