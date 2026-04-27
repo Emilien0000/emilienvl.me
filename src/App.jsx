@@ -116,40 +116,86 @@ function DarkModeToggle({ dark, onToggle }) {
 // ─── Page Admin — CMS Portfolio ──────────────────────────────────
 
 function AdminPage() {
-  const [authed, setAuthed] = useState(false);
+  // Connexion persistante via localStorage
+  const [authed, setAuthed] = useState(() => localStorage.getItem('adm_auth') === 'true');
   const [pw, setPw] = useState('');
-  const [activeTab, setActiveTab] = useState('overview');
-  
+  const [activeTab, setActiveTab] = useState('projects'); // 'projects' ou 'exp'
+
   // Data States
   const [projectsList, setProjectsList] = useState([]);
-  const [skillsList, setSkillsList] = useState([]);
   const [expList, setExpList] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Form States (pour ajout/édition)
+  const [editItem, setEditItem] = useState(null); // Si null = ajout, si objet = édition
+
   const fetchAll = async () => {
     setLoading(true);
-    const [p, s, e] = await Promise.all([
-      supabase.from('projets').select('*').order('id'),
-      supabase.from('skills').select('*'),
-      supabase.from('experiences').select('*')
+    const [p, e] = await Promise.all([
+      supabase.from('projets').select('*').order('id', { ascending: false }),
+      supabase.from('experiences').select('*').order('id', { ascending: false })
     ]);
     setProjectsList(p.data || []);
-    setSkillsList(s.data || []);
     setExpList(e.data || []);
     setLoading(false);
   };
 
-  const tryLogin = () => { if (pw === 'CV') { setAuthed(true); fetchAll(); } };
+  useEffect(() => { if (authed) fetchAll(); }, [authed]);
+
+  const tryLogin = () => {
+    if (pw === 'CV') { 
+      setAuthed(true); 
+      localStorage.setItem('adm_auth', 'true');
+    }
+  };
+
+  const handleLogout = () => {
+    setAuthed(false);
+    localStorage.removeItem('adm_auth');
+  };
+
+  // --- ACTIONS CRUD ---
+  const saveItem = async (table, item) => {
+    setLoading(true);
+    const isEdit = item.id && !item.isDuplicate;
+    const { isDuplicate, ...cleanItem } = item; // On retire le flag temporaire
+
+    let error;
+    if (isEdit) {
+      const { error: err } = await supabase.from(table).update(cleanItem).eq('id', item.id);
+      error = err;
+    } else {
+      // Pour un nouvel item, on génère un ID si besoin ou on laisse le SERIAL de Supabase
+      const { error: err } = await supabase.from(table).insert([cleanItem]);
+      error = err;
+    }
+
+    if (error) alert("Erreur : " + error.message);
+    else { setEditItem(null); fetchAll(); }
+    setLoading(false);
+  };
+
+  const deleteItem = async (table, id) => {
+    if (window.confirm("Supprimer définitivement ?")) {
+      await supabase.from(table).delete().eq('id', id);
+      fetchAll();
+    }
+  };
+
+  const duplicateItem = (item) => {
+    const { id, ...rest } = item;
+    setEditItem({ ...rest, title: item.title + " (Copie)", is_published: false, isDuplicate: true });
+  };
 
   if (!authed) {
     return (
       <div className="admin-page">
         <div className="admin-login">
           <div className="admin-lock">🔐</div>
-          <h1 className="admin-title">Panel de Contrôle</h1>
+          <h1 className="admin-title">Panel Admin</h1>
           <div className="admin-input-row">
-            <input type="password" className="admin-input" placeholder="Mot de passe" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && tryLogin()} />
-            <button className="admin-btn" onClick={tryLogin}>Connexion</button>
+            <input type="password" className="admin-input" placeholder="Mdp" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && tryLogin()} />
+            <button className="admin-btn" onClick={tryLogin}>Entrer</button>
           </div>
         </div>
       </div>
@@ -158,54 +204,61 @@ function AdminPage() {
 
   return (
     <div className="adm-layout">
-      {/* SIDEBAR */}
       <aside className="adm-sidebar">
-        <div className="logo" style={{ marginBottom: '30px' }}>EVL. <span style={{ fontSize: '0.6rem', color: 'var(--highlight-color)' }}>ADMIN</span></div>
-        <button className={`adm-nav-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>📊 Vue d'ensemble</button>
-        <button className={`adm-nav-btn ${activeTab === 'projects' ? 'active' : ''}`} onClick={() => setActiveTab('projects')}>📂 Projets</button>
-        <button className={`adm-nav-btn ${activeTab === 'exp' ? 'active' : ''}`} onClick={() => setActiveTab('exp')}>💼 Expériences</button>
-        <div style={{ marginTop: 'auto' }}>
-          <a href="/" className="admin-back-link">← Quitter</a>
+        <div className="adm-logo">EVL<span>.</span></div>
+        <button className={`adm-nav-btn ${activeTab === 'projects' ? 'active' : ''}`} onClick={() => {setActiveTab('projects'); setEditItem(null);}}>📂 Projets</button>
+        <button className={`adm-nav-btn ${activeTab === 'exp' ? 'active' : ''}`} onClick={() => {setActiveTab('exp'); setEditItem(null);}}>💼 Expériences</button>
+        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <a href="/" className="admin-back-link">← Retour Site</a>
+          <button onClick={handleLogout} className="adm-mini-btn">Déconnexion</button>
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
       <main className="adm-main">
-        <header style={{ marginBottom: '40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1 className="admin-title">{activeTab === 'overview' ? 'Tableau de bord' : `Gestion : ${activeTab}`}</h1>
-          <span className="admin-badge">Mode Production</span>
+        <header className="adm-header-row">
+          <h1 className="admin-title">{activeTab === 'projects' ? 'Gestion Projets' : 'Gestion Expériences'}</h1>
+          <button className="admin-btn" onClick={() => setEditItem({ title: '', is_published: false })}>+ Nouveau</button>
         </header>
 
-        {activeTab === 'overview' && (
-          <>
-            <div className="adm-grid">
-              <div className="adm-stat-card">
-                <span className="admin-stat-label">Total Projets</span>
-                <div className="admin-stat-value">{projectsList.length}</div>
+        {/* LISTE DES ITEMS */}
+        {!editItem ? (
+          <div className="adm-grid">
+            {(activeTab === 'projects' ? projectsList : expList).map(item => (
+              <div key={item.id} className="adm-stat-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span className={`status-badge ${item.is_published ? 'status-published' : 'status-draft'}`}>
+                    {item.is_published ? 'Public' : 'Brouillon'}
+                  </span>
+                  <span className="admin-stat-label">ID: {item.id}</span>
+                </div>
+                <h3 style={{ margin: '10px 0', fontSize: '1.1rem' }}>{item.title}</h3>
+                <div className="adm-actions-row">
+                  <button className="adm-mini-btn" onClick={() => setEditItem(item)}>Modifier</button>
+                  <button className="adm-mini-btn" onClick={() => duplicateItem(item)}>Dupliquer</button>
+                  <button className="adm-mini-btn adm-mini-btn--del" onClick={() => deleteItem(activeTab === 'projects' ? 'projets' : 'experiences', item.id)}>Supprimer</button>
+                </div>
               </div>
-              <div className="adm-stat-card">
-                <span className="admin-stat-label">Compétences</span>
-                <div className="admin-stat-value">{skillsList.length}</div>
+            ))}
+          </div>
+        ) : (
+          /* FORMULAIRE D'ÉDITION / AJOUT */
+          <div className="adm-dashboard">
+            <h2>{editItem.id ? 'Modifier' : 'Ajouter'}</h2>
+            <div style={{ display: 'grid', gap: '15px', marginTop: '20px' }}>
+              <input className="admin-input" placeholder="Titre" value={editItem.title} onChange={e => setEditItem({...editItem, title: e.target.value})} />
+              <input className="admin-input" placeholder="Slug" value={editItem.slug} onChange={e => setEditItem({...editItem, slug: e.target.value})} />
+              
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <label style={{ fontSize: '0.9rem' }}>
+                  <input type="checkbox" checked={editItem.is_published} onChange={e => setEditItem({...editItem, is_published: e.target.checked})} /> Publier immédiatement
+                </label>
               </div>
-              <div className="adm-stat-card">
-                <span className="admin-stat-label">Visites (Local)</span>
-                <div className="admin-stat-value">{localStorage.getItem('portfolio_visits') || 0}</div>
-              </div>
-            </div>
-            
-            <div className="adm-section">
-              <h2 className="adm-section-title">Dernières Activités</h2>
-              <div className="admin-dashboard">
-                <p style={{ color: 'var(--text-secondary)' }}>La base de données Supabase est synchronisée et opérationnelle.</p>
-              </div>
-            </div>
-          </>
-        )}
 
-        {activeTab === 'projects' && (
-          <div className="adm-two-col">
-             {/* Ici tu peux remettre ton formulaire d'ajout et ta liste de projets que nous avions codé précédemment */}
-             <p style={{ color: 'var(--text-secondary)' }}>Interface de gestion des projets active.</p>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button className="admin-btn" onClick={() => saveItem(activeTab === 'projects' ? 'projets' : 'experiences', editItem)}>Enregistrer</button>
+                <button className="adm-mini-btn" onClick={() => setEditItem(null)}>Annuler</button>
+              </div>
+            </div>
           </div>
         )}
       </main>
@@ -326,10 +379,10 @@ function MainLayout({ dark, onToggleDark }) {
       setDbStatus('loading');
       try {
         const [projRes, skillRes, expRes] = await Promise.all([
-          supabase.from('projets').select('*').order('id', { ascending: false }),
-          supabase.from('skills').select('*'),
-          supabase.from('experiences').select('*')
-        ]);
+            supabase.from('projets').select('*').eq('is_published', true).order('id', { ascending: false }),
+            supabase.from('skills').select('*'),
+            supabase.from('experiences').select('*').eq('is_published', true)
+          ]);
 
         if (projRes.error || skillRes.error || expRes.error) throw new Error("Erreur SQL");
 
