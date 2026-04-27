@@ -1,4 +1,4 @@
-// src/App.jsx
+// src/App.jsx23
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -187,7 +187,7 @@ function AdminPage() {
     }
     setLoading(false);
   };
-  
+
   const togglePublish = async (item) => {
     const table = activeTab === 'projects' ? 'projets' : 'experiences';
     await supabase.from(table).update({ is_published: !item.is_published }).eq('id', item.id);
