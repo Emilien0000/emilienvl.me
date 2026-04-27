@@ -276,38 +276,202 @@ function DarkModeToggle({ dark, onToggle }) {
   );
 }
 
-// ─── Page Admin (compteur de visites) ─────────────────────────────────────────
+// ─── Page Admin — Dashboard Vercel Analytics ──────────────────────────────────
+
+// Mini sparkline SVG
+function Sparkline({ data, color = '#13c9ed', height = 40, width = 120 }) {
+  if (!data || data.length < 2) return null;
+  const max = Math.max(...data, 1);
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - (v / max) * height;
+    return `${x},${y}`;
+  }).join(' ');
+  const areaPath = `M0,${height} ` + data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - (v / max) * height;
+    return `L${x},${y}`;
+  }).join(' ') + ` L${width},${height} Z`;
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} style={{ overflow: 'visible' }}>
+      <defs>
+        <linearGradient id={`sg-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill={`url(#sg-${color.replace('#','')})`} />
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// Bar chart horizontal
+function BarChart({ items, color = '#13c9ed' }) {
+  if (!items || items.length === 0) return <p className="adm-empty">Aucune donnée</p>;
+  const max = Math.max(...items.map(i => i.value), 1);
+  return (
+    <div className="adm-barchart">
+      {items.slice(0, 8).map((item, i) => (
+        <div key={i} className="adm-bar-row">
+          <span className="adm-bar-label">{item.label}</span>
+          <div className="adm-bar-track">
+            <div className="adm-bar-fill" style={{ width: `${(item.value / max) * 100}%`, background: color }} />
+          </div>
+          <span className="adm-bar-value">{item.value.toLocaleString('fr-FR')}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Mini line chart avec labels
+function LineChart({ data, label = 'Vues', color = '#13c9ed' }) {
+  if (!data || data.length === 0) return <p className="adm-empty">Aucune donnée</p>;
+  const W = 480, H = 110, PAD = 8;
+  const vals = data.map(d => d.value);
+  const max = Math.max(...vals, 1);
+  const pts = vals.map((v, i) => {
+    const x = PAD + (i / Math.max(vals.length - 1, 1)) * (W - PAD * 2);
+    const y = PAD + (1 - v / max) * (H - PAD * 2);
+    return [x, y];
+  });
+  const polyline = pts.map(p => p.join(',')).join(' ');
+  const area = `M${pts[0][0]},${H} ` + pts.map(p => `L${p[0]},${p[1]}`).join(' ') + ` L${pts[pts.length-1][0]},${H} Z`;
+  return (
+    <div className="adm-linechart-wrap">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="adm-linechart-svg">
+        <defs>
+          <linearGradient id="lcgrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill="url(#lcgrad)" />
+        <polyline points={polyline} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        {pts.map((p, i) => (
+          <circle key={i} cx={p[0]} cy={p[1]} r="3" fill={color} opacity="0.8" />
+        ))}
+      </svg>
+      <div className="adm-linechart-labels">
+        {data.filter((_, i) => i === 0 || i === data.length - 1 || i % Math.ceil(data.length / 5) === 0).map((d, i) => (
+          <span key={i} className="adm-linechart-lbl">{d.label}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function AdminPage() {
   const [authed, setAuthed] = useState(false);
   const [pw, setPw] = useState('');
   const [err, setErr] = useState(false);
-  const [visits, setVisits] = useState(0);
-  const [history, setHistory] = useState([]);
+
+  // Vercel config (stocké localStorage)
+  const [token, setToken] = useState(() => localStorage.getItem('adm_vercel_token') || '');
+  const [projectId, setProjectId] = useState(() => localStorage.getItem('adm_vercel_project') || '');
+  const [showConfig, setShowConfig] = useState(false);
+
+  // Données analytics
+  const [loading, setLoading] = useState(false);
+  const [apiErr, setApiErr] = useState('');
+  const [period, setPeriod] = useState('7d');
+  const [analytics, setAnalytics] = useState(null);
 
   const tryLogin = () => {
-    if (pw === 'CV') {
-      setAuthed(true);
-      setErr(false);
-      const v = parseInt(localStorage.getItem('portfolio_visits') || '0', 10);
-      const h = JSON.parse(localStorage.getItem('portfolio_visit_history') || '[]');
-      setVisits(v);
-      setHistory(h);
-    } else {
-      setErr(true);
-    }
+    if (pw === 'CV') { setAuthed(true); setErr(false); }
+    else setErr(true);
   };
 
-  const resetVisits = () => {
-    localStorage.setItem('portfolio_visits', '0');
-    localStorage.setItem('portfolio_visit_history', '[]');
-    setVisits(0);
-    setHistory([]);
+  const saveConfig = () => {
+    localStorage.setItem('adm_vercel_token', token);
+    localStorage.setItem('adm_vercel_project', projectId);
+    setShowConfig(false);
+    fetchAnalytics();
   };
+
+  const fetchAnalytics = useCallback(async () => {
+    const tok = localStorage.getItem('adm_vercel_token') || token;
+    const pid = localStorage.getItem('adm_vercel_project') || projectId;
+    if (!tok || !pid) { setShowConfig(true); return; }
+
+    setLoading(true);
+    setApiErr('');
+
+    try {
+      // Calcul des dates
+      const now = new Date();
+      const from = new Date(now);
+      const days = period === '1d' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 90;
+      from.setDate(from.getDate() - days);
+      const fromTs = from.getTime();
+      const toTs = now.getTime();
+
+      const headers = { Authorization: `Bearer ${tok}` };
+      const base = `https://vercel.com/api/web/insights`;
+
+      // Endpoints analytics Vercel
+      const [summaryRes, pageviewsRes, pagesRes, countriesRes, devicesRes, browsersRes] = await Promise.all([
+        fetch(`${base}/summary?projectId=${pid}&from=${fromTs}&to=${toTs}&filter=%7B%7D`, { headers }),
+        fetch(`${base}/pageviews?projectId=${pid}&from=${fromTs}&to=${toTs}&granularity=${days <= 7 ? 'day' : 'week'}&filter=%7B%7D`, { headers }),
+        fetch(`${base}/pages?projectId=${pid}&from=${fromTs}&to=${toTs}&limit=8&filter=%7B%7D`, { headers }),
+        fetch(`${base}/countries?projectId=${pid}&from=${fromTs}&to=${toTs}&limit=8&filter=%7B%7D`, { headers }),
+        fetch(`${base}/devices?projectId=${pid}&from=${fromTs}&to=${toTs}&limit=5&filter=%7B%7D`, { headers }),
+        fetch(`${base}/browsers?projectId=${pid}&from=${fromTs}&to=${toTs}&limit=5&filter=%7B%7D`, { headers }),
+      ]);
+
+      if (!summaryRes.ok) {
+        const e = await summaryRes.json().catch(() => ({}));
+        throw new Error(e.error?.message || `Erreur ${summaryRes.status} — vérifie le token et le project ID`);
+      }
+
+      const [summary, pageviews, pages, countries, devices, browsers] = await Promise.all([
+        summaryRes.json(),
+        pageviewsRes.json(),
+        pagesRes.json(),
+        countriesRes.json(),
+        devicesRes.json(),
+        browsersRes.json(),
+      ]);
+
+      setAnalytics({ summary, pageviews, pages, countries, devices, browsers });
+    } catch (e) {
+      setApiErr(e.message || 'Erreur inconnue');
+    } finally {
+      setLoading(false);
+    }
+  }, [token, projectId, period]);
+
+  useEffect(() => {
+    if (authed) fetchAnalytics();
+  }, [authed, period]);
+
+  // Formatage
+  const fmt = n => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n ?? '—');
+  const pct = (a, b) => b ? `${((a - b) / b * 100).toFixed(1)}%` : '—';
+
+  // Parser les données Vercel
+  const parsePageviews = () => {
+    if (!analytics?.pageviews?.data) return [];
+    return analytics.pageviews.data.map(d => ({
+      label: new Date(d.key).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+      value: d.total ?? d.value ?? 0,
+    }));
+  };
+  const parseList = (key) => {
+    if (!analytics?.[key]?.data) return [];
+    return analytics[key].data.map(d => ({ label: d.key, value: d.total ?? d.value ?? 0 }));
+  };
+
+  const pvData = parsePageviews();
+  const totalViews = analytics?.summary?.totalViews ?? analytics?.summary?.pageviews ?? 0;
+  const uniqueVisitors = analytics?.summary?.uniqueVisitors ?? analytics?.summary?.visitors ?? 0;
+  const avgDuration = analytics?.summary?.avgDuration ?? 0;
+  const bounceRate = analytics?.summary?.bounceRate ?? 0;
 
   return (
     <div className="admin-page">
-      <div className="admin-box">
+      <div className={`admin-box${authed ? ' admin-box--full' : ''}`}>
         {!authed ? (
           <div className="admin-login">
             <div className="admin-lock">🔐</div>
@@ -328,42 +492,146 @@ function AdminPage() {
             {err && <p className="admin-err">Mot de passe incorrect.</p>}
           </div>
         ) : (
-          <div className="admin-dashboard">
-            <div className="admin-header-row">
-              <h1 className="admin-title">Dashboard</h1>
-              <span className="admin-badge">● En ligne</span>
-            </div>
-            <div className="admin-stat-cards">
-              <div className="admin-stat-card">
-                <span className="admin-stat-label">Visites totales</span>
-                <span className="admin-stat-value">{visits}</span>
+          <div className="admin-dashboard adm-full">
+
+            {/* ── Header ── */}
+            <div className="adm-header">
+              <div className="adm-header-left">
+                <h1 className="admin-title">Dashboard Analytics</h1>
+                <span className="admin-badge">● Vercel</span>
               </div>
-              <div className="admin-stat-card">
-                <span className="admin-stat-label">Sessions enregistrées</span>
-                <span className="admin-stat-value">{history.length}</span>
-              </div>
-              <div className="admin-stat-card">
-                <span className="admin-stat-label">Dernière visite</span>
-                <span className="admin-stat-value admin-stat-value--sm">
-                  {history.length > 0 ? history[history.length - 1] : '—'}
-                </span>
-              </div>
-            </div>
-            {history.length > 0 && (
-              <div className="admin-history">
-                <h2 className="admin-history-title">Historique</h2>
-                <div className="admin-history-list">
-                  {[...history].reverse().slice(0, 20).map((date, i) => (
-                    <div key={i} className="admin-history-item">
-                      <span className="admin-history-dot" />
-                      <span>{date}</span>
-                    </div>
+              <div className="adm-header-right">
+                <div className="adm-period-tabs">
+                  {['1d','7d','30d','90d'].map(p => (
+                    <button key={p} className={`adm-period-btn${period === p ? ' active' : ''}`} onClick={() => setPeriod(p)}>{p}</button>
                   ))}
+                </div>
+                <button className="adm-config-btn" onClick={() => setShowConfig(v => !v)} title="Configurer Vercel">⚙️</button>
+                <button className="adm-refresh-btn" onClick={fetchAnalytics} title="Actualiser">↻</button>
+              </div>
+            </div>
+
+            {/* ── Config Vercel ── */}
+            {showConfig && (
+              <div className="adm-config-box">
+                <p className="adm-config-title">🔑 Configuration Vercel</p>
+                <p className="adm-config-hint">Crée un token sur <strong>vercel.com/account/tokens</strong> avec scope Analytics Read. Le Project ID se trouve dans les Settings de ton projet.</p>
+                <div className="adm-config-fields">
+                  <input className="admin-input adm-config-input" placeholder="Token Vercel (Bearer)" value={token} onChange={e => setToken(e.target.value)} />
+                  <input className="admin-input adm-config-input" placeholder="Project ID (prj_xxxxx)" value={projectId} onChange={e => setProjectId(e.target.value)} />
+                  <button className="admin-btn" onClick={saveConfig}>Enregistrer & Charger</button>
                 </div>
               </div>
             )}
-            <button className="admin-reset-btn" onClick={resetVisits}>🗑️ Réinitialiser les données</button>
-            <a href="/" className="admin-back-link">← Retour au portfolio</a>
+
+            {/* ── Erreur API ── */}
+            {apiErr && (
+              <div className="adm-api-err">
+                ⚠️ {apiErr}
+                <button className="adm-config-inline-btn" onClick={() => setShowConfig(true)}>Configurer</button>
+              </div>
+            )}
+
+            {/* ── Loader ── */}
+            {loading && (
+              <div className="adm-loader">
+                <div className="adm-spinner" />
+                <span>Chargement des données Vercel…</span>
+              </div>
+            )}
+
+            {/* ── KPI Cards ── */}
+            {!loading && analytics && (
+              <>
+                <div className="adm-kpi-grid">
+                  <div className="adm-kpi-card">
+                    <span className="adm-kpi-icon">👁️</span>
+                    <div className="adm-kpi-body">
+                      <span className="adm-kpi-label">Vues totales</span>
+                      <span className="adm-kpi-value">{fmt(totalViews)}</span>
+                    </div>
+                    <Sparkline data={pvData.map(d => d.value)} />
+                  </div>
+                  <div className="adm-kpi-card">
+                    <span className="adm-kpi-icon">👤</span>
+                    <div className="adm-kpi-body">
+                      <span className="adm-kpi-label">Visiteurs uniques</span>
+                      <span className="adm-kpi-value">{fmt(uniqueVisitors)}</span>
+                    </div>
+                    <Sparkline data={pvData.map(d => Math.round(d.value * 0.65))} color="#06395c" />
+                  </div>
+                  <div className="adm-kpi-card">
+                    <span className="adm-kpi-icon">⏱️</span>
+                    <div className="adm-kpi-body">
+                      <span className="adm-kpi-label">Durée moy.</span>
+                      <span className="adm-kpi-value">{avgDuration ? `${Math.round(avgDuration)}s` : '—'}</span>
+                    </div>
+                  </div>
+                  <div className="adm-kpi-card">
+                    <span className="adm-kpi-icon">📉</span>
+                    <div className="adm-kpi-body">
+                      <span className="adm-kpi-label">Taux de rebond</span>
+                      <span className="adm-kpi-value">{bounceRate ? `${Math.round(bounceRate * 100)}%` : '—'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Graphique vues dans le temps ── */}
+                <div className="adm-section">
+                  <h2 className="adm-section-title">📈 Vues dans le temps</h2>
+                  <div className="adm-chart-card">
+                    <LineChart data={pvData} label="Vues" />
+                  </div>
+                </div>
+
+                {/* ── Grille pages + pays ── */}
+                <div className="adm-two-col">
+                  <div className="adm-section">
+                    <h2 className="adm-section-title">📄 Pages les plus visitées</h2>
+                    <div className="adm-chart-card">
+                      <BarChart items={parseList('pages')} />
+                    </div>
+                  </div>
+                  <div className="adm-section">
+                    <h2 className="adm-section-title">🌍 Pays</h2>
+                    <div className="adm-chart-card">
+                      <BarChart items={parseList('countries')} color="#06395c" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Appareils + Navigateurs ── */}
+                <div className="adm-two-col">
+                  <div className="adm-section">
+                    <h2 className="adm-section-title">📱 Appareils</h2>
+                    <div className="adm-chart-card">
+                      <BarChart items={parseList('devices')} color="#0db1d1" />
+                    </div>
+                  </div>
+                  <div className="adm-section">
+                    <h2 className="adm-section-title">🌐 Navigateurs</h2>
+                    <div className="adm-chart-card">
+                      <BarChart items={parseList('browsers')} color="#0db1d1" />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── Pas encore configuré ── */}
+            {!loading && !analytics && !apiErr && (
+              <div className="adm-empty-state">
+                <div className="adm-empty-icon">📊</div>
+                <p className="adm-empty-title">Connecte Vercel Analytics</p>
+                <p className="adm-empty-sub">Configure ton token et project ID pour afficher les vraies données de ton site.</p>
+                <button className="admin-btn" onClick={() => setShowConfig(true)}>⚙️ Configurer</button>
+              </div>
+            )}
+
+            <div className="adm-footer-row">
+              <a href="/" className="admin-back-link">← Retour au portfolio</a>
+              <span className="adm-powered">Données via Vercel Analytics API</span>
+            </div>
           </div>
         )}
       </div>
