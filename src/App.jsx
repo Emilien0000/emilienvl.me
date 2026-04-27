@@ -115,7 +115,6 @@ function AdminPage() {
   const [authed, setAuthed] = useState(() => localStorage.getItem('adm_auth') === 'true');
   const [pw, setPw] = useState(() => localStorage.getItem('adm_pw') || '');
   const [activeTab, setActiveTab] = useState('projects');
-  
   const [projectsList, setProjectsList] = useState([]);
   const [expList, setExpList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -139,51 +138,43 @@ function AdminPage() {
       setAuthed(true); 
       localStorage.setItem('adm_auth', 'true');
       localStorage.setItem('adm_pw', 'CV');
-    } else { alert("Mot de passe incorrect"); }
-  };
-
-  const handleLogout = () => {
-    setAuthed(false);
-    localStorage.removeItem('adm_auth');
-    localStorage.removeItem('adm_pw');
+    } else { alert("Mdp incorrect"); }
   };
 
   const saveItem = async () => {
     setLoading(true);
     const table = activeTab === 'projects' ? 'projets' : 'experiences';
-    const { isDuplicate, ...cleanItem } = editItem;
-    
-    // Pour les tableaux (tags et images), on s'assure qu'ils sont bien formatés
-    if (typeof cleanItem.tags === 'string') cleanItem.tags = cleanItem.tags.split(',').map(t => t.trim());
-    if (typeof cleanItem.images === 'string') cleanItem.images = cleanItem.images.split(',').map(i => i.trim());
+    const { isDuplicate, id, ...cleanItem } = editItem; // On extrait l'ID ici
 
-    const res = editItem.id && !isDuplicate 
-      ? await supabase.from(table).update(cleanItem).eq('id', editItem.id)
-      : await supabase.from(table).insert([cleanItem]);
+    // Transformation des chaînes en tableaux pour Supabase
+    if (typeof cleanItem.images === 'string') cleanItem.images = cleanItem.images.split(',').map(s => s.trim());
+    if (typeof cleanItem.tags === 'string') cleanItem.tags = cleanItem.tags.split(',').map(s => s.trim());
 
-    if (res.error) {
-      if (res.error.code === '23505') alert("Erreur : Ce slug est déjà utilisé par un autre élément.");
-      else alert(res.error.message);
-    } else { 
-      setEditItem(null); 
-      fetchAll(); 
+    let res;
+    if (id && !isDuplicate) {
+      // ÉDITION : On utilise l'ID pour savoir quoi modifier
+      res = await supabase.from(table).update(cleanItem).eq('id', id);
+    } else {
+      // AJOUT ou DUPLICATION : On NE met PAS l'ID pour laisser Supabase le générer
+      res = await supabase.from(table).insert([cleanItem]);
     }
+
+    if (res.error) alert("Erreur : " + res.error.message);
+    else { setEditItem(null); fetchAll(); }
     setLoading(false);
   };
 
   const duplicate = (item) => {
-    const { id, ...rest } = item;
-    setEditItem({ ...rest, title: item.title + " (Copie)", slug: item.slug + "-copy", is_published: false, isDuplicate: true });
+    setEditItem({ ...item, title: item.title + " (Copie)", slug: item.slug + "-copy", is_published: false, isDuplicate: true });
   };
 
   if (!authed) {
     return (
       <div className="admin-page">
         <div className="admin-login">
-          <div className="admin-lock">🔐</div>
           <h1 className="admin-title">Panel Admin</h1>
           <div className="admin-input-row">
-            <input type="password" placeholder="Mdp" className="admin-input" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && tryLogin()} />
+            <input type="password" className="admin-input" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && tryLogin()} />
             <button className="admin-btn" onClick={tryLogin}>Entrer</button>
           </div>
         </div>
@@ -195,67 +186,48 @@ function AdminPage() {
     <div className="adm-layout">
       <aside className="adm-sidebar">
         <div className="adm-logo">EVL<span>.</span></div>
-        <button className={`adm-nav-btn ${activeTab === 'projects' ? 'active' : ''}`} onClick={() => {setActiveTab('projects'); setEditItem(null);}}>📂 Projets</button>
-        <button className={`adm-nav-btn ${activeTab === 'exp' ? 'active' : ''}`} onClick={() => {setActiveTab('exp'); setEditItem(null);}}>💼 Expériences</button>
+        <button className={`adm-nav-btn ${activeTab === 'projects' ? 'active' : ''}`} onClick={() => {setActiveTab('projects'); setEditItem(null)}}>📂 Projets</button>
+        <button className={`adm-nav-btn ${activeTab === 'exp' ? 'active' : ''}`} onClick={() => {setActiveTab('exp'); setEditItem(null)}}>💼 Expériences</button>
         <div style={{ marginTop: 'auto' }}>
-          <a href="/" className="admin-back-link" style={{display:'block', marginBottom:'15px'}}>← Voir le site</a>
-          <button onClick={handleLogout} className="adm-mini-btn" style={{width:'100%'}}>Déconnexion</button>
+          <a href="/" className="admin-back-link">← Voir le site</a>
         </div>
       </aside>
 
       <main className="adm-main">
         <header className="adm-header-row">
           <h1 className="admin-title">{activeTab === 'projects' ? 'Gestion Projets' : 'Gestion Expériences'}</h1>
-          <button className="admin-btn" onClick={() => setEditItem({ title: '', is_published: false, slug: '', images: [], tags: [], tech: '', desc_short: '', details: '', date: '', category: '', icon: '' })}>+ Nouveau</button>
+          <button className="adm-primary-btn" onClick={() => setEditItem({ title: '', is_published: false, images: [], tags: [] })}>+ Nouveau</button>
         </header>
 
         {editItem ? (
-          <div className="adm-form-card" style={{ maxWidth: '900px' }}>
-            <h2>{editItem.id && !editItem.isDuplicate ? 'Modifier' : 'Ajouter'}</h2>
-            <div style={{display:'grid', gridTemplateColumns: '1fr 1fr', gap:'20px', marginTop:'20px'}}>
-               {/* Champs communs */}
-               <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                  <label>Titre<input className="admin-input" value={editItem.title || ''} onChange={e=>setEditItem({...editItem, title: e.target.value})} /></label>
-                  <label>Slug (URL unique)<input className="admin-input" value={editItem.slug || ''} onChange={e=>setEditItem({...editItem, slug: e.target.value})} /></label>
-                  <label>Date / Période<input className="admin-input" placeholder="ex: Mars 2026" value={editItem.date || editItem.period || ''} onChange={e=>setEditItem({...editItem, [activeTab === 'projects' ? 'date' : 'period']: e.target.value})} /></label>
-                  
-                  {activeTab === 'projects' ? (
-                    <>
-                      <label>Technologies (texte)<input className="admin-input" placeholder="React, SQL..." value={editItem.tech || ''} onChange={e=>setEditItem({...editItem, tech: e.target.value})} /></label>
-                      <label>Lien du projet<input className="admin-input" value={editItem.link || ''} onChange={e=>setEditItem({...editItem, link: e.target.value})} /></label>
-                    </>
-                  ) : (
-                    <>
-                      <label>Catégorie<input className="admin-input" placeholder="Informatique, Bénévolat..." value={editItem.category || ''} onChange={e=>setEditItem({...editItem, category: e.target.value})} /></label>
-                      <label>Icône (Emoji)<input className="admin-input" placeholder="🏢, 💻..." value={editItem.icon || ''} onChange={e=>setEditItem({...editItem, icon: e.target.value})} /></label>
-                    </>
-                  )}
-               </div>
-
-               <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                  <label>Images / Tags (séparés par une virgule)
-                    <input className="admin-input" placeholder={activeTab === 'projects' ? "/img1.webp, /img2.webp" : "React, Python..."} 
-                           value={activeTab === 'projects' ? (Array.isArray(editItem.images) ? editItem.images.join(', ') : '') : (Array.isArray(editItem.tags) ? editItem.tags.join(', ') : '')} 
-                           onChange={e => setEditItem({...editItem, [activeTab === 'projects' ? 'images' : 'tags']: e.target.value})} />
-                  </label>
-                  <label>Courte description
-                    <textarea className="admin-input" rows="3" value={editItem.desc_short || editItem.desc_text || ''} 
-                              onChange={e=>setEditItem({...editItem, [activeTab === 'projects' ? 'desc_short' : 'desc_text']: e.target.value})} />
-                  </label>
-                  <label>Détails complets (Missions)
-                    <textarea className="admin-input" rows="6" placeholder="Utilise • pour les listes" value={editItem.details || ''} 
-                              onChange={e=>setEditItem({...editItem, details: e.target.value})} />
-                  </label>
-               </div>
+          <div className="adm-form-grid">
+            <div className="adm-input-group">
+              <label>Titre</label>
+              <input className="adm-field" value={editItem.title || ''} onChange={e=>setEditItem({...editItem, title: e.target.value})} />
+            </div>
+            <div className="adm-input-group">
+              <label>Slug (URL)</label>
+              <input className="adm-field" value={editItem.slug || ''} onChange={e=>setEditItem({...editItem, slug: e.target.value})} />
+            </div>
+            
+            <div className="adm-input-group full-width">
+              <label>Description Courte</label>
+              <textarea className="adm-field" rows="2" value={editItem.desc_short || editItem.desc_text || ''} 
+                        onChange={e=>setEditItem({...editItem, [activeTab === 'projects' ? 'desc_short' : 'desc_text']: e.target.value})} />
             </div>
 
-            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label style={{display:'flex', gap:'10px', alignItems:'center', cursor:'pointer'}}>
-                <input type="checkbox" checked={editItem.is_published} onChange={e=>setEditItem({...editItem, is_published: e.target.checked})} /> 
-                Rendre public sur le site
+            <div className="adm-input-group full-width">
+              <label>Détails (Missions)</label>
+              <textarea className="adm-field" rows="5" value={editItem.details || ''} onChange={e=>setEditItem({...editItem, details: e.target.value})} />
+            </div>
+
+            <div className="adm-input-group full-width" style={{ flexDirection: 'row', gap: '20px', alignItems: 'center' }}>
+              <label style={{ display: 'flex', gap: '10px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={editItem.is_published} onChange={e=>setEditItem({...editItem, is_published: e.target.checked})} />
+                Publier sur le site
               </label>
-              <div style={{display:'flex', gap:'10px'}}>
-                <button className="admin-btn" onClick={saveItem} disabled={loading}>Enregistrer</button>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: '10px' }}>
+                <button className="adm-primary-btn" onClick={saveItem} disabled={loading}>Enregistrer</button>
                 <button className="adm-mini-btn" onClick={() => setEditItem(null)}>Annuler</button>
               </div>
             </div>
@@ -268,7 +240,6 @@ function AdminPage() {
                   {item.is_published ? 'Public' : 'Brouillon'}
                 </span>
                 <h3 style={{marginTop:'12px'}}>{item.title}</h3>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{item.slug}</p>
                 <div className="adm-actions-row">
                   <button className="adm-mini-btn" onClick={() => setEditItem(item)}>Modifier</button>
                   <button className="adm-mini-btn" onClick={() => duplicate(item)}>Dupliquer</button>
