@@ -1,4 +1,4 @@
-// src/App.jsx23dd
+// src/App.jsx23
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
