@@ -1644,10 +1644,12 @@ h2 {
 }
 
 
+/* ... (Garde tout ton début de fichier App.css identique jusqu'aux styles Admin) ... */
+
 /* --- Notification Toast (Haut Droite) --- */
 .db-toast {
   position: fixed;
-  top: 24px; /* Changé de bottom à top */
+  top: 24px; 
   right: 24px;
   background: var(--card-bg);
   border: 1px solid var(--border-subtle);
@@ -1660,16 +1662,65 @@ h2 {
   box-shadow: 0 10px 30px rgba(0,0,0,0.15);
 }
 
-/* --- Logo Admin --- */
+.toast-dot { width: 8px; height: 8px; border-radius: 50%; }
+.toast-dot.success { background: #2ecc71; box-shadow: 0 0 10px #2ecc71; }
+.toast-dot.loading { background: var(--highlight-color); animation: pulse-dot 1.5s infinite; }
+@keyframes pulse-dot { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+
+/* --- Structure Admin --- */
+.adm-layout { 
+  display: grid; 
+  grid-template-columns: 260px 1fr; 
+  min-height: 100vh; 
+  background: var(--bg-color); 
+}
+
+.adm-sidebar {
+  background: var(--card-bg);
+  border-right: 1px solid var(--border-subtle);
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
 .adm-logo {
-  font-size: 1.6rem;
-  font-weight: 800;
+  font-size: 1.8rem;
+  font-weight: 900;
   color: var(--text-main);
-  margin-bottom: 30px;
+  margin-bottom: 40px;
 }
 .adm-logo span { color: var(--highlight-color); }
 
-/* --- Badges de statut --- */
+.adm-nav-btn {
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 8px;
+}
+.adm-nav-btn.active { background: rgba(19, 201, 237, 0.1); color: var(--highlight-color); }
+
+.adm-main { padding: 50px; }
+
+.adm-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 40px;
+}
+
+.adm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+/* --- Badges & Boutons CRUD --- */
 .status-badge {
   font-size: 0.7rem;
   padding: 2px 8px;
@@ -1680,17 +1731,16 @@ h2 {
 .status-published { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
 .status-draft { background: rgba(173, 185, 202, 0.15); color: var(--text-secondary); }
 
-/* --- Boutons d'actions --- */
-.adm-actions-row { display: flex; gap: 8px; margin-top: 10px; }
+.adm-actions-row { display: flex; gap: 8px; margin-top: 15px; }
 .adm-mini-btn {
-  padding: 6px 10px;
+  padding: 8px 12px;
   font-size: 0.75rem;
   border-radius: 8px;
   border: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
+  font-weight: 600;
 }
 .adm-mini-btn:hover { border-color: var(--highlight-color); color: var(--highlight-color); }
 .adm-mini-btn--del:hover { border-color: #e74c3c; color: #e74c3c; }
