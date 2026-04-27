@@ -1668,12 +1668,8 @@ h2 {
 @keyframes pulse-dot { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
 
 /* --- Admin Layout — Pro Style --- */
-.adm-layout { 
-  display: grid; 
-  grid-template-columns: 280px 1fr; 
-  min-height: 100vh; 
-  background: var(--bg-color); 
-}
+/* --- Admin Global Layout --- */
+.adm-layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; background: var(--bg-color); }
 
 .adm-sidebar {
   background: var(--card-bg);
@@ -1681,7 +1677,13 @@ h2 {
   padding: 40px 24px;
   display: flex;
   flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
 }
+
+.adm-logo { font-size: 2rem; font-weight: 900; color: var(--text-main); margin-bottom: 40px; }
+.adm-logo span { color: var(--highlight-color); }
 
 .adm-nav-btn {
   padding: 14px 20px;
@@ -1690,67 +1692,67 @@ h2 {
   background: transparent;
   color: var(--text-secondary);
   text-align: left;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
   margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
+.adm-nav-btn.active { background: rgba(19, 201, 237, 0.1); color: var(--highlight-color); border-color: rgba(19, 201, 237, 0.2); }
 
-.adm-nav-btn:hover { background: rgba(255,255,255,0.03); color: var(--text-main); }
-.adm-nav-btn.active { 
-  background: rgba(19, 201, 237, 0.1); 
-  color: var(--highlight-color); 
-  border-color: rgba(19, 201, 237, 0.2); 
-}
+.adm-main { padding: 60px; max-width: 1400px; width: 100%; margin: 0 auto; }
 
-.adm-main { padding: 60px; max-width: 1200px; margin: 0 auto; width: 100%; }
+.adm-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
 
-/* --- Formulaire Clean --- */
-.adm-form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 30px;
-  background: var(--card-bg);
-  padding: 40px;
-  border-radius: 24px;
-  border: 1px solid var(--border-subtle);
-  margin-top: 30px;
-}
+/* --- Formulaire --- */
+.adm-form-container { background: var(--card-bg); border: 1px solid var(--border-subtle); border-radius: 24px; padding: 40px; animation: fadeIn 0.3s ease; }
 
-.adm-input-group { display: flex; flex-direction: column; gap: 8px; }
-.adm-input-group label { font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+.adm-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.full-width { grid-column: span 2; }
+
+.adm-input-group { display: flex; flex-direction: column; gap: 10px; }
+.adm-input-group label { font-size: 0.85rem; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
 
 .adm-field {
   padding: 14px 18px;
   border-radius: 12px;
-  border: 1.5px solid var(--border-subtle);
+  border: 2px solid var(--border-subtle);
   background: var(--bg-color);
   color: var(--text-main);
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: 1rem;
   outline: none;
   transition: border-color 0.2s;
 }
 .adm-field:focus { border-color: var(--highlight-color); }
 
-.full-width { grid-column: span 2; }
+.adm-form-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 40px; padding-top: 30px; border-top: 1px solid var(--border-subtle); }
 
-/* Boutons */
-.adm-primary-btn {
-  background: var(--highlight-color);
-  color: white;
-  border: none;
-  padding: 14px 28px;
-  border-radius: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.2s;
+.adm-publish-toggle { display: flex; align-items: center; gap: 12px; cursor: pointer; font-weight: 600; color: var(--text-main); }
+.adm-publish-toggle input { width: 20px; height: 20px; accent-color: var(--highlight-color); }
+
+.adm-form-actions { display: flex; gap: 12px; }
+
+/* --- Cartes du Dashboard --- */
+.adm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
+
+.adm-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  padding: 24px;
+  transition: transform 0.2s, border-color 0.2s;
 }
-.adm-primary-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(19,201,237,0.3); }
+.adm-card:hover { border-color: var(--highlight-color); transform: translateY(-4px); }
 
+.adm-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.adm-card-id { font-size: 0.8rem; color: var(--text-secondary); font-weight: 700; }
+.adm-card-title { font-size: 1.2rem; color: var(--text-main); margin-bottom: 20px; }
+
+/* --- Boutons --- */
+.adm-primary-btn { background: var(--highlight-color); color: white; border: none; padding: 12px 24px; border-radius: 12px; font-weight: 800; cursor: pointer; transition: 0.2s; }
+.adm-primary-btn:hover { transform: scale(1.03); box-shadow: 0 8px 20px rgba(19,201,237,0.3); }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 /* --- Badges & Boutons CRUD --- */
 .status-badge {
   font-size: 0.7rem;

@@ -115,6 +115,7 @@ function AdminPage() {
   const [authed, setAuthed] = useState(() => localStorage.getItem('adm_auth') === 'true');
   const [pw, setPw] = useState(() => localStorage.getItem('adm_pw') || '');
   const [activeTab, setActiveTab] = useState('projects');
+  
   const [projectsList, setProjectsList] = useState([]);
   const [expList, setExpList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -138,47 +139,48 @@ function AdminPage() {
       setAuthed(true); 
       localStorage.setItem('adm_auth', 'true');
       localStorage.setItem('adm_pw', 'CV');
-    } else { alert("Mdp incorrect"); }
+    } else { alert("Mot de passe incorrect"); }
+  };
+
+  const handleLogout = () => {
+    setAuthed(false);
+    localStorage.removeItem('adm_auth');
+    localStorage.removeItem('adm_pw');
   };
 
   const saveItem = async () => {
     setLoading(true);
     const table = activeTab === 'projects' ? 'projets' : 'experiences';
-    const { isDuplicate, id, ...cleanItem } = editItem; // On extrait l'ID ici
+    const { isDuplicate, id, ...cleanItem } = editItem;
 
-    // Transformation des chaînes en tableaux pour Supabase
-    if (typeof cleanItem.images === 'string') cleanItem.images = cleanItem.images.split(',').map(s => s.trim());
-    if (typeof cleanItem.tags === 'string') cleanItem.tags = cleanItem.tags.split(',').map(s => s.trim());
+    // Conversion des chaînes (images/tags) en tableaux SQL
+    if (typeof cleanItem.images === 'string') cleanItem.images = cleanItem.images.split(',').map(s => s.trim()).filter(Boolean);
+    if (typeof cleanItem.tags === 'string') cleanItem.tags = cleanItem.tags.split(',').map(s => s.trim()).filter(Boolean);
 
-    let res;
-    if (id && !isDuplicate) {
-      // ÉDITION : On utilise l'ID pour savoir quoi modifier
-      res = await supabase.from(table).update(cleanItem).eq('id', id);
-    } else {
-      // AJOUT ou DUPLICATION : On NE met PAS l'ID pour laisser Supabase le générer
-      res = await supabase.from(table).insert([cleanItem]);
-    }
+    const res = id && !isDuplicate 
+      ? await supabase.from(table).update(cleanItem).eq('id', id)
+      : await supabase.from(table).insert([cleanItem]);
 
     if (res.error) alert("Erreur : " + res.error.message);
     else { setEditItem(null); fetchAll(); }
     setLoading(false);
   };
 
-  const duplicate = (item) => {
-    setEditItem({ ...item, title: item.title + " (Copie)", slug: item.slug + "-copy", is_published: false, isDuplicate: true });
+  const initNew = () => {
+    const base = { title: '', slug: '', is_published: true, details: '' };
+    if (activeTab === 'projects') setEditItem({ ...base, date: '', tech: '', link: '', images: [], image_fit: 'cover', desc_short: '' });
+    else setEditItem({ ...base, period: '', category: '', icon: '💼', tags: [], desc_text: '' });
   };
 
   if (!authed) {
     return (
-      <div className="admin-page">
-        <div className="admin-login">
-          <h1 className="admin-title">Panel Admin</h1>
-          <div className="admin-input-row">
-            <input type="password" className="admin-input" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && tryLogin()} />
-            <button className="admin-btn" onClick={tryLogin}>Entrer</button>
-          </div>
+      <div className="admin-page"><div className="admin-login">
+        <h1 className="admin-title">Panel Admin</h1>
+        <div className="admin-input-row">
+          <input type="password" placeholder="Mdp" className="admin-input" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && tryLogin()} />
+          <button className="admin-btn" onClick={tryLogin}>Entrer</button>
         </div>
-      </div>
+      </div></div>
     );
   }
 
@@ -190,44 +192,83 @@ function AdminPage() {
         <button className={`adm-nav-btn ${activeTab === 'exp' ? 'active' : ''}`} onClick={() => {setActiveTab('exp'); setEditItem(null)}}>💼 Expériences</button>
         <div style={{ marginTop: 'auto' }}>
           <a href="/" className="admin-back-link">← Voir le site</a>
+          <button onClick={handleLogout} className="adm-mini-btn" style={{width:'100%', marginTop:'15px'}}>Déconnexion</button>
         </div>
       </aside>
 
       <main className="adm-main">
         <header className="adm-header-row">
           <h1 className="admin-title">{activeTab === 'projects' ? 'Gestion Projets' : 'Gestion Expériences'}</h1>
-          <button className="adm-primary-btn" onClick={() => setEditItem({ title: '', is_published: false, images: [], tags: [] })}>+ Nouveau</button>
+          {!editItem && <button className="adm-primary-btn" onClick={initNew}>+ Nouveau</button>}
         </header>
 
         {editItem ? (
-          <div className="adm-form-grid">
-            <div className="adm-input-group">
-              <label>Titre</label>
-              <input className="adm-field" value={editItem.title || ''} onChange={e=>setEditItem({...editItem, title: e.target.value})} />
-            </div>
-            <div className="adm-input-group">
-              <label>Slug (URL)</label>
-              <input className="adm-field" value={editItem.slug || ''} onChange={e=>setEditItem({...editItem, slug: e.target.value})} />
-            </div>
-            
-            <div className="adm-input-group full-width">
-              <label>Description Courte</label>
-              <textarea className="adm-field" rows="2" value={editItem.desc_short || editItem.desc_text || ''} 
-                        onChange={e=>setEditItem({...editItem, [activeTab === 'projects' ? 'desc_short' : 'desc_text']: e.target.value})} />
+          <div className="adm-form-container">
+            <div className="adm-form-grid">
+              <div className="adm-input-group">
+                <label>Titre</label>
+                <input className="adm-field" value={editItem.title || ''} onChange={e=>setEditItem({...editItem, title: e.target.value})} />
+              </div>
+              <div className="adm-input-group">
+                <label>Slug (URL)</label>
+                <input className="adm-field" value={editItem.slug || ''} onChange={e=>setEditItem({...editItem, slug: e.target.value})} />
+              </div>
+              
+              <div className="adm-input-group">
+                <label>{activeTab === 'projects' ? 'Date' : 'Période'}</label>
+                <input className="adm-field" value={editItem.date || editItem.period || ''} onChange={e=>setEditItem({...editItem, [activeTab === 'projects' ? 'date' : 'period']: e.target.value})} />
+              </div>
+
+              {activeTab === 'projects' ? (
+                <>
+                  <div className="adm-input-group">
+                    <label>Lien du projet</label>
+                    <input className="adm-field" value={editItem.link || ''} onChange={e=>setEditItem({...editItem, link: e.target.value})} />
+                  </div>
+                  <div className="adm-input-group full-width">
+                    <label>Images (URLs séparées par des virgules)</label>
+                    <textarea className="adm-field" rows="2" value={Array.isArray(editItem.images) ? editItem.images.join(', ') : editItem.images || ''} onChange={e=>setEditItem({...editItem, images: e.target.value})} />
+                  </div>
+                  <div className="adm-input-group">
+                    <label>Technologies (Texte)</label>
+                    <input className="adm-field" value={editItem.tech || ''} onChange={e=>setEditItem({...editItem, tech: e.target.value})} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="adm-input-group">
+                    <label>Catégorie</label>
+                    <input className="adm-field" value={editItem.category || ''} onChange={e=>setEditItem({...editItem, category: e.target.value})} />
+                  </div>
+                  <div className="adm-input-group">
+                    <label>Icône (Emoji)</label>
+                    <input className="adm-field" value={editItem.icon || ''} onChange={e=>setEditItem({...editItem, icon: e.target.value})} />
+                  </div>
+                  <div className="adm-input-group full-width">
+                    <label>Compétences / Tags (virgules)</label>
+                    <input className="adm-field" value={Array.isArray(editItem.tags) ? editItem.tags.join(', ') : editItem.tags || ''} onChange={e=>setEditItem({...editItem, tags: e.target.value})} />
+                  </div>
+                </>
+              )}
+
+              <div className="adm-input-group full-width">
+                <label>Description Courte</label>
+                <textarea className="adm-field" rows="2" value={editItem.desc_short || editItem.desc_text || ''} 
+                          onChange={e=>setEditItem({...editItem, [activeTab === 'projects' ? 'desc_short' : 'desc_text']: e.target.value})} />
+              </div>
+              <div className="adm-input-group full-width">
+                <label>Détails complets (Missions)</label>
+                <textarea className="adm-field" rows="5" value={editItem.details || ''} onChange={e=>setEditItem({...editItem, details: e.target.value})} />
+              </div>
             </div>
 
-            <div className="adm-input-group full-width">
-              <label>Détails (Missions)</label>
-              <textarea className="adm-field" rows="5" value={editItem.details || ''} onChange={e=>setEditItem({...editItem, details: e.target.value})} />
-            </div>
-
-            <div className="adm-input-group full-width" style={{ flexDirection: 'row', gap: '20px', alignItems: 'center' }}>
-              <label style={{ display: 'flex', gap: '10px', cursor: 'pointer' }}>
+            <div className="adm-form-footer">
+              <label className="adm-publish-toggle">
                 <input type="checkbox" checked={editItem.is_published} onChange={e=>setEditItem({...editItem, is_published: e.target.checked})} />
-                Publier sur le site
+                <span>Rendre public sur le site</span>
               </label>
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: '10px' }}>
-                <button className="adm-primary-btn" onClick={saveItem} disabled={loading}>Enregistrer</button>
+              <div className="adm-form-actions">
+                <button className="adm-primary-btn" onClick={saveItem} disabled={loading}>{loading ? '...' : 'Enregistrer'}</button>
                 <button className="adm-mini-btn" onClick={() => setEditItem(null)}>Annuler</button>
               </div>
             </div>
@@ -235,14 +276,17 @@ function AdminPage() {
         ) : (
           <div className="adm-grid">
             {(activeTab === 'projects' ? projectsList : expList).map(item => (
-              <div key={item.id} className="adm-stat-card">
-                <span className={`status-badge ${item.is_published ? 'status-published' : 'status-draft'}`}>
-                  {item.is_published ? 'Public' : 'Brouillon'}
-                </span>
-                <h3 style={{marginTop:'12px'}}>{item.title}</h3>
+              <div key={item.id} className="adm-card">
+                <div className="adm-card-header">
+                  <span className={`status-badge ${item.is_published ? 'status-published' : 'status-draft'}`}>
+                    {item.is_published ? 'Public' : 'Brouillon'}
+                  </span>
+                  <span className="adm-card-id">#{item.id}</span>
+                </div>
+                <h3 className="adm-card-title">{item.title}</h3>
                 <div className="adm-actions-row">
                   <button className="adm-mini-btn" onClick={() => setEditItem(item)}>Modifier</button>
-                  <button className="adm-mini-btn" onClick={() => duplicate(item)}>Dupliquer</button>
+                  <button className="adm-mini-btn" onClick={() => { const {id, ...rest} = item; setEditItem({...rest, title: item.title + ' (Copie)', slug: item.slug + '-copy', is_published: false, isDuplicate: true}) }}>Dupliquer</button>
                   <button className="adm-mini-btn adm-mini-btn--del" onClick={async () => { if(window.confirm("Supprimer ?")) { await supabase.from(activeTab === 'projects' ? 'projets' : 'experiences').delete().eq('id', item.id); fetchAll(); } }}>Supprimer</button>
                 </div>
               </div>
