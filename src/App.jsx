@@ -1,8 +1,9 @@
-// src/App.jsx
+  // src/App.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
+import { Analytics } from '@vercel/analytics/react';
 
 // ─── Données ──────────────────────────────────────────────────────────────────
 
@@ -1284,6 +1285,10 @@ function App() {
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>
       </VisitTracker>
+      
+      {/* LIGNE À AJOUTER ICI 👇 */}
+      <Analytics />
+      
     </BrowserRouter>
   );
 }
