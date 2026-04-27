@@ -114,21 +114,25 @@ function DarkModeToggle({ dark, onToggle }) {
 function AdminPage() {
   const [authed, setAuthed] = useState(() => localStorage.getItem('adm_auth') === 'true');
   const [pw, setPw] = useState(() => localStorage.getItem('adm_pw') || '');
-  const [activeTab, setActiveTab] = useState('projects');
+  const [activeTab, setActiveTab] = useState('projects'); // 'projects', 'exp', 'skills'
   
   const [projectsList, setProjectsList] = useState([]);
   const [expList, setExpList] = useState([]);
+  const [skillsList, setSkillsList] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [editItem, setEditItem] = useState(null);
 
   const fetchAll = async () => {
     setLoading(true);
-    const [p, e] = await Promise.all([
+    const [p, e, s] = await Promise.all([
       supabase.from('projets').select('*').order('id', { ascending: false }),
-      supabase.from('experiences').select('*').order('id', { ascending: false })
+      supabase.from('experiences').select('*').order('id', { ascending: false }),
+      supabase.from('skills').select('*').order('id', { ascending: false })
     ]);
     setProjectsList(p.data || []);
     setExpList(e.data || []);
+    setSkillsList(s.data || []);
     setLoading(false);
   };
 
@@ -148,28 +152,67 @@ function AdminPage() {
     localStorage.removeItem('adm_pw');
   };
 
+  // --- ACTIONS BDD ---
   const saveItem = async () => {
     setLoading(true);
-    const table = activeTab === 'projects' ? 'projets' : 'experiences';
+    const table = activeTab === 'projects' ? 'projets' : activeTab === 'exp' ? 'experiences' : 'skills';
     const { isDuplicate, id, ...cleanItem } = editItem;
 
-    // Conversion des chaînes (images/tags) en tableaux SQL
-    if (typeof cleanItem.images === 'string') cleanItem.images = cleanItem.images.split(',').map(s => s.trim()).filter(Boolean);
     if (typeof cleanItem.tags === 'string') cleanItem.tags = cleanItem.tags.split(',').map(s => s.trim()).filter(Boolean);
 
     const res = id && !isDuplicate 
       ? await supabase.from(table).update(cleanItem).eq('id', id)
       : await supabase.from(table).insert([cleanItem]);
 
-    if (res.error) alert("Erreur : " + res.error.message);
-    else { setEditItem(null); fetchAll(); }
+    if (res.error) {
+      if (res.error.code === '23505') alert("Erreur : Ce slug ou nom existe déjà.");
+      else alert("Erreur : " + res.error.message);
+    } else { 
+      setEditItem(null); 
+      fetchAll(); 
+    }
     setLoading(false);
   };
 
+  // Quick Publish depuis la galerie
+  const togglePublish = async (item) => {
+    const table = activeTab === 'projects' ? 'projets' : 'experiences';
+    await supabase.from(table).update({ is_published: !item.is_published }).eq('id', item.id);
+    fetchAll();
+  };
+
+  const duplicate = (item) => {
+    setEditItem({ ...item, title: item.title + " (Copie)", slug: item.slug ? item.slug + "-copy" : '', is_published: false, isDuplicate: true });
+  };
+
   const initNew = () => {
-    const base = { title: '', slug: '', is_published: true, details: '' };
-    if (activeTab === 'projects') setEditItem({ ...base, date: '', tech: '', link: '', images: [], image_fit: 'cover', desc_short: '' });
-    else setEditItem({ ...base, period: '', category: '', icon: '💼', tags: [], desc_text: '' });
+    if (activeTab === 'projects') setEditItem({ title: '', slug: '', is_published: true, details: '', date: '', tech: '', link: '', images: [], desc_short: '' });
+    else if (activeTab === 'exp') setEditItem({ title: '', slug: '', is_published: true, details: '', period: '', category: '', icon: '💼', tags: [], desc_text: '' });
+    else setEditItem({ label: '', desc_text: '', project_ids: [], experience_ids: [] });
+  };
+
+  // --- UPLOAD D'IMAGES (DRAG & DROP) ---
+  const handleFiles = async (files) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const uploadedUrls = [];
+      for (const file of files) {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+        
+        const { error } = await supabase.storage.from('images').upload(fileName, file);
+        if (error) throw error;
+        
+        const { data } = supabase.storage.from('images').getPublicUrl(fileName);
+        uploadedUrls.push(data.publicUrl);
+      }
+      setEditItem(prev => ({ ...prev, images: [...(prev.images || []), ...uploadedUrls] }));
+    } catch (err) {
+      alert("Erreur lors de l'upload : " + err.message);
+    } finally {
+      setUploading(false);
+    }
   };
 
   if (!authed) {
@@ -184,12 +227,16 @@ function AdminPage() {
     );
   }
 
+  const currentList = activeTab === 'projects' ? projectsList : activeTab === 'exp' ? expList : skillsList;
+
   return (
     <div className="adm-layout">
       <aside className="adm-sidebar">
         <div className="adm-logo">EVL<span>.</span></div>
         <button className={`adm-nav-btn ${activeTab === 'projects' ? 'active' : ''}`} onClick={() => {setActiveTab('projects'); setEditItem(null)}}>📂 Projets</button>
         <button className={`adm-nav-btn ${activeTab === 'exp' ? 'active' : ''}`} onClick={() => {setActiveTab('exp'); setEditItem(null)}}>💼 Expériences</button>
+        <button className={`adm-nav-btn ${activeTab === 'skills' ? 'active' : ''}`} onClick={() => {setActiveTab('skills'); setEditItem(null)}}>🧠 Compétences</button>
+        
         <div style={{ marginTop: 'auto' }}>
           <a href="/" className="admin-back-link">← Voir le site</a>
           <button onClick={handleLogout} className="adm-mini-btn" style={{width:'100%', marginTop:'15px'}}>Déconnexion</button>
@@ -198,96 +245,155 @@ function AdminPage() {
 
       <main className="adm-main">
         <header className="adm-header-row">
-          <h1 className="admin-title">{activeTab === 'projects' ? 'Gestion Projets' : 'Gestion Expériences'}</h1>
+          <h1 className="admin-title">
+            {activeTab === 'projects' ? 'Projets' : activeTab === 'exp' ? 'Expériences' : 'Compétences'}
+          </h1>
           {!editItem && <button className="adm-primary-btn" onClick={initNew}>+ Nouveau</button>}
         </header>
 
         {editItem ? (
           <div className="adm-form-container">
-            <div className="adm-form-grid">
-              <div className="adm-input-group">
-                <label>Titre</label>
-                <input className="adm-field" value={editItem.title || ''} onChange={e=>setEditItem({...editItem, title: e.target.value})} />
-              </div>
-              <div className="adm-input-group">
-                <label>Slug (URL)</label>
-                <input className="adm-field" value={editItem.slug || ''} onChange={e=>setEditItem({...editItem, slug: e.target.value})} />
-              </div>
-              
-              <div className="adm-input-group">
-                <label>{activeTab === 'projects' ? 'Date' : 'Période'}</label>
-                <input className="adm-field" value={editItem.date || editItem.period || ''} onChange={e=>setEditItem({...editItem, [activeTab === 'projects' ? 'date' : 'period']: e.target.value})} />
-              </div>
+            {/* 1. FORMULAIRE PROJETS & EXPERIENCES */}
+            {activeTab !== 'skills' && (
+              <div className="adm-form-grid">
+                <div className="adm-input-group">
+                  <label>Titre</label>
+                  <input className="adm-field" value={editItem.title || ''} onChange={e=>setEditItem({...editItem, title: e.target.value})} />
+                </div>
+                <div className="adm-input-group">
+                  <label>Slug (URL)</label>
+                  <input className="adm-field" value={editItem.slug || ''} onChange={e=>setEditItem({...editItem, slug: e.target.value})} />
+                </div>
+                <div className="adm-input-group">
+                  <label>{activeTab === 'projects' ? 'Date' : 'Période'}</label>
+                  <input className="adm-field" value={editItem.date || editItem.period || ''} onChange={e=>setEditItem({...editItem, [activeTab === 'projects' ? 'date' : 'period']: e.target.value})} />
+                </div>
 
-              {activeTab === 'projects' ? (
-                <>
-                  <div className="adm-input-group">
-                    <label>Lien du projet</label>
-                    <input className="adm-field" value={editItem.link || ''} onChange={e=>setEditItem({...editItem, link: e.target.value})} />
-                  </div>
-                  <div className="adm-input-group full-width">
-                    <label>Images (URLs séparées par des virgules)</label>
-                    <textarea className="adm-field" rows="2" value={Array.isArray(editItem.images) ? editItem.images.join(', ') : editItem.images || ''} onChange={e=>setEditItem({...editItem, images: e.target.value})} />
-                  </div>
-                  <div className="adm-input-group">
-                    <label>Technologies (Texte)</label>
-                    <input className="adm-field" value={editItem.tech || ''} onChange={e=>setEditItem({...editItem, tech: e.target.value})} />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="adm-input-group">
-                    <label>Catégorie</label>
-                    <input className="adm-field" value={editItem.category || ''} onChange={e=>setEditItem({...editItem, category: e.target.value})} />
-                  </div>
-                  <div className="adm-input-group">
-                    <label>Icône (Emoji)</label>
-                    <input className="adm-field" value={editItem.icon || ''} onChange={e=>setEditItem({...editItem, icon: e.target.value})} />
-                  </div>
-                  <div className="adm-input-group full-width">
-                    <label>Compétences / Tags (virgules)</label>
-                    <input className="adm-field" value={Array.isArray(editItem.tags) ? editItem.tags.join(', ') : editItem.tags || ''} onChange={e=>setEditItem({...editItem, tags: e.target.value})} />
-                  </div>
-                </>
-              )}
+                {activeTab === 'projects' ? (
+                  <>
+                    <div className="adm-input-group">
+                      <label>Lien du projet</label>
+                      <input className="adm-field" value={editItem.link || ''} onChange={e=>setEditItem({...editItem, link: e.target.value})} />
+                    </div>
+                    
+                    {/* DRAG & DROP IMAGES */}
+                    <div className="adm-input-group full-width">
+                      <label>Images du projet</label>
+                      <label className="adm-dropzone" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}>
+                        <span className="adm-dropzone-icon">📥</span>
+                        <span>{uploading ? 'Upload en cours...' : 'Glissez-déposez vos images ici ou cliquez pour parcourir'}</span>
+                        <input type="file" multiple accept="image/*" style={{display:'none'}} onChange={e => handleFiles(e.target.files)} />
+                      </label>
+                      {editItem.images?.length > 0 && (
+                        <div className="adm-image-preview-list">
+                          {editItem.images.map((img, i) => (
+                            <div key={i} className="adm-img-preview">
+                              <img src={img} alt="preview" />
+                              <button className="adm-img-del" onClick={() => setEditItem({...editItem, images: editItem.images.filter((_, idx) => idx !== i)})}>×</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
-              <div className="adm-input-group full-width">
-                <label>Description Courte</label>
-                <textarea className="adm-field" rows="2" value={editItem.desc_short || editItem.desc_text || ''} 
-                          onChange={e=>setEditItem({...editItem, [activeTab === 'projects' ? 'desc_short' : 'desc_text']: e.target.value})} />
+                    <div className="adm-input-group full-width">
+                      <label>Technologies (Texte)</label>
+                      <input className="adm-field" value={editItem.tech || ''} onChange={e=>setEditItem({...editItem, tech: e.target.value})} />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="adm-input-group">
+                      <label>Catégorie</label>
+                      <input className="adm-field" value={editItem.category || ''} onChange={e=>setEditItem({...editItem, category: e.target.value})} />
+                    </div>
+                    <div className="adm-input-group">
+                      <label>Icône (Emoji)</label>
+                      <input className="adm-field" value={editItem.icon || ''} onChange={e=>setEditItem({...editItem, icon: e.target.value})} />
+                    </div>
+                  </>
+                )}
+
+                <div className="adm-input-group full-width">
+                  <label>Description Courte</label>
+                  <textarea className="adm-field" rows="2" value={editItem.desc_short || editItem.desc_text || ''} onChange={e=>setEditItem({...editItem, [activeTab === 'projects' ? 'desc_short' : 'desc_text']: e.target.value})} />
+                </div>
+                <div className="adm-input-group full-width">
+                  <label>Détails complets (Missions)</label>
+                  <textarea className="adm-field" rows="5" value={editItem.details || ''} onChange={e=>setEditItem({...editItem, details: e.target.value})} />
+                </div>
               </div>
-              <div className="adm-input-group full-width">
-                <label>Détails complets (Missions)</label>
-                <textarea className="adm-field" rows="5" value={editItem.details || ''} onChange={e=>setEditItem({...editItem, details: e.target.value})} />
+            )}
+
+            {/* 2. FORMULAIRE COMPÉTENCES */}
+            {activeTab === 'skills' && (
+              <div className="adm-form-grid">
+                <div className="adm-input-group full-width">
+                  <label>Nom de la compétence (ex: React, Python)</label>
+                  <input className="adm-field" value={editItem.label || ''} onChange={e=>setEditItem({...editItem, label: e.target.value})} />
+                </div>
+                <div className="adm-input-group full-width">
+                  <label>Description</label>
+                  <textarea className="adm-field" rows="2" value={editItem.desc_text || ''} onChange={e=>setEditItem({...editItem, desc_text: e.target.value})} />
+                </div>
+                
+                {/* LIAISON AVEC LES PROJETS */}
+                <div className="adm-input-group full-width">
+                  <label>Attribuer aux projets :</label>
+                  <div className="adm-checkbox-grid">
+                    {projectsList.map(p => (
+                      <label key={p.id} className="adm-checkbox-label">
+                        <input type="checkbox" checked={editItem.project_ids?.includes(p.id)} 
+                          onChange={e => {
+                            const newIds = e.target.checked 
+                              ? [...(editItem.project_ids || []), p.id] 
+                              : (editItem.project_ids || []).filter(id => id !== p.id);
+                            setEditItem({...editItem, project_ids: newIds});
+                          }} />
+                        {p.title}
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="adm-form-footer">
-              <label className="adm-publish-toggle">
-                <input type="checkbox" checked={editItem.is_published} onChange={e=>setEditItem({...editItem, is_published: e.target.checked})} />
-                <span>Rendre public sur le site</span>
-              </label>
+              {activeTab !== 'skills' ? (
+                <label className="adm-publish-toggle">
+                  <input type="checkbox" checked={editItem.is_published} onChange={e=>setEditItem({...editItem, is_published: e.target.checked})} />
+                  <span>Rendre public sur le site</span>
+                </label>
+              ) : <div></div>}
               <div className="adm-form-actions">
-                <button className="adm-primary-btn" onClick={saveItem} disabled={loading}>{loading ? '...' : 'Enregistrer'}</button>
+                <button className="adm-primary-btn" onClick={saveItem} disabled={loading || uploading}>{loading ? '...' : 'Enregistrer'}</button>
                 <button className="adm-mini-btn" onClick={() => setEditItem(null)}>Annuler</button>
               </div>
             </div>
           </div>
         ) : (
           <div className="adm-grid">
-            {(activeTab === 'projects' ? projectsList : expList).map(item => (
+            {currentList.map(item => (
               <div key={item.id} className="adm-card">
                 <div className="adm-card-header">
-                  <span className={`status-badge ${item.is_published ? 'status-published' : 'status-draft'}`}>
-                    {item.is_published ? 'Public' : 'Brouillon'}
-                  </span>
+                  {activeTab !== 'skills' ? (
+                    <span className={`status-badge ${item.is_published ? 'status-published' : 'status-draft'}`}>
+                      {item.is_published ? 'Public' : 'Brouillon'}
+                    </span>
+                  ) : <span className="status-badge" style={{background: 'rgba(19, 201, 237, 0.1)', color: 'var(--highlight-color)'}}>Compétence</span>}
                   <span className="adm-card-id">#{item.id}</span>
                 </div>
-                <h3 className="adm-card-title">{item.title}</h3>
+                <h3 className="adm-card-title">{item.title || item.label}</h3>
+                
                 <div className="adm-actions-row">
                   <button className="adm-mini-btn" onClick={() => setEditItem(item)}>Modifier</button>
-                  <button className="adm-mini-btn" onClick={() => { const {id, ...rest} = item; setEditItem({...rest, title: item.title + ' (Copie)', slug: item.slug + '-copy', is_published: false, isDuplicate: true}) }}>Dupliquer</button>
-                  <button className="adm-mini-btn adm-mini-btn--del" onClick={async () => { if(window.confirm("Supprimer ?")) { await supabase.from(activeTab === 'projects' ? 'projets' : 'experiences').delete().eq('id', item.id); fetchAll(); } }}>Supprimer</button>
+                  {activeTab !== 'skills' && (
+                    <>
+                      <button className="adm-mini-btn" onClick={() => togglePublish(item)}>{item.is_published ? 'Masquer' : 'Publier'}</button>
+                      <button className="adm-mini-btn" onClick={() => duplicate(item)}>Dupliquer</button>
+                    </>
+                  )}
+                  <button className="adm-mini-btn adm-mini-btn--del" onClick={async () => { if(window.confirm("Supprimer ?")) { await supabase.from(activeTab === 'projects' ? 'projets' : activeTab === 'exp' ? 'experiences' : 'skills').delete().eq('id', item.id); fetchAll(); } }}>Supprimer</button>
                 </div>
               </div>
             ))}
