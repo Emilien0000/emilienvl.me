@@ -159,33 +159,41 @@ function AdminPage() {
   };
 
   const saveItem = async () => {
-    setLoading(true);
-    const table = activeTab === 'projects' ? 'projets' : activeTab === 'exp' ? 'experiences' : 'skills';
-    
-    // CORRECTION ICI : on a ajouté "id" pour l'extraire correctement
-    const { isDuplicate, id, ...cleanItem } = editItem;
+  setLoading(true);
+  const table = activeTab === 'projects' ? 'projets' : activeTab === 'exp' ? 'experiences' : 'skills';
+  
+  const { isDuplicate, id, ...cleanItem } = editItem;
 
-    // Formatage des tags/images pour Supabase
-    if (typeof cleanItem.tags === 'string') cleanItem.tags = cleanItem.tags.split(',').map(s => s.trim()).filter(Boolean);
-    if (typeof cleanItem.images === 'string') cleanItem.images = cleanItem.images.split(',').map(s => s.trim()).filter(Boolean);
+  // ✅ Génère un slug si vide
+  if (activeTab !== 'skills' && !cleanItem.slug?.trim()) {
+    cleanItem.slug = (cleanItem.title || 'item')
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, '') // retire les accents
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      + '-' + Date.now();
+  }
 
-    let res;
-    if (id && !isDuplicate) {
-      res = await supabase.from(table).update(cleanItem).eq('id', id);
-    } else {
-      // Pour une création ou duplication, on ne fournit PAS l'ID
-      res = await supabase.from(table).insert([cleanItem]);
-    }
+  if (typeof cleanItem.tags === 'string') cleanItem.tags = cleanItem.tags.split(',').map(s => s.trim()).filter(Boolean);
+  if (typeof cleanItem.images === 'string') cleanItem.images = cleanItem.images.split(',').map(s => s.trim()).filter(Boolean);
 
-    if (res.error) {
-    alert("Code: " + res.error.code + "\nMessage: " + res.error.message + "\nDétails: " + res.error.details + "\nHint: " + res.error.hint);
-    }  else { 
-      setEditItem(null); 
-      setPreviewItem(null);
-      fetchAll(); 
-    }
-    setLoading(false);
-  };
+  let res;
+  if (id && !isDuplicate) {
+    res = await supabase.from(table).update(cleanItem).eq('id', id);
+  } else {
+    res = await supabase.from(table).insert([cleanItem]);
+  }
+
+  if (res.error) {
+    if (res.error.code === '23505') alert("Erreur : Ce slug ou nom existe déjà. Modifie le slug manuellement.");
+    else alert("Erreur : " + res.error.message);
+  } else { 
+    setEditItem(null); 
+    setPreviewItem(null);
+    fetchAll(); 
+  }
+  setLoading(false);
+};
 
   const togglePublish = async (item) => {
     const table = activeTab === 'projects' ? 'projets' : 'experiences';
