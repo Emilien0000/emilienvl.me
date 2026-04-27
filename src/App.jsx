@@ -1,175 +1,9 @@
-  // src/App.jsx
+// src/App.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
-import { Analytics } from '@vercel/analytics/react';
-
-// ─── Données ──────────────────────────────────────────────────────────────────
-
-const projects = [
-  { 
-    id: 3, 
-    slug: 'zentracker',
-    title: 'ZenTracker.online', 
-    date: 'Janvier 2026 - Avril 2026',
-    dateSort: 2025,
-    desc: "Développement d'une plateforme fullstack d'achats automatisés, incluant la création d'une boutique, le scraping de données et un tableau de bord administrateur.", 
-    details: "ZenTracker.online est une solution fullstack que j'ai conçue et développée pour répondre à mes propres besoins en tant que vendeur en ligne. Le frontend est développé en React, le backend en Python (Flask), avec une base de données SQL pour le stockage des données clients. La plateforme permet d'automatiser l'achat de produits au Japon, le suivi des stocks... avec des scripts d'automatisation et de scraping pour récupérer les données en temps réel depuis différentes marketplaces. Un des défis majeurs a été de gérer l'authentification sécurisée, les limites des APIs externes, ainsi que la sécurité du site pour faire face à de potentielles attaques de concurrents.",
-    tech: 'React, Python, API, SQL', 
-    skillIds: ['React', 'Python', 'SQL', "Gestion d'API"],
-    link: 'https://zentracker.online',
-    images: ['/zentracker.webp', '/zentracker2.webp'],
-    imageFit: 'contain',
-  },
-  { 
-    id: 4, 
-    slug: 'extension-zentracker',
-    title: 'Extension ZenTracker', 
-    date: 'Mars 2026',
-    dateSort: 20250302,
-    desc: "Conception d'une extension navigateur pour ZenTracker, optimisant l'expérience utilisateur via l'intégration d'un flux dynamique, d'un outil d'authentification haute précision et de l'automatisation des transactions e-commerce.", 
-    details: "Dans la continuité de ZenTracker.online, j'ai développé une extension navigateur dédiée (Chrome/Firefox) permettant l'optimisation du site ainsi que l'ajout de fonctionnalités supplémentaires. S'intégrant directement aux pages des marketplaces, elle permet d'extraire automatiquement les informations produits, prix et stocks pour les synchroniser avec la plateforme sans quitter la page. L'extension injecte une interface légère dans le DOM et propose des outils avancés comme l'inclusion du feed sur toutes les pages web, l'activation d'une loupe pour l'authentification de produits à forte valeur, ou encore l'automatisation du paiement sur les sites e-commerce directement depuis zentracker.online.",
-    tech: 'JavaScript, Extension Chrome, API, Web Scraping', 
-    skillIds: ["Gestion d'API"],
-    link: 'https://zentracker.online',
-    images: ['/extension.webp'],
-    imageFit: 'contain',
-  },
-  { 
-    id: 1, 
-    slug: 'pacman-c',
-    title: 'Pacman en C', 
-    date: 'Novembre 2025',
-    dateSort: 20241201,
-    desc: "Développement d'un clone complet du jeu légendaire Pacman, réalisé entièrement en langage C avec gestion de l'algorithmique des fantômes.", 
-    details: "Dans le cadre scolaire, il nous a été demandé de coder un jeu Pac-Man. Pour ce projet fait en binôme, nous avons choisi une direction artistique 'Jurassic Park'. Le programme repose sur le langage C, l'animation des images est gérée par la bibliothèque SDL, et nous avons développé le projet via l'environnement Code::Blocks. Les principaux défis ont été de comprendre le fonctionnement de la SDL et de concevoir une architecture modulaire afin de faciliter le travail collaboratif sur le même code.",
-    tech: 'Langage C, SDL, Algorithmie',
-    skillIds: ['Langage C'],
-    link: 'https://github.com/Emilien0000/2a-pacman',
-    images: ['/pacman.webp'],
-    imageFit: 'cover',
-  },
-  { 
-    id: 2, 
-    slug: 'echecs-c',
-    title: "Jeu d'Échecs en C", 
-    date: 'Octobre 2024',
-    dateSort: 20241001,
-    desc: "Conception d'un moteur de jeu d'échecs en C, incluant la logique de déplacement des pièces et la gestion des règles de jeu.", 
-    details: "Dans le cadre scolaire, en binôme nous avons conçu un moteur de jeu d'échecs entièrement en langage C. Le projet couvre l'implémentation des règles de déplacement de chaque pièce, la gestion des situations spéciales (roque, prise en passant, promotion du pion), ainsi que la détection des échecs et échecs et mat. L'interface en ligne de commande permet à deux joueurs de s'affronter en local. Le principal défi a été de structurer le code de manière claire et modulaire pour gérer la complexité des règles du jeu.",
-    tech: 'Langage C, Structures de données',
-    skillIds: ['Langage C'],
-    link: 'https://github.com/Emilien0000/echec',
-    images: ['/echec.webp'],
-    imageFit: 'contain',
-  },
-];
-
-const skills = [
-  { id: 'Langage C',     label: 'Langage C',      desc: 'Programmation système, structures de données, algorithmique.',  projectIds: [1, 2] },
-  { id: 'Python',        label: 'Python',          desc: "Scripts d'automatisation, scraping, backend Flask.",            projectIds: [3] },
-  { id: 'React',         label: 'React',           desc: 'Interfaces web modernes, composants, état applicatif.',         projectIds: [3] },
-  { id: 'SQL',           label: 'SQL',             desc: 'Modélisation et interrogation de bases de données.',            projectIds: [3] },
-  { id: 'Cybersécurité', label: 'Cybersécurité',   desc: 'Sécurité applicative, analyse de vulnérabilités, CSP.',         projectIds: [3, 4] },
-  { id: "Gestion d'API", label: "Gestion d'API",   desc: "Conception et consommation d'APIs REST sécurisées.",            projectIds: [3, 4] },
-  { id: 'Pack Adobe',    label: 'Pack Adobe',       desc: 'Photoshop, Illustrator, Premiere Pro.',                         projectIds: [] },
-];
-
-const experiences = [
-  {
-    category: 'Informatique',
-    items: [
-      {
-        slug: 'cityprotect',
-        title: 'Technicien Polyvalent — CITYPROTECT',
-        period: '2025 · Stage 1 mois',
-        tags: ['API', 'Nmap', 'Réseau'],
-        desc: "Création d'automatisations via Make (gestion d'API), paramétrage de caméras et switchs, initiation à Nmap.",
-        icon: '🏢',
-        details: "Durant ce stage au sein de CITYPROTECT, j'ai eu l'occasion de travailler sur plusieurs missions techniques complémentaires :\n\n• Automatisation de flux via Make (ex-Integromat) : conception de scénarios d'automatisation reliant différentes APIs (webhooks, alertes, notifications).\n\n• Paramétrage réseau : configuration de switchs managés et de caméras IP sur des infrastructures client, intégration dans des NVR.\n\n• Initiation à Nmap : découverte du scan réseau pour cartographier les équipements et identifier les ports ouverts sur des périmètres définis.\n\n• Support technique client : assistance à la mise en service et aux tests de bon fonctionnement des installations de vidéosurveillance.",
-      },
-      {
-        slug: 'dev-fullstack',
-        title: 'Développeur fullstack — Activité personnelle',
-        period: '2026',
-        tags: ['React', 'Python', 'OVH'],
-        desc: "Création et déploiement de sites web fullstack pour mon activité de commerce en ligne via OVH.",
-        icon: '💻',
-        details: "Dans le cadre de mon activité de commerce en ligne, j'ai conçu et déployé de A à Z plusieurs applications web :\n\n• Frontend React : interfaces modernes avec routing, gestion d'état, composants réutilisables et animations fluides.\n\n• Backend Python / Flask : API REST sécurisées, gestion des sessions, authentification JWT, intégration de bases de données SQL.\n\n• Déploiement OVH : configuration de serveurs VPS, mise en place de reverse proxy Nginx, certificats SSL, gestion des DNS et des domaines.\n\n• Maintenance continue : monitoring, corrections de bugs, évolutions fonctionnelles selon les besoins de l'activité.",
-      },
-      {
-        slug: 'python-scraping',
-        title: 'Outils Python & Scraping',
-        period: '2023 – 2024',
-        tags: ['Python', 'Scraping', 'Automatisation'],
-        desc: "Développement d'outils Python, d'extensions et de scripts de scraping pour automatiser mon activité de commerce.",
-        icon: '🐍',
-        details: "Pour automatiser et optimiser mon activité de revente, j'ai développé un ensemble d'outils Python sur mesure :\n\n• Scripts de scraping : extraction automatique de prix, stocks et descriptions depuis des marketplaces japonaises (Mercari, Yahoo Auctions) en utilisant BeautifulSoup et Selenium.\n\n• Alertes en temps réel : scripts de surveillance qui envoient des notifications (Telegram, email) lors de nouvelles opportunités d'achat.\n\n• Automatisation de tâches répétitives : import/export de catalogues, gestion de fichiers CSV, renommage et traitement d'images en masse.\n\n• Extensions navigateur : injection de scripts pour enrichir l'interface des marketplaces directement en navigation.",
-      },
-    ],
-  },
-  {
-    category: 'Engagement & Bénévolat',
-    items: [
-      {
-        slug: 'snu-gendarmerie',
-        title: 'Cadet de la Gendarmerie Nationale — SNU',
-        period: 'Sept. 2023 – Juil. 2024',
-        tags: ['SNU', 'Gendarmerie', 'Mission d\'intérêt général'],
-        desc: "Phase 1 : séjour de cohésion (10 jours). Phase 2 : mission d'intérêt général en tant que Cadet à la gendarmerie nationale d'Amiens.",
-        icon: '🛡️',
-        details: "Participation au Service National Universel (SNU) avec deux phases distinctes :\n\n• Phase 1 — Séjour de cohésion (10 jours) : vie en collectivité, activités civiques et sportives, sensibilisation aux valeurs républicaines et à l'engagement citoyen.\n\n• Phase 2 — Mission d'intérêt général à la Gendarmerie Nationale d'Amiens : intégration au sein d'une brigade, observation et participation aux activités quotidiennes des gendarmes, sensibilisation aux missions de sécurité publique et de maintien de l'ordre.\n\n• Obtention du statut de Cadet de la République, avec remise officielle du diplôme.",
-      },
-    ],
-  },
-  {
-    category: 'Emploi Vacataire',
-    items: [
-      {
-        slug: 'animateur-vacataire',
-        title: 'Animateur Vacataire — Amiens Métropole',
-        period: '2024 & 2025 · 1 mois/an',
-        tags: ['Animation', 'Encadrement'],
-        desc: "Encadrement de groupes d'enfants, responsable d'attractions estivales dans le cadre de la mission « Un été à Amiens ».",
-        icon: '☀️',
-        details: "Dans le cadre de la mission estivale « Un été à Amiens » portée par Amiens Métropole :\n\n• Encadrement de groupes d'enfants de 6 à 14 ans lors d'animations et d'activités en plein air.\n\n• Responsable d'une attraction estivale : gestion de la sécurité, accueil du public, coordination avec l'équipe.\n\n• Organisation et animation d'ateliers créatifs, jeux collectifs et activités sportives adaptées aux différents groupes d'âge.\n\n• Expérience enrichissante en communication, gestion de groupe et sens des responsabilités.",
-      },
-    ],
-  },
-  {
-    category: 'Centres d\'intérêt',
-    items: [
-      {
-        slug: 'drone',
-        title: 'Pilote de drone cinématographique',
-        period: 'Depuis 2025',
-        tags: ['Drone', 'Catégorie A1/A3', 'AlphaTango'],
-        desc: "Certifié pilote en catégorie ouverte A1/A3, passionné par la prise de vue aérienne.",
-        icon: '🚁',
-        details: "Passionné par la photographie et la vidéographie aérienne :\n\n• Certification officielle pilote de drone en catégorie ouverte A1/A3 (formation en ligne + QCU réglementaire).\n\n• Enregistrement sur la plateforme AlphaTango (DGAC) et respect de la réglementation en vigueur.\n\n• Réalisation de prises de vue cinématographiques : paysages, événements, propriétés — avec post-production vidéo (DaVinci Resolve).\n\n• Intérêt pour l'intégration du drone dans des projets créatifs et commerciaux (reportages, immobilier, événementiel).",
-      },
-      {
-        slug: 'magie',
-        title: 'Membre d\'une association de magie',
-        period: 'Depuis 2018',
-        tags: ['Magie', 'Association'],
-        desc: "Membre actif d'une association de magie, pratique de tours de cartes et de close-up.",
-        icon: '🎩',
-        details: "Membre actif d'une association de magie depuis plus de 6 ans :\n\n• Spécialisation dans la magie de close-up : manipulations de cartes, pièces, objets du quotidien.\n\n• Participation régulière aux réunions de l'association : partage de techniques, apprentissage collectif, critiques constructives.\n\n• Performances lors d'événements associatifs et familiaux : développement de la présence scénique et de la communication non-verbale.\n\n• La magie m'a appris la rigueur, la patience et la créativité — des qualités transposables dans tous les domaines.",
-      },
-      {
-        slug: 'commerce',
-        title: 'Commerce & vente en ligne',
-        period: 'Depuis 2023',
-        tags: ['E-commerce', 'Business', 'Japon'],
-        desc: "Gestion d'une activité personnelle de commerce sur catalogue en ligne, spécialisé dans l'import de produits japonais.",
-        icon: '🛍️',
-        details: "Gestion autonome d'une activité de commerce en ligne depuis 2023 :\n\n• Sourcing de produits japonais (sneakers, streetwear, objets de collection) via des marketplaces spécialisées (Mercari JP, Yahoo Auctions JP).\n\n• Développement d'outils d'automatisation sur mesure pour surveiller les prix et automatiser les achats au meilleur moment.\n\n• Gestion complète de la chaîne : achat, logistique internationale, revente sur plateformes européennes.\n\n• Cette activité est à l'origine de la création de ZenTracker.online et de l'extension navigateur associée.",
-      },
-    ],
-  },
-];
+import { supabase } from './supabase';
 
 // ─── Variants animations ───────────────────────────────────────────────────────
 
@@ -277,198 +111,82 @@ function DarkModeToggle({ dark, onToggle }) {
   );
 }
 
-// ─── Page Admin — Dashboard Vercel Analytics ──────────────────────────────────
+// ─── Page Admin (compteur de visites) ─────────────────────────────────────────
 
-// Mini sparkline SVG
-function Sparkline({ data, color = '#13c9ed', height = 40, width = 120 }) {
-  if (!data || data.length < 2) return null;
-  const max = Math.max(...data, 1);
-  const pts = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * width;
-    const y = height - (v / max) * height;
-    return `${x},${y}`;
-  }).join(' ');
-  const areaPath = `M0,${height} ` + data.map((v, i) => {
-    const x = (i / (data.length - 1)) * width;
-    const y = height - (v / max) * height;
-    return `L${x},${y}`;
-  }).join(' ') + ` L${width},${height} Z`;
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} style={{ overflow: 'visible' }}>
-      <defs>
-        <linearGradient id={`sg-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={areaPath} fill={`url(#sg-${color.replace('#','')})`} />
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-// Bar chart horizontal
-function BarChart({ items, color = '#13c9ed' }) {
-  if (!items || items.length === 0) return <p className="adm-empty">Aucune donnée</p>;
-  const max = Math.max(...items.map(i => i.value), 1);
-  return (
-    <div className="adm-barchart">
-      {items.slice(0, 8).map((item, i) => (
-        <div key={i} className="adm-bar-row">
-          <span className="adm-bar-label">{item.label}</span>
-          <div className="adm-bar-track">
-            <div className="adm-bar-fill" style={{ width: `${(item.value / max) * 100}%`, background: color }} />
-          </div>
-          <span className="adm-bar-value">{item.value.toLocaleString('fr-FR')}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// Mini line chart avec labels
-function LineChart({ data, label = 'Vues', color = '#13c9ed' }) {
-  if (!data || data.length === 0) return <p className="adm-empty">Aucune donnée</p>;
-  const W = 480, H = 110, PAD = 8;
-  const vals = data.map(d => d.value);
-  const max = Math.max(...vals, 1);
-  const pts = vals.map((v, i) => {
-    const x = PAD + (i / Math.max(vals.length - 1, 1)) * (W - PAD * 2);
-    const y = PAD + (1 - v / max) * (H - PAD * 2);
-    return [x, y];
-  });
-  const polyline = pts.map(p => p.join(',')).join(' ');
-  const area = `M${pts[0][0]},${H} ` + pts.map(p => `L${p[0]},${p[1]}`).join(' ') + ` L${pts[pts.length-1][0]},${H} Z`;
-  return (
-    <div className="adm-linechart-wrap">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="adm-linechart-svg">
-        <defs>
-          <linearGradient id="lcgrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={area} fill="url(#lcgrad)" />
-        <polyline points={polyline} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        {pts.map((p, i) => (
-          <circle key={i} cx={p[0]} cy={p[1]} r="3" fill={color} opacity="0.8" />
-        ))}
-      </svg>
-      <div className="adm-linechart-labels">
-        {data.filter((_, i) => i === 0 || i === data.length - 1 || i % Math.ceil(data.length / 5) === 0).map((d, i) => (
-          <span key={i} className="adm-linechart-lbl">{d.label}</span>
-        ))}
-      </div>
-    </div>
-  );
-}
+// ─── Page Admin — CMS Portfolio ──────────────────────────────────
 
 function AdminPage() {
   const [authed, setAuthed] = useState(false);
   const [pw, setPw] = useState('');
   const [err, setErr] = useState(false);
 
-  // Vercel config (stocké localStorage)
-  const [token, setToken] = useState(() => localStorage.getItem('adm_vercel_token') || '');
-  const [projectId, setProjectId] = useState(() => localStorage.getItem('adm_vercel_project') || '');
-  const [showConfig, setShowConfig] = useState(false);
-
-  // Données analytics
+  // States de notre CMS
+  const [projectsList, setProjectsList] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [apiErr, setApiErr] = useState('');
-  const [period, setPeriod] = useState('7d');
-  const [analytics, setAnalytics] = useState(null);
+
+  // Formulaire d'ajout
+  const [newProject, setNewProject] = useState({
+    title: '', slug: '', date: '', desc_short: '', tech: '', link: ''
+  });
 
   const tryLogin = () => {
-    if (pw === 'CV') { setAuthed(true); setErr(false); }
-    else setErr(true);
-  };
-
-  const saveConfig = () => {
-    localStorage.setItem('adm_vercel_token', token);
-    localStorage.setItem('adm_vercel_project', projectId);
-    setShowConfig(false);
-    fetchAnalytics();
-  };
-
-  const fetchAnalytics = useCallback(async () => {
-    const tok = localStorage.getItem('adm_vercel_token') || token;
-    const pid = localStorage.getItem('adm_vercel_project') || projectId;
-    if (!tok || !pid) { setShowConfig(true); return; }
-
-    setLoading(true);
-    setApiErr('');
-
-    try {
-      // Calcul des dates
-      const now = new Date();
-      const from = new Date(now);
-      const days = period === '1d' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 90;
-      from.setDate(from.getDate() - days);
-      const fromTs = from.getTime();
-      const toTs = now.getTime();
-
-      const headers = { Authorization: `Bearer ${tok}` };
-      const base = `https://vercel.com/api/web/insights`;
-
-      // Endpoints analytics Vercel
-      const [summaryRes, pageviewsRes, pagesRes, countriesRes, devicesRes, browsersRes] = await Promise.all([
-        fetch(`${base}/summary?projectId=${pid}&from=${fromTs}&to=${toTs}&filter=%7B%7D`, { headers }),
-        fetch(`${base}/pageviews?projectId=${pid}&from=${fromTs}&to=${toTs}&granularity=${days <= 7 ? 'day' : 'week'}&filter=%7B%7D`, { headers }),
-        fetch(`${base}/pages?projectId=${pid}&from=${fromTs}&to=${toTs}&limit=8&filter=%7B%7D`, { headers }),
-        fetch(`${base}/countries?projectId=${pid}&from=${fromTs}&to=${toTs}&limit=8&filter=%7B%7D`, { headers }),
-        fetch(`${base}/devices?projectId=${pid}&from=${fromTs}&to=${toTs}&limit=5&filter=%7B%7D`, { headers }),
-        fetch(`${base}/browsers?projectId=${pid}&from=${fromTs}&to=${toTs}&limit=5&filter=%7B%7D`, { headers }),
-      ]);
-
-      if (!summaryRes.ok) {
-        const e = await summaryRes.json().catch(() => ({}));
-        throw new Error(e.error?.message || `Erreur ${summaryRes.status} — vérifie le token et le project ID`);
-      }
-
-      const [summary, pageviews, pages, countries, devices, browsers] = await Promise.all([
-        summaryRes.json(),
-        pageviewsRes.json(),
-        pagesRes.json(),
-        countriesRes.json(),
-        devicesRes.json(),
-        browsersRes.json(),
-      ]);
-
-      setAnalytics({ summary, pageviews, pages, countries, devices, browsers });
-    } catch (e) {
-      setApiErr(e.message || 'Erreur inconnue');
-    } finally {
-      setLoading(false);
+    if (pw === 'CV') { 
+      setAuthed(true); 
+      setErr(false); 
+      fetchProjectsAdmin(); 
+    } else {
+      setErr(true);
     }
-  }, [token, projectId, period]);
-
-  useEffect(() => {
-    if (authed) fetchAnalytics();
-  }, [authed, period]);
-
-  // Formatage
-  const fmt = n => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n ?? '—');
-  const pct = (a, b) => b ? `${((a - b) / b * 100).toFixed(1)}%` : '—';
-
-  // Parser les données Vercel
-  const parsePageviews = () => {
-    if (!analytics?.pageviews?.data) return [];
-    return analytics.pageviews.data.map(d => ({
-      label: new Date(d.key).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
-      value: d.total ?? d.value ?? 0,
-    }));
-  };
-  const parseList = (key) => {
-    if (!analytics?.[key]?.data) return [];
-    return analytics[key].data.map(d => ({ label: d.key, value: d.total ?? d.value ?? 0 }));
   };
 
-  const pvData = parsePageviews();
-  const totalViews = analytics?.summary?.totalViews ?? analytics?.summary?.pageviews ?? 0;
-  const uniqueVisitors = analytics?.summary?.uniqueVisitors ?? analytics?.summary?.visitors ?? 0;
-  const avgDuration = analytics?.summary?.avgDuration ?? 0;
-  const bounceRate = analytics?.summary?.bounceRate ?? 0;
+  // 1. Récupérer les projets actuels
+  const fetchProjectsAdmin = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('projets').select('*').order('id', { ascending: false });
+    if (!error) setProjectsList(data || []);
+    setLoading(false);
+  };
+
+  // 2. Ajouter un nouveau projet
+  const handleAddProject = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    // On calcule un nouvel ID (le plus grand actuel + 1)
+    const newId = projectsList.length > 0 ? Math.max(...projectsList.map(p => p.id)) + 1 : 1;
+
+    const { error } = await supabase.from('projets').insert([{
+      id: newId,
+      title: newProject.title,
+      slug: newProject.slug,
+      date: newProject.date,
+      desc_short: newProject.desc_short,
+      tech: newProject.tech,
+      link: newProject.link,
+      images: [], // On met un tableau vide par défaut pour l'instant
+      image_fit: 'cover'
+    }]);
+
+    if (error) {
+      alert("Erreur lors de l'ajout : " + error.message);
+    } else {
+      alert("Projet ajouté avec succès !");
+      // On vide le formulaire
+      setNewProject({ title: '', slug: '', date: '', desc_short: '', tech: '', link: '' });
+      // On rafraîchit la liste
+      fetchProjectsAdmin();
+    }
+    setLoading(false);
+  };
+
+  // 3. Supprimer un projet
+  const handleDelete = async (id, title) => {
+    if (window.confirm(`Es-tu sûr de vouloir supprimer le projet "${title}" ?`)) {
+      setLoading(true);
+      await supabase.from('projets').delete().eq('id', id);
+      fetchProjectsAdmin();
+    }
+  };
 
   return (
     <div className="admin-page">
@@ -494,144 +212,55 @@ function AdminPage() {
           </div>
         ) : (
           <div className="admin-dashboard adm-full">
-
-            {/* ── Header ── */}
             <div className="adm-header">
               <div className="adm-header-left">
-                <h1 className="admin-title">Dashboard Analytics</h1>
-                <span className="admin-badge">● Vercel</span>
+                <h1 className="admin-title">Gestion du Portfolio</h1>
+                <span className="admin-badge">● Supabase</span>
               </div>
-              <div className="adm-header-right">
-                <div className="adm-period-tabs">
-                  {['1d','7d','30d','90d'].map(p => (
-                    <button key={p} className={`adm-period-btn${period === p ? ' active' : ''}`} onClick={() => setPeriod(p)}>{p}</button>
-                  ))}
-                </div>
-                <button className="adm-config-btn" onClick={() => setShowConfig(v => !v)} title="Configurer Vercel">⚙️</button>
-                <button className="adm-refresh-btn" onClick={fetchAnalytics} title="Actualiser">↻</button>
-              </div>
+              <button className="adm-refresh-btn" onClick={fetchProjectsAdmin} title="Actualiser">↻</button>
             </div>
 
-            {/* ── Config Vercel ── */}
-            {showConfig && (
-              <div className="adm-config-box">
-                <p className="adm-config-title">🔑 Configuration Vercel</p>
-                <p className="adm-config-hint">Crée un token sur <strong>vercel.com/account/tokens</strong> avec scope Analytics Read. Le Project ID se trouve dans les Settings de ton projet.</p>
-                <div className="adm-config-fields">
-                  <input className="admin-input adm-config-input" placeholder="Token Vercel (Bearer)" value={token} onChange={e => setToken(e.target.value)} />
-                  <input className="admin-input adm-config-input" placeholder="Project ID (prj_xxxxx)" value={projectId} onChange={e => setProjectId(e.target.value)} />
-                  <button className="admin-btn" onClick={saveConfig}>Enregistrer & Charger</button>
+            {loading && <div className="adm-loader"><div className="adm-spinner" /><span>Chargement...</span></div>}
+
+            <div className="adm-two-col" style={{ marginTop: '30px' }}>
+              
+              {/* COLONNE GAUCHE : Formulaire d'ajout */}
+              <div className="adm-section">
+                <h2 className="adm-section-title">➕ Ajouter un projet</h2>
+                <form className="adm-chart-card" onSubmit={handleAddProject} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  <input className="admin-input" required placeholder="Titre (ex: Mon Super Projet)" value={newProject.title} onChange={e => setNewProject({...newProject, title: e.target.value})} />
+                  <input className="admin-input" required placeholder="Slug (ex: mon-super-projet)" value={newProject.slug} onChange={e => setNewProject({...newProject, slug: e.target.value})} />
+                  <input className="admin-input" required placeholder="Date (ex: Mars 2026)" value={newProject.date} onChange={e => setNewProject({...newProject, date: e.target.value})} />
+                  <input className="admin-input" required placeholder="Technologies (ex: React, Node)" value={newProject.tech} onChange={e => setNewProject({...newProject, tech: e.target.value})} />
+                  <input className="admin-input" placeholder="Lien URL (optionnel)" value={newProject.link} onChange={e => setNewProject({...newProject, link: e.target.value})} />
+                  <textarea className="admin-input" required placeholder="Courte description..." rows="3" value={newProject.desc_short} onChange={e => setNewProject({...newProject, desc_short: e.target.value})}></textarea>
+                  
+                  <button type="submit" className="admin-btn" disabled={loading}>Ajouter le projet</button>
+                </form>
+              </div>
+
+              {/* COLONNE DROITE : Liste des projets actuels */}
+              <div className="adm-section">
+                <h2 className="adm-section-title">📚 Projets en ligne</h2>
+                <div className="adm-chart-card" style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '450px', overflowY: 'auto' }}>
+                  {projectsList.map(p => (
+                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', border: '1px solid var(--border-subtle)', borderRadius: '12px', background: 'var(--bg-color)' }}>
+                      <div>
+                        <strong style={{ color: 'var(--text-main)' }}>{p.title}</strong>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{p.tech}</div>
+                      </div>
+                      <button onClick={() => handleDelete(p.id, p.title)} className="admin-reset-btn" style={{ marginRight: 0, padding: '6px 12px' }}>Supprimer</button>
+                    </div>
+                  ))}
+                  {projectsList.length === 0 && !loading && <p className="adm-empty">Aucun projet trouvé.</p>}
                 </div>
               </div>
-            )}
 
-            {/* ── Erreur API ── */}
-            {apiErr && (
-              <div className="adm-api-err">
-                ⚠️ {apiErr}
-                <button className="adm-config-inline-btn" onClick={() => setShowConfig(true)}>Configurer</button>
-              </div>
-            )}
-
-            {/* ── Loader ── */}
-            {loading && (
-              <div className="adm-loader">
-                <div className="adm-spinner" />
-                <span>Chargement des données Vercel…</span>
-              </div>
-            )}
-
-            {/* ── KPI Cards ── */}
-            {!loading && analytics && (
-              <>
-                <div className="adm-kpi-grid">
-                  <div className="adm-kpi-card">
-                    <span className="adm-kpi-icon">👁️</span>
-                    <div className="adm-kpi-body">
-                      <span className="adm-kpi-label">Vues totales</span>
-                      <span className="adm-kpi-value">{fmt(totalViews)}</span>
-                    </div>
-                    <Sparkline data={pvData.map(d => d.value)} />
-                  </div>
-                  <div className="adm-kpi-card">
-                    <span className="adm-kpi-icon">👤</span>
-                    <div className="adm-kpi-body">
-                      <span className="adm-kpi-label">Visiteurs uniques</span>
-                      <span className="adm-kpi-value">{fmt(uniqueVisitors)}</span>
-                    </div>
-                    <Sparkline data={pvData.map(d => Math.round(d.value * 0.65))} color="#06395c" />
-                  </div>
-                  <div className="adm-kpi-card">
-                    <span className="adm-kpi-icon">⏱️</span>
-                    <div className="adm-kpi-body">
-                      <span className="adm-kpi-label">Durée moy.</span>
-                      <span className="adm-kpi-value">{avgDuration ? `${Math.round(avgDuration)}s` : '—'}</span>
-                    </div>
-                  </div>
-                  <div className="adm-kpi-card">
-                    <span className="adm-kpi-icon">📉</span>
-                    <div className="adm-kpi-body">
-                      <span className="adm-kpi-label">Taux de rebond</span>
-                      <span className="adm-kpi-value">{bounceRate ? `${Math.round(bounceRate * 100)}%` : '—'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── Graphique vues dans le temps ── */}
-                <div className="adm-section">
-                  <h2 className="adm-section-title">📈 Vues dans le temps</h2>
-                  <div className="adm-chart-card">
-                    <LineChart data={pvData} label="Vues" />
-                  </div>
-                </div>
-
-                {/* ── Grille pages + pays ── */}
-                <div className="adm-two-col">
-                  <div className="adm-section">
-                    <h2 className="adm-section-title">📄 Pages les plus visitées</h2>
-                    <div className="adm-chart-card">
-                      <BarChart items={parseList('pages')} />
-                    </div>
-                  </div>
-                  <div className="adm-section">
-                    <h2 className="adm-section-title">🌍 Pays</h2>
-                    <div className="adm-chart-card">
-                      <BarChart items={parseList('countries')} color="#06395c" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── Appareils + Navigateurs ── */}
-                <div className="adm-two-col">
-                  <div className="adm-section">
-                    <h2 className="adm-section-title">📱 Appareils</h2>
-                    <div className="adm-chart-card">
-                      <BarChart items={parseList('devices')} color="#0db1d1" />
-                    </div>
-                  </div>
-                  <div className="adm-section">
-                    <h2 className="adm-section-title">🌐 Navigateurs</h2>
-                    <div className="adm-chart-card">
-                      <BarChart items={parseList('browsers')} color="#0db1d1" />
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* ── Pas encore configuré ── */}
-            {!loading && !analytics && !apiErr && (
-              <div className="adm-empty-state">
-                <div className="adm-empty-icon">📊</div>
-                <p className="adm-empty-title">Connecte Vercel Analytics</p>
-                <p className="adm-empty-sub">Configure ton token et project ID pour afficher les vraies données de ton site.</p>
-                <button className="admin-btn" onClick={() => setShowConfig(true)}>⚙️ Configurer</button>
-              </div>
-            )}
+            </div>
 
             <div className="adm-footer-row">
-              <a href="/" className="admin-back-link">← Retour au portfolio</a>
-              <span className="adm-powered">Données via Vercel Analytics API</span>
+              <a href="/" className="admin-back-link">← Retour au portfolio public</a>
+              <span className="adm-powered">Données synchronisées en direct</span>
             </div>
           </div>
         )}
@@ -639,7 +268,6 @@ function AdminPage() {
     </div>
   );
 }
-
 // ─── Page Linktree (cachée) ────────────────────────────────────────────────────
 
 function LinksPage() {
@@ -724,11 +352,14 @@ function LinksPage() {
 
 // ─── Layout principal ──────────────────────────────────────────────────────────
 
+// ─── Layout principal ──────────────────────────────────────────────────────────
+
 function MainLayout({ dark, onToggleDark }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { projectSlug, expSlug } = useParams();
 
+  // 1. --- STATES DE L'INTERFACE ---
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedSkill, setSelectedSkill] = useState(null);
@@ -736,54 +367,106 @@ function MainLayout({ dark, onToggleDark }) {
   const [activeTechFilter, setActiveTechFilter] = useState(null);
   const [selectedExp, setSelectedExp] = useState(null);
 
-  // Dérive l'onglet actif depuis l'URL
+  // 2. --- STATES DE LA BASE DE DONNÉES ---
+  const [projects, setProjects] = useState([]);
+  const [skills, setSkills] = useState([]);
+  const [experiences, setExperiences] = useState([]);
+  const [loadingData, setLoadingData] = useState(true);
+
+  // 3. --- RÉCUPÉRATION SUPABASE ---
+  useEffect(() => {
+    const fetchAllData = async () => {
+      try {
+        const [projRes, skillRes, expRes] = await Promise.all([
+          supabase.from('projets').select('*').order('id', { ascending: false }),
+          supabase.from('skills').select('*'),
+          supabase.from('experiences').select('*')
+        ]);
+
+        if (projRes.error) throw projRes.error;
+        if (skillRes.error) throw skillRes.error;
+        if (expRes.error) throw expRes.error;
+
+        const formattedSkills = (skillRes.data || []).map(s => ({
+          ...s,
+          desc: s.desc_text,
+          projectIds: s.project_ids || []
+        }));
+        setSkills(formattedSkills);
+
+        const formattedProjects = (projRes.data || []).map(p => {
+          const linkedSkillTags = formattedSkills
+            .filter(skill => skill.projectIds.includes(p.id))
+            .map(skill => skill.id);
+          return { ...p, desc: p.desc_short, skillIds: linkedSkillTags };
+        });
+        setProjects(formattedProjects);
+
+        const groupedExp = (expRes.data || []).reduce((acc, currentExp) => {
+          const formattedExp = { ...currentExp, desc: currentExp.desc_text };
+          const categoryIndex = acc.findIndex(c => c.category === formattedExp.category);
+          if (categoryIndex > -1) {
+            acc[categoryIndex].items.push(formattedExp);
+          } else {
+            acc.push({ category: formattedExp.category, items: [formattedExp] });
+          }
+          return acc;
+        }, []);
+        setExperiences(groupedExp);
+
+      } catch (error) {
+        console.error("Erreur Supabase :", error);
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
+    fetchAllData();
+  }, []);
+
+  // 4. --- NAVIGATION & URL ---
   const pathSegments = location.pathname.split('/').filter(Boolean);
   const pathTab = pathSegments[0] || 'home';
 
   const goTo = (tab) => { navigate(`/${tab}`); setMenuOpen(false); };
 
-  // Ouvrir un projet depuis l'URL /projects/:slug
+  // Ouvrir un projet depuis l'URL (attend le chargement Supabase)
   useEffect(() => {
-    if (pathTab === 'projects' && projectSlug) {
+    if (projects.length > 0 && pathTab === 'projects' && projectSlug) {
       const found = projects.find(p => p.slug === projectSlug);
       if (found) setSelectedProject(found);
     }
-  }, [projectSlug, pathTab]);
+  }, [projectSlug, pathTab, projects]);
 
-  // Ouvrir une expérience depuis l'URL /experiences/:slug
+  // Ouvrir une expérience depuis l'URL (attend le chargement Supabase)
   const allExpItems = experiences.flatMap(cat => cat.items);
   useEffect(() => {
-    if (pathTab === 'experiences' && expSlug) {
+    if (allExpItems.length > 0 && pathTab === 'experiences' && expSlug) {
       const found = allExpItems.find(e => e.slug === expSlug);
       if (found) setSelectedExp(found);
     }
-  }, [expSlug, pathTab]);
+  }, [expSlug, pathTab, experiences]);
 
-  // Fermer modale expérience → nettoyer URL
   const closeExp = useCallback(() => {
     setSelectedExp(null);
     if (expSlug) navigate('/experiences', { replace: true });
   }, [expSlug, navigate]);
 
-  // Ouvrir une expérience → mettre à jour l'URL
   const openExp = useCallback((exp) => {
     setSelectedExp(exp);
     if (exp.slug) navigate(`/experiences/${exp.slug}`, { replace: true });
   }, [navigate]);
 
-  // Fermer modale projet → nettoyer URL
   const closeProject = useCallback(() => {
     setSelectedProject(null);
     if (projectSlug) navigate('/projects', { replace: true });
   }, [projectSlug, navigate]);
 
-  // Ouvrir un projet → mettre à jour l'URL
   const openProject = useCallback((project) => {
     setSelectedProject(project);
     navigate(`/projects/${project.slug}`, { replace: true });
   }, [navigate]);
 
-  // Fermer avec Échap
   useEffect(() => {
     const handler = (e) => {
       if (e.key === 'Escape') {
@@ -801,7 +484,6 @@ function MainLayout({ dark, onToggleDark }) {
     ? projects.filter(p => selectedSkill.projectIds.includes(p.id))
     : [];
 
-  // Toutes les technos distinctes des projets
   const allTechs = [...new Set(projects.flatMap(p => p.skillIds))];
 
   const filteredProjects = activeTechFilter
@@ -1285,10 +967,6 @@ function App() {
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>
       </VisitTracker>
-      
-      {/* LIGNE À AJOUTER ICI 👇 */}
-      <Analytics />
-      
     </BrowserRouter>
   );
 }
