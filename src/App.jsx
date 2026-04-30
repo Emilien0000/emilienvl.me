@@ -111,9 +111,11 @@ function DarkModeToggle({ dark, onToggle }) {
   );
 }
 
+const ADMIN_HASH = '69050a418734442c99d69f8af69717668620e83172e1f4b9812494c3e43bd2c3';
+
 function AdminPage() {
-  const [authed, setAuthed] = useState(() => localStorage.getItem('adm_auth') === 'true');
-  const [pw, setPw] = useState(() => localStorage.getItem('adm_pw') || '');
+  const [authed, setAuthed] = useState(() => sessionStorage.getItem('adm_auth') === 'true');
+  const [pw, setPw] = useState('');
   const [activeTab, setActiveTab] = useState('projects'); 
   
   const [projectsList, setProjectsList] = useState([]);
@@ -144,18 +146,22 @@ function AdminPage() {
 
   useEffect(() => { if (authed) fetchAll(); }, [authed]);
 
-  const tryLogin = () => {
-    if (pw === 'CV') { 
-      setAuthed(true); 
-      localStorage.setItem('adm_auth', 'true');
-      localStorage.setItem('adm_pw', 'CV');
-    } else { alert("Mot de passe incorrect"); }
+  const tryLogin = async () => {
+    const encoder = new TextEncoder();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(pw));
+    const hashHex = Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+    if (hashHex === ADMIN_HASH) {
+      setAuthed(true);
+      sessionStorage.setItem('adm_auth', 'true');
+    } else {
+      alert("Mot de passe incorrect");
+    }
   };
 
   const handleLogout = () => {
     setAuthed(false);
-    localStorage.removeItem('adm_auth');
-    localStorage.removeItem('adm_pw');
+    sessionStorage.removeItem('adm_auth');
   };
 
   const saveItem = async () => {
