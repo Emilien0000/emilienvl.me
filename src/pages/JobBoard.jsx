@@ -504,7 +504,8 @@ export default function JobBoard() {
   const [nextRefreshIn, setNextRefreshIn] = useState(null);
 
   // Persistent
-  const [urlFilters, setUrlFilters] = useState(() => LS.get('jb_url_filters', []));
+  const [urlFilters, setUrlFilters] = useState([]);
+  const [filtersLoaded, setFiltersLoaded] = useState(false);
   const [banwords,   setBanwords]   = useState(() => LS.get('jb_banwords', []));
   const [saves,      setSaves]      = useState(() => LS.get('jb_saves', []));
 
@@ -513,16 +514,25 @@ export default function JobBoard() {
   const countdownRef= useRef(null);
 
   // Persist
-  useEffect(() => { LS.set('jb_url_filters', urlFilters); }, [urlFilters]);
+  // urlFilters sont persistés en DB via /api/filters
+  const filtersLoadedRef = useRef(false);
+  useEffect(() => {
+    // Ne pas écraser la DB lors du chargement initial
+    if (!filtersLoadedRef.current) { filtersLoadedRef.current = filtersLoaded; return; }
+    if (!filtersLoaded) return;
+    fetch('/api/filters', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filters: urlFilters }),
+    }).catch(() => {});
+  }, [urlFilters, filtersLoaded]);
   useEffect(() => { LS.set('jb_banwords',    banwords);   }, [banwords]);
   useEffect(() => { LS.set('jb_saves',       saves);     }, [saves]);
 
   // ── Fetch principal ───────────────────────────────────────────────────────
 
-  const fetchJobs = useCallback(async (urls = urlFilters) => {
-    const activeUrls = urls.filter(f => f.enabled).map(f => f.url);
-    if (!activeUrls.length) return;
-
+  // ── Charge les offres depuis Supabase (instantané) ───────────────────────
+  const fetchJobs = useCallback(async () => {
     if (abortRef.current) abortRef.current.abort();
     abortRef.current = new AbortController();
 
@@ -533,8 +543,7 @@ export default function JobBoard() {
     if (activeTab !== 'results') setActiveTab('results');
 
     try {
-      const params = new URLSearchParams({ urls: activeUrls.join(','), limit: '60' });
-      const res = await fetch(`/api/jobs?${params}`, { signal: abortRef.current.signal });
+      const res = await fetch('/api/jobs?limit=30', { signal: abortRef.current.signal });
       if (!res.ok) throw new Error(`Erreur serveur : ${res.status}`);
       const data = await res.json();
 
@@ -556,7 +565,24 @@ export default function JobBoard() {
     } finally {
       setLoading(false);
     }
-  }, [urlFilters, activeTab]);
+  }, [activeTab]);
+
+  // ── Déclenche le scraping en arrière-plan (appel non-bloquant) ────────────
+  const triggerScrape = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    if (activeTab !== 'results') setActiveTab('results');
+    try {
+      // Lance le scrape (peut prendre jusqu'à 60s côté serveur)
+      const res = await fetch('/api/scrape', { method: 'POST' });
+      if (!res.ok) throw new Error(`Erreur scraping : ${res.status}`);
+      // Une fois le scrape terminé, recharge les offres depuis la DB
+      await fetchJobs();
+    } catch (err) {
+      if (err.name !== 'AbortError') setError(err.message || 'Erreur inconnue');
+      setLoading(false);
+    }
+  }, [fetchJobs, activeTab]);
 
   // ── Countdown + auto-refresh ───────────────────────────────────────────────
 
@@ -583,11 +609,27 @@ export default function JobBoard() {
     };
   }, [lastRefresh]);
 
-  // ── Initial fetch si liens présents ───────────────────────────────────────
+  // ── Chargement initial : filtres depuis DB puis offres ───────────────────
 
   useEffect(() => {
-    if (urlFilters.some(f => f.enabled)) fetchJobs();
+    async function init() {
+      try {
+        const res = await fetch('/api/filters');
+        if (res.ok) {
+          const filters = await res.json();
+          // Merge avec les saves locaux (banwords, saves restent localStorage)
+          setUrlFilters(Array.isArray(filters) ? filters : []);
+        }
+      } catch {}
+      setFiltersLoaded(true);
+    }
+    init();
   }, []);
+
+  // Charge les offres une fois les filtres prêts
+  useEffect(() => {
+    if (filtersLoaded) fetchJobs();
+  }, [filtersLoaded]);
 
   // ── Filtres visuels ────────────────────────────────────────────────────────
 
@@ -653,7 +695,7 @@ export default function JobBoard() {
 
           <button
             className="jb-tab jb-tab-refresh"
-            onClick={() => fetchJobs()}
+            onClick={() => triggerScrape()}
             disabled={loading || enabledCount === 0}
             title={enabledCount === 0 ? 'Ajoute des liens dans "Mes liens"' : 'Scraper maintenant'}
           >
@@ -705,7 +747,7 @@ export default function JobBoard() {
               {error && !loading && (
                 <motion.div className="jb-error-box" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                   <p>😕 {error}</p>
-                  <button className="jb-search-btn" onClick={() => fetchJobs()}>Réessayer</button>
+                  <button className="jb-search-btn" onClick={() => triggerScrape()}>Réessayer</button>
                 </motion.div>
               )}
 
@@ -766,7 +808,7 @@ export default function JobBoard() {
               <FiltersPanel
                 filters={urlFilters}
                 onChange={setUrlFilters}
-                onScrapeNow={() => fetchJobs()}
+                onScrapeNow={() => triggerScrape()}
               />
             </motion.div>
           )}
