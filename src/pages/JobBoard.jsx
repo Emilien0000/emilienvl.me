@@ -1,603 +1,406 @@
 // src/pages/JobBoard.jsx
+// Route : /alternances
+// Scraper d'annonces Indeed / HelloWork / Stage.fr via /api/jobs
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
-// ─── Données mock (fallback si l'API n'est pas dispo) ────────────────────────
-const MOCK_JOBS = [
-  {
-    id: 'mock_1', source: 'Indeed', sourceColor: '#2164f3',
-    title: 'Alternant Cybersécurité', company: 'Orange Cyberdefense',
-    location: 'Paris (75)', description: 'Rejoignez notre SOC pour une alternance de 2 ans en cybersécurité défensive. Vous participerez à la surveillance des systèmes et à la réponse aux incidents.',
-    link: 'https://fr.indeed.com', date: new Date(Date.now() - 86400000).toISOString(), type: 'Alternance',
-  },
-  {
-    id: 'mock_2', source: 'Hello Work', sourceColor: '#ff6b35',
-    title: 'Alternance Administrateur Réseaux & Systèmes', company: 'Thales Group',
-    location: 'Toulouse (31)', description: 'En alternance au sein de notre DSI, vous gérerez l\'infrastructure réseau, participerez à des projets de sécurisation et apprendrez aux côtés d\'experts.',
-    link: 'https://www.hellowork.com', date: new Date(Date.now() - 2 * 86400000).toISOString(), type: 'Alternance',
-  },
-  {
-    id: 'mock_3', source: 'Stage.fr', sourceColor: '#00b894',
-    title: 'Alternance Analyste SOC N1/N2', company: 'Sopra Steria',
-    location: 'Lyon (69)', description: 'Analyste SOC en alternance : surveillance temps réel, triage des alertes SIEM, qualification des incidents et rédaction de rapports de sécurité.',
-    link: 'https://www.stage.fr', date: new Date(Date.now() - 3 * 86400000).toISOString(), type: 'Alternance',
-  },
-  {
-    id: 'mock_4', source: 'Indeed', sourceColor: '#2164f3',
-    title: 'Alternant Pentesteur / Ethical Hacker', company: 'Capgemini',
-    location: 'Paris (75)', description: 'Intégrez notre équipe Red Team pour réaliser des tests d\'intrusion sur des infrastructures critiques. Formation assurée par des experts certifiés OSCP.',
-    link: 'https://fr.indeed.com', date: new Date(Date.now() - 5 * 86400000).toISOString(), type: 'Alternance',
-  },
-  {
-    id: 'mock_5', source: 'Hello Work', sourceColor: '#ff6b35',
-    title: 'Alternance Ingénieur Cloud & Sécurité', company: 'Atos',
-    location: 'Grenoble (38)', description: 'Vous interviendrez sur des projets de migration cloud sécurisée (Azure/AWS), mise en place de politiques de sécurité et automatisation DevSecOps.',
-    link: 'https://www.hellowork.com', date: new Date(Date.now() - 7 * 86400000).toISOString(), type: 'Alternance',
-  },
-  {
-    id: 'mock_6', source: 'Stage.fr', sourceColor: '#00b894',
-    title: 'Alternance Technicien Réseaux', company: 'SFR Business',
-    location: 'Bordeaux (33)', description: 'Administration et supervision du réseau cœur, déploiement de configurations, monitoring et support N2 pour nos clients entreprises.',
-    link: 'https://www.stage.fr', date: new Date(Date.now() - 10 * 86400000).toISOString(), type: 'Alternance',
-  },
+// ── Icônes SVG inline ────────────────────────────────────────────────────────
+
+const IconSearch = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+  </svg>
+);
+const IconMap = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+  </svg>
+);
+const IconExternal = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+  </svg>
+);
+const IconRefresh = ({ spinning }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+    style={{ animation: spinning ? 'spin 0.8s linear infinite' : 'none' }}>
+    <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+  </svg>
+);
+const IconBack = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m15 18-6-6 6-6"/>
+  </svg>
+);
+const IconBriefcase = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+  </svg>
+);
+const IconCalendar = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>
+);
+
+// ── Config sources ───────────────────────────────────────────────────────────
+
+const SOURCES = [
+  { id: 'indeed',    label: 'Indeed',    color: '#003A9B', emoji: '🔵' },
+  { id: 'hellowork', label: 'HelloWork', color: '#FF6B35', emoji: '🟠' },
+  { id: 'stage',     label: 'Stage.fr',  color: '#00B894', emoji: '🟢' },
 ];
 
-// ─── Constantes ───────────────────────────────────────────────────────────────
-const SOURCES = ['Toutes', 'Indeed', 'Hello Work', 'Stage.fr'];
-
-const STATUS_CONFIG = {
-  none:     { label: 'Suivre',        emoji: '＋', color: 'var(--text-secondary)', bg: 'transparent' },
-  saved:    { label: 'Sauvegardé',    emoji: '⭐', color: '#f39c12',              bg: 'rgba(243,156,18,0.1)' },
-  applied:  { label: 'Postulé',       emoji: '✅', color: '#27ae60',              bg: 'rgba(39,174,96,0.1)'  },
-  rejected: { label: 'Non retenu',    emoji: '❌', color: '#e74c3c',              bg: 'rgba(231,76,60,0.1)'  },
+const TYPE_LABELS = {
+  alternance: { label: 'Alternance', color: '#13c9ed' },
+  stage:      { label: 'Stage',      color: '#7c3aed' },
+  emploi:     { label: 'Emploi',     color: '#06395c' },
 };
-const STATUS_CYCLE = ['none', 'saved', 'applied', 'rejected'];
 
-const LOCATIONS_SUGGEST = ['Paris', 'Lyon', 'Toulouse', 'Bordeaux', 'Lille', 'Nantes', 'Marseille', 'Grenoble', 'Rennes', 'France'];
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+function formatDate(iso) {
+  try {
+    return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch { return ''; }
+}
+
 function timeAgo(iso) {
-  if (!iso) return null;
   const diff = Date.now() - new Date(iso).getTime();
   const days = Math.floor(diff / 86400000);
   if (days === 0) return "Aujourd'hui";
   if (days === 1) return 'Hier';
-  if (days < 7) return `Il y a ${days}j`;
-  if (days < 30) return `Il y a ${Math.floor(days / 7)}sem`;
-  return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(new Date(iso));
+  if (days < 7)  return `Il y a ${days} j`;
+  if (days < 30) return `Il y a ${Math.floor(days / 7)} sem`;
+  return formatDate(iso);
 }
 
-// ─── Hooks localStorage ───────────────────────────────────────────────────────
-function useJobStatuses() {
-  const [statuses, setStatuses] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('job_statuses') || '{}'); } catch { return {}; }
-  });
-  const cycleStatus = useCallback((id) => {
-    setStatuses(prev => {
-      const current = prev[id] || 'none';
-      const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(current) + 1) % STATUS_CYCLE.length];
-      const updated = { ...prev, [id]: next };
-      localStorage.setItem('job_statuses', JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
-  return { statuses, cycleStatus };
+function sourceColor(source) {
+  return SOURCES.find(s => s.label === source || s.id === source?.toLowerCase())?.color || '#13c9ed';
 }
 
-function useSeenJobs() {
-  const [seen, setSeen] = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('job_seen') || '[]')); } catch { return new Set(); }
-  });
-  const markSeen = useCallback((id) => {
-    setSeen(prev => {
-      if (prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.add(id);
-      localStorage.setItem('job_seen', JSON.stringify([...next]));
-      return next;
-    });
-  }, []);
-  return { seen, markSeen };
-}
+// ── JobCard ───────────────────────────────────────────────────────────────────
 
-// ─── Composant SourceBadge ────────────────────────────────────────────────────
-function SourceBadge({ source, color }) {
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
-      borderRadius: '20px', fontSize: '0.68rem', fontWeight: 700,
-      background: `${color}18`, color, border: `1px solid ${color}30`, whiteSpace: 'nowrap',
-    }}>
-      {source}
-    </span>
-  );
-}
-
-// ─── Composant JobCard ────────────────────────────────────────────────────────
-function JobCard({ job, status, onCycleStatus, isSeen, onMarkSeen }) {
-  const statusCfg = STATUS_CONFIG[status || 'none'];
-  const [expanded, setExpanded] = useState(false);
-
-  const handleOpen = () => {
-    onMarkSeen(job.id);
-    window.open(job.link, '_blank', 'noopener noreferrer');
-  };
+function JobCard({ job, index }) {
+  const typeInfo = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
+  const color    = sourceColor(job.source);
 
   return (
-    <motion.div
-      layout
+    <motion.a
+      href={job.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="jb-card"
+      style={{ '--source-color': color }}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.97 }}
-      transition={{ duration: 0.3 }}
-      style={{
-        background: 'var(--card-bg)',
-        border: `1.5px solid ${isSeen ? 'var(--border-subtle)' : 'rgba(19,201,237,0.25)'}`,
-        borderRadius: '16px',
-        padding: '1.1rem 1.25rem',
-        display: 'flex', flexDirection: 'column', gap: '0.6rem',
-        boxShadow: isSeen ? 'var(--shadow-card)' : '0 4px 20px rgba(19,201,237,0.09)',
-        opacity: isSeen ? 0.85 : 1,
-        transition: 'border-color 0.3s ease, opacity 0.3s ease',
-        position: 'relative',
-      }}
+      transition={{ duration: 0.35, delay: index * 0.04 }}
+      whileHover={{ y: -3, transition: { duration: 0.2 } }}
     >
-      {/* Badge Nouveau */}
-      {!isSeen && (
-        <span style={{
-          position: 'absolute', top: '12px', right: '12px',
-          background: 'var(--highlight-color)', color: '#fff',
-          fontSize: '0.6rem', fontWeight: 800, padding: '2px 7px',
-          borderRadius: '20px', letterSpacing: '0.06em', textTransform: 'uppercase',
-        }}>Nouveau</span>
-      )}
+      {/* Barre colorée source */}
+      <div className="jb-card-accent" />
 
-      {/* Source + date */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <SourceBadge source={job.source} color={job.sourceColor} />
-        {job.date && (
-          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginLeft: 'auto', paddingRight: isSeen ? 0 : '64px' }}>
-            🕐 {timeAgo(job.date)}
+      <div className="jb-card-inner">
+        <div className="jb-card-top">
+          <div className="jb-card-badges">
+            <span className="jb-source-badge" style={{ background: color + '18', color }}>
+              {job.source}
+            </span>
+            <span className="jb-type-badge" style={{ background: typeInfo.color + '18', color: typeInfo.color }}>
+              {typeInfo.label}
+            </span>
+          </div>
+          <span className="jb-date">
+            <IconCalendar />
+            {timeAgo(job.date)}
           </span>
-        )}
-      </div>
-
-      {/* Titre */}
-      <h3
-        onClick={handleOpen}
-        style={{
-          fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)',
-          lineHeight: 1.35, cursor: 'pointer', paddingRight: !isSeen ? '52px' : 0,
-        }}
-      >
-        {job.title}
-      </h3>
-
-      {/* Entreprise + lieu */}
-      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        {job.company && job.company !== 'Inconnu' && (
-          <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-            🏢 {job.company}
-          </span>
-        )}
-        {job.location && (
-          <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-            📍 {job.location}
-          </span>
-        )}
-      </div>
-
-      {/* Description */}
-      {job.description && (
-        <div>
-          <p style={{
-            fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.55,
-            display: expanded ? 'block' : '-webkit-box',
-            WebkitLineClamp: expanded ? undefined : 2,
-            WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          }}>
-            {job.description}
-          </p>
-          {job.description.length > 120 && (
-            <button
-              onClick={() => setExpanded(v => !v)}
-              style={{ background: 'none', border: 'none', color: 'var(--highlight-color)', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', padding: '2px 0', marginTop: '2px' }}
-            >
-              {expanded ? 'Voir moins ↑' : 'Voir plus ↓'}
-            </button>
-          )}
         </div>
-      )}
 
-      {/* Footer */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        paddingTop: '0.6rem', borderTop: '1px solid var(--border-subtle)', marginTop: '0.1rem',
-      }}>
-        <button
-          onClick={(e) => { e.stopPropagation(); onCycleStatus(job.id); }}
-          style={{
-            padding: '4px 10px', borderRadius: '20px',
-            border: `1px solid ${statusCfg.color}50`,
-            background: statusCfg.bg, color: statusCfg.color,
-            fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
-          }}
-          title="Cliquer pour changer le statut"
-        >
-          {statusCfg.emoji} {statusCfg.label}
-        </button>
-        <button
-          onClick={handleOpen}
-          style={{
-            padding: '5px 13px', borderRadius: '10px',
-            border: '1px solid rgba(19,201,237,0.35)',
-            background: 'transparent', color: 'var(--highlight-color)',
-            fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(19,201,237,0.1)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-        >
-          Voir l'offre →
-        </button>
+        <h3 className="jb-title">{job.title}</h3>
+
+        {job.company && (
+          <p className="jb-company">
+            <IconBriefcase />
+            {job.company}
+          </p>
+        )}
+
+        {job.location && (
+          <p className="jb-location">
+            <IconMap />
+            {job.location}
+          </p>
+        )}
+
+        {job.description && (
+          <p className="jb-desc">{job.description}</p>
+        )}
+
+        <div className="jb-card-footer">
+          <span className="jb-apply-btn">
+            Voir l'offre <IconExternal />
+          </span>
+        </div>
       </div>
-    </motion.div>
+    </motion.a>
   );
 }
 
-// ─── Composant principal ──────────────────────────────────────────────────────
+// ── Skeleton loader ───────────────────────────────────────────────────────────
+
+function Skeleton() {
+  return (
+    <div className="jb-card jb-skeleton">
+      <div className="jb-card-accent" style={{ opacity: 0.3 }} />
+      <div className="jb-card-inner">
+        <div className="jb-sk-row" style={{ width: '40%', height: 20, marginBottom: 12 }} />
+        <div className="jb-sk-row" style={{ width: '85%', height: 22, marginBottom: 8 }} />
+        <div className="jb-sk-row" style={{ width: '55%', height: 16, marginBottom: 6 }} />
+        <div className="jb-sk-row" style={{ width: '35%', height: 14, marginBottom: 14 }} />
+        <div className="jb-sk-row" style={{ width: '70%', height: 12 }} />
+        <div className="jb-sk-row" style={{ width: '50%', height: 12, marginTop: 4 }} />
+      </div>
+    </div>
+  );
+}
+
+// ── Composant principal ───────────────────────────────────────────────────────
+
 export default function JobBoard() {
   const navigate = useNavigate();
-  const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [isMock, setIsMock] = useState(false);
-  const [fetchedAt, setFetchedAt] = useState(null);
-  const [sources, setSources] = useState({});
 
-  // Filtres
-  const [search, setSearch] = useState('');
-  const [locationFilter, setLocationFilter] = useState('');
-  const [activeSource, setActiveSource] = useState('Toutes');
-  const [activeStatus, setActiveStatus] = useState('Toutes');
-  const [showNew, setShowNew] = useState(false);
+  const [query,     setQuery]     = useState('alternance développeur');
+  const [location,  setLocation]  = useState('France');
+  const [sources,   setSources]   = useState(['indeed', 'hellowork', 'stage']);
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [jobs,      setJobs]      = useState([]);
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState(null);
+  const [fetched,   setFetched]   = useState(false);
+  const [warnings,  setWarnings]  = useState([]);
 
-  const { statuses, cycleStatus } = useJobStatuses();
-  const { seen, markSeen } = useSeenJobs();
+  const abortRef = useRef(null);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchJobs = useCallback(async () => {
+    if (!sources.length) return;
     setLoading(true);
     setError(null);
-    setIsMock(false);
+    setJobs([]);
+    setFetched(false);
+
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+
     try {
-      const res = await fetch('/api/jobs');
-      const contentType = res.headers.get('content-type') || '';
-      if (!res.ok || !contentType.includes('application/json')) {
-        throw new Error('API indisponible');
-      }
+      const params = new URLSearchParams({
+        q:       query,
+        location: location,
+        sources: sources.join(','),
+        limit:   '12',
+      });
+
+      const res = await fetch(`/api/jobs?${params}`, {
+        signal: abortRef.current.signal,
+      });
+
+      if (!res.ok) throw new Error(`Erreur serveur : ${res.status}`);
       const data = await res.json();
+
       setJobs(data.jobs || []);
-      setSources(data.sources || {});
-      setFetchedAt(data.fetchedAt || null);
-    } catch {
-      // Fallback mock en dev / API non déployée
-      setJobs(MOCK_JOBS);
-      setSources({ indeed: 2, hellowork: 2, stagefr: 2 });
-      setFetchedAt(new Date().toISOString());
-      setIsMock(true);
+      setWarnings(data.errors || []);
+      setFetched(true);
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        setError(err.message || 'Erreur inconnue');
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [query, location, sources]);
 
-  useEffect(() => { fetchJobs(); }, [fetchJobs]);
+  // Auto-fetch au premier mount
+  useEffect(() => { fetchJobs(); }, []);
 
-  // ── Filtrage ───────────────────────────────────────────────────────────────
-  const filtered = jobs.filter(job => {
-    const q = search.toLowerCase();
-    const matchSearch = !q ||
-      job.title.toLowerCase().includes(q) ||
-      job.company.toLowerCase().includes(q) ||
-      job.description?.toLowerCase().includes(q);
+  const filteredJobs = typeFilter === 'all'
+    ? jobs
+    : jobs.filter(j => j.type === typeFilter);
 
-    const matchLoc = !locationFilter ||
-      job.location.toLowerCase().includes(locationFilter.toLowerCase());
+  const toggleSource = (id) => {
+    setSources(prev =>
+      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+    );
+  };
 
-    const matchSource = activeSource === 'Toutes' || job.source === activeSource;
-
-    const jobStatus = statuses[job.id] || 'none';
-    const matchStatus = activeStatus === 'Toutes' || jobStatus === activeStatus;
-
-    const matchNew = !showNew || !seen.has(job.id);
-
-    return matchSearch && matchLoc && matchSource && matchStatus && matchNew;
-  });
-
-  // ── Stats ──────────────────────────────────────────────────────────────────
-  const newCount = jobs.filter(j => !seen.has(j.id)).length;
-  const appliedCount = Object.values(statuses).filter(s => s === 'applied').length;
-  const savedCount = Object.values(statuses).filter(s => s === 'saved').length;
-
-  const hasActiveFilter = search || locationFilter || activeSource !== 'Toutes' || activeStatus !== 'Toutes' || showNew;
-
-  const resetFilters = () => {
-    setSearch('');
-    setLocationFilter('');
-    setActiveSource('Toutes');
-    setActiveStatus('Toutes');
-    setShowNew(false);
+  const handleSearch = (e) => {
+    e.preventDefault();
+    fetchJobs();
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'var(--bg-color)',
-      color: 'var(--text-main)',
-      fontFamily: 'var(--font-main)',
-    }}>
-      {/* ── Header fixe ────────────────────────────────────────────────────── */}
-      <header style={{
-        position: 'sticky', top: 0, zIndex: 100,
-        background: 'var(--bg-color)',
-        borderBottom: '1px solid var(--border-subtle)',
-        backdropFilter: 'blur(12px)',
-        padding: '0 1.5rem',
-      }}>
-        <div style={{
-          maxWidth: '860px', margin: '0 auto',
-          display: 'flex', alignItems: 'center', gap: '1rem',
-          height: '60px',
-        }}>
-          <button
-            onClick={() => navigate('/home')}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              background: 'none', border: '1.5px solid var(--border-subtle)',
-              borderRadius: '10px', padding: '6px 12px',
-              color: 'var(--text-secondary)', fontSize: '0.82rem', fontWeight: 700,
-              cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--highlight-color)'; e.currentTarget.style.color = 'var(--highlight-color)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-          >
-            ← Portfolio
-          </button>
+    <div className="jb-root">
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <div className="jb-header">
+        <button className="jb-back-btn" onClick={() => navigate(-1)}>
+          <IconBack /> Retour
+        </button>
 
-          <div style={{ flex: 1 }}>
-            <h1 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
-              Scraper d'offres <span style={{ color: 'var(--highlight-color)' }}>alternance</span>
-            </h1>
-            <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', margin: 0 }}>
-              Indeed · Hello Work · Stage.fr
-              {fetchedAt && ` · ${timeAgo(fetchedAt)}`}
-              {isMock && <span style={{ color: '#f39c12', marginLeft: '6px' }}>⚠️ Données démo</span>}
-            </p>
-          </div>
+        <motion.div
+          className="jb-hero"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="jb-hero-badge">🎯 Job Tracker</div>
+          <h1 className="jb-hero-title">
+            Trouve ton <span className="highlight">alternance</span>
+          </h1>
+          <p className="jb-hero-sub">
+            Annonces agrégées depuis Indeed, HelloWork &amp; Stage.fr — en temps réel
+          </p>
+        </motion.div>
 
-          <button
-            onClick={fetchJobs}
-            disabled={loading}
-            style={{
-              background: 'none', border: '1.5px solid var(--border-subtle)',
-              borderRadius: '10px', padding: '6px 12px',
-              color: 'var(--highlight-color)', fontSize: '0.82rem', fontWeight: 700,
-              cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1,
-              transition: 'all 0.2s', whiteSpace: 'nowrap',
-            }}
-          >
-            {loading ? '…' : '🔄 Refresh'}
-          </button>
-        </div>
-      </header>
-
-      <div style={{ maxWidth: '860px', margin: '0 auto', padding: '1.5rem 1.25rem' }}>
-
-        {/* ── Stats ──────────────────────────────────────────────────────────── */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: '0.6rem', marginBottom: '1.5rem',
-        }}>
-          {[
-            { label: 'Total', value: jobs.length, color: 'var(--highlight-color)' },
-            { label: 'Nouveaux', value: newCount, color: '#3498db' },
-            { label: 'Sauvegardés', value: savedCount, color: '#f39c12' },
-            { label: 'Postulés', value: appliedCount, color: '#27ae60' },
-          ].map(stat => (
-            <div key={stat.label} style={{
-              background: 'var(--card-bg)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '12px', padding: '0.8rem',
-              textAlign: 'center',
-            }}>
-              <div style={{ fontSize: '1.5rem', fontWeight: 900, color: stat.color, lineHeight: 1 }}>{stat.value}</div>
-              <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 600, marginTop: '2px' }}>{stat.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* ── Zone filtres ────────────────────────────────────────────────────── */}
-        <div style={{
-          background: 'var(--card-bg)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: '16px', padding: '1rem 1.1rem',
-          marginBottom: '1.25rem',
-          display: 'flex', flexDirection: 'column', gap: '0.75rem',
-        }}>
-
-          {/* Recherche + Localisation */}
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative', flex: '1 1 200px', minWidth: '160px' }}>
-              <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', fontSize: '0.85rem' }}>🔍</span>
+        {/* ── Barre de recherche ──────────────────────────────────── */}
+        <motion.form
+          className="jb-search-form"
+          onSubmit={handleSearch}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.1 }}
+        >
+          <div className="jb-search-row">
+            <div className="jb-search-field">
+              <IconSearch />
               <input
                 type="text"
-                placeholder="Poste, entreprise…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                style={{
-                  width: '100%', padding: '0.6rem 0.8rem 0.6rem 2.1rem',
-                  borderRadius: '10px', border: '1.5px solid var(--border-subtle)',
-                  background: 'var(--bg-color)', color: 'var(--text-main)',
-                  fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box',
-                }}
-                onFocus={e => e.target.style.borderColor = 'var(--highlight-color)'}
-                onBlur={e => e.target.style.borderColor = 'var(--border-subtle)'}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Poste, compétence…"
+                className="jb-input"
               />
             </div>
-            <div style={{ position: 'relative', flex: '1 1 160px', minWidth: '140px' }}>
-              <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', fontSize: '0.85rem' }}>📍</span>
+            <div className="jb-search-field">
+              <IconMap />
               <input
                 type="text"
+                value={location}
+                onChange={e => setLocation(e.target.value)}
                 placeholder="Ville, région…"
-                value={locationFilter}
-                onChange={e => setLocationFilter(e.target.value)}
-                list="loc-suggest"
-                style={{
-                  width: '100%', padding: '0.6rem 0.8rem 0.6rem 2.1rem',
-                  borderRadius: '10px', border: '1.5px solid var(--border-subtle)',
-                  background: 'var(--bg-color)', color: 'var(--text-main)',
-                  fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box',
-                }}
-                onFocus={e => e.target.style.borderColor = 'var(--highlight-color)'}
-                onBlur={e => e.target.style.borderColor = 'var(--border-subtle)'}
+                className="jb-input"
               />
-              <datalist id="loc-suggest">
-                {LOCATIONS_SUGGEST.map(l => <option key={l} value={l} />)}
-              </datalist>
             </div>
+            <button type="submit" className="jb-search-btn" disabled={loading}>
+              {loading
+                ? <><IconRefresh spinning={true} /> Recherche…</>
+                : <><IconSearch /> Rechercher</>
+              }
+            </button>
           </div>
 
           {/* Sources */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600, marginRight: '2px' }}>Source</span>
+          <div className="jb-source-toggles">
             {SOURCES.map(src => (
-              <button key={src} onClick={() => setActiveSource(src)} style={{
-                padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700,
-                border: `1.5px solid ${activeSource === src ? 'var(--highlight-color)' : 'var(--border-subtle)'}`,
-                background: activeSource === src ? 'rgba(19,201,237,0.12)' : 'transparent',
-                color: activeSource === src ? 'var(--highlight-color)' : 'var(--text-secondary)',
-                cursor: 'pointer', transition: 'all 0.18s',
-              }}>
-                {src} {src !== 'Toutes' && sources[src.toLowerCase().replace(' ', '')] !== undefined ? `(${sources[src.toLowerCase().replace(' ', '')] || 0})` : ''}
+              <button
+                key={src.id}
+                type="button"
+                className={`jb-source-toggle ${sources.includes(src.id) ? 'active' : ''}`}
+                style={{ '--src-color': src.color }}
+                onClick={() => toggleSource(src.id)}
+              >
+                {src.emoji} {src.label}
               </button>
             ))}
           </div>
-
-          {/* Statuts + Nouveau */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600, marginRight: '2px' }}>Statut</span>
-            {['Toutes', 'saved', 'applied', 'rejected'].map(st => {
-              const label = st === 'Toutes' ? 'Tous' : STATUS_CONFIG[st]?.emoji + ' ' + STATUS_CONFIG[st]?.label;
-              const isActive = activeStatus === st;
-              return (
-                <button key={st} onClick={() => setActiveStatus(st)} style={{
-                  padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700,
-                  border: `1.5px solid ${isActive ? 'var(--highlight-color)' : 'var(--border-subtle)'}`,
-                  background: isActive ? 'rgba(19,201,237,0.12)' : 'transparent',
-                  color: isActive ? 'var(--highlight-color)' : 'var(--text-secondary)',
-                  cursor: 'pointer', transition: 'all 0.18s',
-                }}>
-                  {label}
-                </button>
-              );
-            })}
-            <button
-              onClick={() => setShowNew(v => !v)}
-              style={{
-                padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700,
-                border: `1.5px solid ${showNew ? '#3498db' : 'var(--border-subtle)'}`,
-                background: showNew ? 'rgba(52,152,219,0.12)' : 'transparent',
-                color: showNew ? '#3498db' : 'var(--text-secondary)',
-                cursor: 'pointer', transition: 'all 0.18s', marginLeft: 'auto',
-              }}
-            >
-              🆕 Nouveaux seulement
-            </button>
-          </div>
-
-          {/* Reset */}
-          {hasActiveFilter && (
-            <button
-              onClick={resetFilters}
-              style={{
-                alignSelf: 'flex-start', background: 'none', border: 'none',
-                color: 'var(--highlight-color)', fontSize: '0.75rem', fontWeight: 700,
-                cursor: 'pointer', padding: 0,
-              }}
-            >
-              ✕ Réinitialiser les filtres
-            </button>
-          )}
-        </div>
-
-        {/* ── Feed ─────────────────────────────────────────────────────────────── */}
-        {loading && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '4rem 0', color: 'var(--text-secondary)' }}>
-            <div style={{
-              width: '36px', height: '36px',
-              border: '3px solid rgba(19,201,237,0.2)',
-              borderTop: '3px solid #13c9ed',
-              borderRadius: '50%', animation: 'spin 0.8s linear infinite',
-            }} />
-            <span style={{ fontSize: '0.9rem' }}>Scraping en cours…</span>
-          </div>
-        )}
-
-        {!loading && filtered.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary)' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🔎</div>
-            <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>Aucune offre trouvée</div>
-            <div style={{ fontSize: '0.85rem' }}>Essaie d'autres filtres ou mots-clés</div>
-            {hasActiveFilter && (
-              <button onClick={resetFilters} style={{
-                marginTop: '1rem', padding: '8px 20px', borderRadius: '10px',
-                border: '1px solid rgba(19,201,237,0.3)', background: 'rgba(19,201,237,0.08)',
-                color: 'var(--highlight-color)', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem',
-              }}>
-                Réinitialiser les filtres
-              </button>
-            )}
-          </div>
-        )}
-
-        {!loading && filtered.length > 0 && (
-          <>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.85rem' }}>
-              {filtered.length} offre{filtered.length > 1 ? 's' : ''} {hasActiveFilter ? 'filtrée' + (filtered.length > 1 ? 's' : '') : ''}
-            </p>
-            <AnimatePresence mode="popLayout">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                {filtered.map(job => (
-                  <JobCard
-                    key={job.id}
-                    job={job}
-                    status={statuses[job.id]}
-                    onCycleStatus={cycleStatus}
-                    isSeen={seen.has(job.id)}
-                    onMarkSeen={markSeen}
-                  />
-                ))}
-              </div>
-            </AnimatePresence>
-          </>
-        )}
-
-        {/* Note données démo */}
-        {isMock && !loading && (
-          <div style={{
-            marginTop: '2rem', padding: '1rem 1.25rem',
-            background: 'rgba(243,156,18,0.08)', border: '1px solid rgba(243,156,18,0.25)',
-            borderRadius: '12px', fontSize: '0.82rem', color: '#f39c12',
-          }}>
-            ⚠️ <strong>Données de démonstration</strong> — L'API <code>/api/jobs</code> n'est pas encore déployée sur Vercel. Ces offres sont fictives. Une fois <code>api/jobs.js</code> poussé sur GitHub, les vraies offres s'afficheront.
-          </div>
-        )}
+        </motion.form>
       </div>
 
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
+      {/* ── Filtres type ───────────────────────────────────────────── */}
+      {fetched && !loading && (
+        <div className="jb-filters">
+          <div className="jb-filters-inner">
+            {['all', 'alternance', 'stage', 'emploi'].map(t => (
+              <button
+                key={t}
+                className={`jb-filter-btn ${typeFilter === t ? 'active' : ''}`}
+                onClick={() => setTypeFilter(t)}
+              >
+                {t === 'all' ? `Tout (${jobs.length})` : `${TYPE_LABELS[t]?.label} (${jobs.filter(j => j.type === t).length})`}
+              </button>
+            ))}
+
+            <button
+              className="jb-filter-btn jb-refresh-btn"
+              onClick={fetchJobs}
+              disabled={loading}
+              title="Actualiser"
+            >
+              <IconRefresh spinning={loading} /> Actualiser
+            </button>
+          </div>
+
+          {warnings.length > 0 && (
+            <p className="jb-warn">
+              ⚠️ {warnings.length} source(s) indisponible(s) : {warnings.join(' · ')}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ── Contenu principal ─────────────────────────────────────── */}
+      <main className="jb-main">
+        {/* Erreur */}
+        {error && !loading && (
+          <motion.div className="jb-error-box" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <p>😕 {error}</p>
+            <button className="jb-search-btn" onClick={fetchJobs}>Réessayer</button>
+          </motion.div>
+        )}
+
+        {/* Skeletons */}
+        {loading && (
+          <div className="jb-grid">
+            {Array.from({ length: 9 }).map((_, i) => <Skeleton key={i} />)}
+          </div>
+        )}
+
+        {/* Résultats */}
+        {!loading && fetched && filteredJobs.length > 0 && (
+          <AnimatePresence mode="popLayout">
+            <div className="jb-grid">
+              {filteredJobs.map((job, i) => (
+                <JobCard key={job.id} job={job} index={i} />
+              ))}
+            </div>
+          </AnimatePresence>
+        )}
+
+        {/* Vide */}
+        {!loading && fetched && filteredJobs.length === 0 && !error && (
+          <motion.div className="jb-empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="jb-empty-icon">🔍</div>
+            <h3>Aucune offre trouvée</h3>
+            <p>Essaie d'autres mots-clés ou élargis la zone géographique.</p>
+          </motion.div>
+        )}
+
+        {/* État initial */}
+        {!loading && !fetched && !error && (
+          <motion.div className="jb-empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="jb-empty-icon">✨</div>
+            <h3>Lance une recherche</h3>
+            <p>Saisis un poste et une localisation pour trouver tes offres.</p>
+          </motion.div>
+        )}
+      </main>
+
+      {/* ── Footer ─────────────────────────────────────────────────── */}
+      <footer className="jb-footer">
+        <p>Données agrégées depuis Indeed, HelloWork &amp; Stage.fr · Résultats en temps réel</p>
+        <p style={{ marginTop: '0.25rem', opacity: 0.6, fontSize: '0.75rem' }}>
+          © 2026 Émilien Vitry-Lhotte
+        </p>
+      </footer>
     </div>
   );
 }

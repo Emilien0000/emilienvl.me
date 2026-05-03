@@ -1,307 +1,223 @@
 // api/jobs.js — Vercel Serverless Function
-// Agrège les offres d'alternance depuis Indeed (RSS), Hello Work (API) et stage.fr (HTML scraping)
-// Place ce fichier dans /api/jobs.js à la racine de ton projet Vite
+// Scrape Indeed (RSS), HelloWork (RSS) et Stage.fr (HTML)
+// Déployé automatiquement sur Vercel dans /api/
 
-import { load } from 'cheerio';
+export const config = { runtime: 'edge' };
 
-// ─── Config ───────────────────────────────────────────────────────────────────
-const KEYWORDS = 'alternance cybersécurité réseaux informatique';
-const LOCATION = 'France';
-const MAX_RESULTS = 30; // par source
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function normalizeDate(str) {
-  if (!str) return null;
-  try {
-    const d = new Date(str);
-    if (!isNaN(d.getTime())) return d.toISOString();
-  } catch (_) {}
-  return null;
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Type': 'application/json',
+  };
 }
 
-function deduplicate(jobs) {
-  const seen = new Set();
-  return jobs.filter(j => {
-    const key = (j.title + j.company).toLowerCase().replace(/\s+/g, '');
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+function xmlText(xml, tag) {
+  const m = xml.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>|<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i'));
+  if (!m) return '';
+  return (m[1] ?? m[2] ?? '').trim();
+}
+
+function parseRSSItems(xml) {
+  const items = [];
+  const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+  let m;
+  while ((m = itemRegex.exec(xml)) !== null) {
+    items.push(m[1]);
+  }
+  return items;
+}
+
+function cleanHTML(str) {
+  return str
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#\d+;/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function parseDate(raw) {
+  try {
+    const d = new Date(raw);
+    if (!isNaN(d)) return d.toISOString();
+  } catch {}
+  return new Date().toISOString();
+}
+
+// ── Scraper Indeed RSS ────────────────────────────────────────────────────────
+
+async function scrapeIndeed(query, location, limit) {
+  // Indeed RSS (non officiel mais public)
+  const url = `https://fr.indeed.com/rss?q=${encodeURIComponent(query)}&l=${encodeURIComponent(location)}&sort=date&limit=${limit}&fromage=30`;
+  
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; RSS reader)',
+      'Accept': 'application/rss+xml, application/xml, text/xml',
+    },
+  });
+
+  if (!res.ok) throw new Error(`Indeed RSS: ${res.status}`);
+  const xml = await res.text();
+  const items = parseRSSItems(xml);
+
+  return items.slice(0, limit).map(item => {
+    const title     = cleanHTML(xmlText(item, 'title'));
+    const link      = xmlText(item, 'link') || xmlText(item, 'guid');
+    const pubDate   = xmlText(item, 'pubDate');
+    const desc      = cleanHTML(xmlText(item, 'description'));
+    // Indeed encode l'entreprise dans le titre "Poste — Entreprise"
+    const [jobTitle, company] = title.includes(' - ')
+      ? title.split(' - ').map(s => s.trim())
+      : [title, ''];
+    // Localisation dans la description
+    const locMatch  = desc.match(/([A-Z][a-zÀ-ÿ\s-]+(?:\s\(\d{2,5}\))?)\s*[-–]/);
+    const jobLocation = locMatch ? locMatch[1].trim() : location;
+
+    return {
+      id: `indeed-${Buffer.from(link).toString('base64').slice(0, 12)}`,
+      source: 'Indeed',
+      title: jobTitle,
+      company,
+      location: jobLocation,
+      url: link,
+      description: desc.slice(0, 280),
+      date: parseDate(pubDate),
+      type: desc.toLowerCase().includes('alternance') ? 'alternance'
+           : desc.toLowerCase().includes('stage') ? 'stage' : 'emploi',
+    };
   });
 }
 
-// ─── Indeed — flux RSS ────────────────────────────────────────────────────────
-async function fetchIndeed() {
-  try {
-    const query = encodeURIComponent(KEYWORDS);
-    const loc = encodeURIComponent(LOCATION);
-    const url = `https://fr.indeed.com/rss?q=${query}&l=${loc}&jt=internship&sort=date`;
+// ── Scraper HelloWork RSS ─────────────────────────────────────────────────────
 
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; portfolio-bot/1.0)',
-        'Accept': 'application/rss+xml, application/xml, text/xml',
-      },
-      signal: AbortSignal.timeout(8000),
-    });
+async function scrapeHelloWork(query, location, limit) {
+  const url = `https://www.hellowork.com/rss/offres-emploi/?k=${encodeURIComponent(query)}&l=${encodeURIComponent(location)}&contrat=alternance,stage`;
 
-    if (!res.ok) throw new Error(`Indeed RSS ${res.status}`);
-    const xml = await res.text();
-    const $ = load(xml, { xmlMode: true });
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; RSS reader)',
+      'Accept': 'application/rss+xml, application/xml, text/xml',
+    },
+  });
 
-    const jobs = [];
-    $('item').each((_, el) => {
-      const title = $(el).find('title').first().text().trim();
-      const link = $(el).find('link').first().text().trim() || $(el).find('guid').text().trim();
-      const description = $(el).find('description').first().text().replace(/<[^>]+>/g, '').trim();
-      const pubDate = normalizeDate($(el).find('pubDate').text().trim());
+  if (!res.ok) throw new Error(`HelloWork RSS: ${res.status}`);
+  const xml = await res.text();
+  const items = parseRSSItems(xml);
 
-      // Extraire l'entreprise depuis le titre "Poste - Entreprise"
-      const parts = title.split(' - ');
-      const company = parts.length > 1 ? parts[parts.length - 1] : 'Inconnu';
-      const jobTitle = parts.length > 1 ? parts.slice(0, -1).join(' - ') : title;
+  return items.slice(0, limit).map(item => {
+    const title    = cleanHTML(xmlText(item, 'title'));
+    const link     = xmlText(item, 'link') || xmlText(item, 'guid');
+    const pubDate  = xmlText(item, 'pubDate');
+    const desc     = cleanHTML(xmlText(item, 'description'));
+    const company  = cleanHTML(xmlText(item, 'author') || xmlText(item, 'dc:creator') || '');
+    const category = cleanHTML(xmlText(item, 'category'));
 
-      if (jobTitle) {
-        jobs.push({
-          id: `indeed_${Buffer.from(link).toString('base64').slice(0, 12)}`,
-          source: 'Indeed',
-          sourceColor: '#2164f3',
-          title: jobTitle,
-          company,
-          location: 'France',
-          description: description.slice(0, 300),
-          link,
-          date: pubDate,
-          type: 'Alternance',
-        });
-      }
-    });
-
-    return jobs.slice(0, MAX_RESULTS);
-  } catch (err) {
-    console.error('[Indeed]', err.message);
-    return [];
-  }
-}
-
-// ─── Hello Work — API publique ────────────────────────────────────────────────
-async function fetchHelloWork() {
-  try {
-    const query = encodeURIComponent(KEYWORDS);
-    const url = `https://www.hellowork.com/fr-fr/emploi/recherche.html?k=${query}&c=alternance&page=1`;
-
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'fr-FR,fr;q=0.9',
-      },
-      signal: AbortSignal.timeout(8000),
-    });
-
-    if (!res.ok) throw new Error(`HelloWork ${res.status}`);
-    const html = await res.text();
-    const $ = load(html);
-
-    const jobs = [];
-
-    // Hello Work charge les offres dans des balises data-json ou articles
-    $('li[data-id], article[data-id], [data-offer-id]').each((_, el) => {
-      const $el = $(el);
-      const title = $el.find('h2, h3, [class*="title"]').first().text().trim();
-      const company = $el.find('[class*="company"], [class*="entreprise"]').first().text().trim();
-      const location = $el.find('[class*="location"], [class*="lieu"]').first().text().trim();
-      const link = $el.find('a').first().attr('href');
-      const fullLink = link ? (link.startsWith('http') ? link : `https://www.hellowork.com${link}`) : '#';
-
-      if (title) {
-        jobs.push({
-          id: `hw_${$el.attr('data-id') || $el.attr('data-offer-id') || Math.random().toString(36).slice(2, 10)}`,
-          source: 'Hello Work',
-          sourceColor: '#ff6b35',
-          title,
-          company: company || 'Inconnu',
-          location: location || 'France',
-          description: '',
-          link: fullLink,
-          date: null,
-          type: 'Alternance',
-        });
-      }
-    });
-
-    // Fallback : scraper les liens d'offres classiques
-    if (jobs.length === 0) {
-      $('a[href*="/emploi/"]').each((_, el) => {
-        const $el = $(el);
-        const title = $el.text().trim();
-        const href = $el.attr('href');
-        if (title && title.length > 10 && href && !jobs.find(j => j.link.includes(href))) {
-          jobs.push({
-            id: `hw_${Math.random().toString(36).slice(2, 10)}`,
-            source: 'Hello Work',
-            sourceColor: '#ff6b35',
-            title,
-            company: 'Voir l\'annonce',
-            location: 'France',
-            description: '',
-            link: href.startsWith('http') ? href : `https://www.hellowork.com${href}`,
-            date: null,
-            type: 'Alternance',
-          });
-        }
-      });
-    }
-
-    return jobs.slice(0, MAX_RESULTS);
-  } catch (err) {
-    console.error('[HelloWork]', err.message);
-    return [];
-  }
-}
-
-// ─── stage.fr — scraping HTML ─────────────────────────────────────────────────
-async function fetchStageFr() {
-  try {
-    const query = encodeURIComponent(KEYWORDS.split(' ').slice(0, 2).join(' '));
-    const url = `https://www.stage.fr/alternance?q=${query}&page=1`;
-
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'fr-FR,fr;q=0.9',
-        'Referer': 'https://www.stage.fr/',
-      },
-      signal: AbortSignal.timeout(8000),
-    });
-
-    if (!res.ok) throw new Error(`stage.fr ${res.status}`);
-    const html = await res.text();
-    const $ = load(html);
-
-    const jobs = [];
-
-    // Sélecteurs courants de stage.fr
-    const selectors = [
-      '.offer-card',
-      '.job-card',
-      'article.offer',
-      '[class*="offer-item"]',
-      '[class*="job-item"]',
-    ];
-
-    let found = false;
-    for (const sel of selectors) {
-      if ($(sel).length > 0) {
-        $(sel).each((_, el) => {
-          const $el = $(el);
-          const title = $el.find('h2, h3, .title, [class*="title"]').first().text().trim();
-          const company = $el.find('.company, [class*="company"], [class*="entreprise"]').first().text().trim();
-          const location = $el.find('.location, [class*="location"], [class*="ville"]').first().text().trim();
-          const link = $el.find('a').first().attr('href');
-          const fullLink = link ? (link.startsWith('http') ? link : `https://www.stage.fr${link}`) : '#';
-          const date = normalizeDate($el.find('time').attr('datetime') || $el.find('[class*="date"]').text());
-
-          if (title) {
-            jobs.push({
-              id: `sf_${Math.random().toString(36).slice(2, 10)}`,
-              source: 'Stage.fr',
-              sourceColor: '#00b894',
-              title,
-              company: company || 'Inconnu',
-              location: location || 'France',
-              description: '',
-              link: fullLink,
-              date,
-              type: 'Alternance',
-            });
-          }
-        });
-        found = true;
-        break;
-      }
-    }
-
-    // Fallback JSON-LD
-    if (!found) {
-      $('script[type="application/ld+json"]').each((_, el) => {
-        try {
-          const data = JSON.parse($(el).html());
-          const items = Array.isArray(data) ? data : [data];
-          items.forEach(item => {
-            if (item['@type'] === 'JobPosting') {
-              jobs.push({
-                id: `sf_${Math.random().toString(36).slice(2, 10)}`,
-                source: 'Stage.fr',
-                sourceColor: '#00b894',
-                title: item.title || '',
-                company: item.hiringOrganization?.name || 'Inconnu',
-                location: item.jobLocation?.address?.addressLocality || 'France',
-                description: (item.description || '').replace(/<[^>]+>/g, '').slice(0, 300),
-                link: item.url || '#',
-                date: normalizeDate(item.datePosted),
-                type: 'Alternance',
-              });
-            }
-          });
-        } catch (_) {}
-      });
-    }
-
-    return jobs.slice(0, MAX_RESULTS);
-  } catch (err) {
-    console.error('[stage.fr]', err.message);
-    return [];
-  }
-}
-
-// ─── Handler principal ────────────────────────────────────────────────────────
-export default async function handler(req, res) {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET');
-  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600'); // cache 5 min
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  try {
-    // Fetch en parallèle, timeout global 9s (Vercel pro = 30s, gratuit = 10s)
-    const [indeed, hellowork, stagefr] = await Promise.allSettled([
-      fetchIndeed(),
-      fetchHelloWork(),
-      fetchStageFr(),
-    ]);
-
-    const allJobs = [
-      ...(indeed.status === 'fulfilled' ? indeed.value : []),
-      ...(hellowork.status === 'fulfilled' ? hellowork.value : []),
-      ...(stagefr.status === 'fulfilled' ? stagefr.value : []),
-    ];
-
-    const jobs = deduplicate(allJobs).sort((a, b) => {
-      if (!a.date && !b.date) return 0;
-      if (!a.date) return 1;
-      if (!b.date) return -1;
-      return new Date(b.date) - new Date(a.date);
-    });
-
-    const sources = {
-      indeed: indeed.status === 'fulfilled' ? indeed.value.length : 0,
-      hellowork: hellowork.status === 'fulfilled' ? hellowork.value.length : 0,
-      stagefr: stagefr.status === 'fulfilled' ? stagefr.value.length : 0,
+    return {
+      id: `hw-${Buffer.from(link).toString('base64').slice(0, 12)}`,
+      source: 'HelloWork',
+      title,
+      company,
+      location,
+      url: link,
+      description: desc.slice(0, 280),
+      date: parseDate(pubDate),
+      type: category.toLowerCase().includes('alternance') ? 'alternance'
+           : category.toLowerCase().includes('stage') ? 'stage' : 'emploi',
     };
+  });
+}
 
-    return res.status(200).json({
-      jobs,
-      total: jobs.length,
-      sources,
-      fetchedAt: new Date().toISOString(),
+// ── Scraper Stage.fr (HTML léger) ────────────────────────────────────────────
+
+async function scrapeStage(query, location, limit) {
+  const url = `https://www.stage.fr/offres-de-stage?motcle=${encodeURIComponent(query)}&lieu=${encodeURIComponent(location)}`;
+
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
+      'Accept': 'text/html',
+      'Accept-Language': 'fr-FR,fr;q=0.9',
+    },
+  });
+
+  if (!res.ok) throw new Error(`Stage.fr: ${res.status}`);
+  const html = await res.text();
+
+  // Extraire les cards d'offres via regex sur le HTML brut
+  const cards = [];
+  // Sélecteur générique sur les blocs d'offres Stage.fr
+  const cardRegex = /class="[^"]*offer[^"]*"[\s\S]*?<\/(?:article|div)>/gi;
+  const titleRegex = /<h[23][^>]*>([\s\S]*?)<\/h[23]>/i;
+  const linkRegex = /href="(\/offre[^"]+)"/i;
+  const companyRegex = /class="[^"]*company[^"]*"[^>]*>([\s\S]*?)<\//i;
+  const locationRegex = /class="[^"]*location[^"]*"[^>]*>([\s\S]*?)<\//i;
+  const dateRegex = /class="[^"]*date[^"]*"[^>]*>([\s\S]*?)<\//i;
+
+  // Fallback : parser les balises <a> ayant /offre dans l'href
+  const linkTitleRegex = /href="(\/offres?[^"]+)"[^>]*>[\s\S]*?<[^>]*>([\s\S]*?)<\/[^>]*>/gi;
+  let m;
+  const seen = new Set();
+
+  while ((m = linkTitleRegex.exec(html)) !== null && cards.length < limit) {
+    const path = m[1];
+    const rawTitle = cleanHTML(m[2]);
+    if (!rawTitle || rawTitle.length < 5) continue;
+    if (seen.has(path)) continue;
+    seen.add(path);
+
+    cards.push({
+      id: `stage-${Buffer.from(path).toString('base64').slice(0, 12)}`,
+      source: 'Stage.fr',
+      title: rawTitle,
+      company: '',
+      location,
+      url: `https://www.stage.fr${path}`,
+      description: '',
+      date: new Date().toISOString(),
+      type: 'stage',
     });
-  } catch (err) {
-    console.error('[/api/jobs]', err);
-    return res.status(500).json({ error: 'Erreur lors de la récupération des offres' });
   }
+
+  return cards.slice(0, limit);
+}
+
+// ── Handler principal ─────────────────────────────────────────────────────────
+
+export default async function handler(req) {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders() });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const query    = searchParams.get('q')        || 'alternance développeur';
+  const location = searchParams.get('location') || 'France';
+  const sources  = (searchParams.get('sources') || 'indeed,hellowork,stage').split(',');
+  const limit    = Math.min(parseInt(searchParams.get('limit') || '10', 10), 20);
+
+  const results  = await Promise.allSettled([
+    sources.includes('indeed')    ? scrapeIndeed(query, location, limit)    : Promise.resolve([]),
+    sources.includes('hellowork') ? scrapeHelloWork(query, location, limit) : Promise.resolve([]),
+    sources.includes('stage')     ? scrapeStage(query, location, limit)     : Promise.resolve([]),
+  ]);
+
+  const jobs = results
+    .flatMap(r => r.status === 'fulfilled' ? r.value : [])
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const errors = results
+    .filter(r => r.status === 'rejected')
+    .map(r => r.reason?.message || 'Erreur inconnue');
+
+  return new Response(
+    JSON.stringify({ jobs, total: jobs.length, errors, query, location }),
+    { status: 200, headers: corsHeaders() }
+  );
 }

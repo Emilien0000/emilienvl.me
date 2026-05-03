@@ -2098,3 +2098,385 @@ h2 {
   border-top: 1px solid var(--border-subtle);
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   JOB BOARD — /alternances
+   À coller à la fin de src/App.css
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Layout racine ──────────────────────────────────────────────── */
+.jb-root {
+  min-height: 100vh;
+  background: var(--bg-color);
+  color: var(--text-main);
+  font-family: var(--font-main);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header / Hero ──────────────────────────────────────────────── */
+.jb-header {
+  background: linear-gradient(
+    160deg,
+    var(--card-bg) 0%,
+    rgba(19, 201, 237, 0.04) 100%
+  );
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 1.5rem 2rem 2rem;
+}
+
+.jb-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: transparent;
+  border: 1.5px solid var(--border-subtle);
+  color: var(--text-main);
+  border-radius: 8px;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 1.5rem;
+  transition: border-color 0.2s, color 0.2s;
+}
+.jb-back-btn:hover {
+  border-color: var(--highlight-color);
+  color: var(--highlight-color);
+}
+
+.jb-hero {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.jb-hero-badge {
+  display: inline-block;
+  background: rgba(19, 201, 237, 0.12);
+  color: var(--highlight-color);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.35rem 0.85rem;
+  border-radius: 50px;
+  margin-bottom: 0.85rem;
+}
+.jb-hero-title {
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-weight: 900;
+  line-height: 1.1;
+  margin-bottom: 0.6rem;
+  color: var(--text-main);
+}
+.jb-hero-sub {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+/* ── Formulaire de recherche ──────────────────────────────────── */
+.jb-search-form {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.jb-search-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.jb-search-field {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--card-bg);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 0 1rem;
+  transition: border-color 0.2s;
+}
+.jb-search-field:focus-within {
+  border-color: var(--highlight-color);
+  box-shadow: 0 0 0 3px rgba(19, 201, 237, 0.1);
+}
+.jb-search-field svg { color: var(--text-secondary); flex-shrink: 0; }
+
+.jb-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-main);
+  font-family: var(--font-main);
+  font-size: 0.95rem;
+  padding: 0.8rem 0;
+}
+.jb-input::placeholder { color: var(--text-secondary); }
+
+.jb-search-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--highlight-color);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 0.8rem 1.6rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.2s, transform 0.15s;
+}
+.jb-search-btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+.jb-search-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Source toggles */
+.jb-source-toggles {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.jb-source-toggle {
+  background: transparent;
+  border: 1.5px solid var(--border-subtle);
+  color: var(--text-secondary);
+  border-radius: 50px;
+  padding: 0.4rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.jb-source-toggle.active {
+  background: color-mix(in srgb, var(--src-color) 12%, transparent);
+  border-color: var(--src-color);
+  color: var(--src-color);
+}
+.jb-source-toggle:hover { border-color: var(--src-color); color: var(--src-color); }
+
+/* ── Barre de filtres ───────────────────────────────────────────── */
+.jb-filters {
+  padding: 1rem 2rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--card-bg);
+}
+.jb-filters-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.jb-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: transparent;
+  border: 1.5px solid var(--border-subtle);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.jb-filter-btn.active,
+.jb-filter-btn:hover {
+  border-color: var(--highlight-color);
+  color: var(--highlight-color);
+  background: rgba(19, 201, 237, 0.08);
+}
+.jb-filter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.jb-refresh-btn { margin-left: auto; }
+
+.jb-warn {
+  max-width: 860px;
+  margin: 0.6rem auto 0;
+  font-size: 0.78rem;
+  color: #e09535;
+}
+
+/* ── Grille de cards ──────────────────────────────────────────── */
+.jb-main {
+  flex: 1;
+  padding: 2rem;
+}
+
+.jb-grid {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.2rem;
+}
+
+/* ── Job Card ───────────────────────────────────────────────────── */
+.jb-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  text-decoration: none;
+  color: var(--text-main);
+  transition: box-shadow 0.25s, border-color 0.25s, transform 0.2s;
+  cursor: pointer;
+}
+.jb-card:hover {
+  border-color: var(--source-color, var(--highlight-color));
+  box-shadow: 0 8px 32px rgba(19, 201, 237, 0.12);
+}
+
+.jb-card-accent {
+  height: 3px;
+  background: var(--source-color, var(--highlight-color));
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.jb-card-inner {
+  padding: 1.1rem 1.2rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.jb-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+.jb-card-badges { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+.jb-source-badge,
+.jb-type-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 50px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.jb-date {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.jb-title {
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--text-main);
+  margin-top: 0.15rem;
+}
+
+.jb-company,
+.jb-location {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+.jb-company { font-weight: 600; }
+
+.jb-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 0.2rem;
+}
+
+.jb-card-footer {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+}
+.jb-apply-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--source-color, var(--highlight-color));
+  transition: gap 0.2s;
+}
+.jb-card:hover .jb-apply-btn { gap: 0.6rem; }
+
+/* ── Skeleton ───────────────────────────────────────────────────── */
+.jb-skeleton { pointer-events: none; }
+.jb-sk-row {
+  background: linear-gradient(90deg, var(--border-subtle) 25%, rgba(19,201,237,0.06) 50%, var(--border-subtle) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Empty / Error states ──────────────────────────────────────── */
+.jb-empty,
+.jb-error-box {
+  max-width: 420px;
+  margin: 4rem auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+.jb-empty-icon { font-size: 3rem; }
+.jb-empty h3 { font-size: 1.2rem; font-weight: 800; }
+.jb-empty p,
+.jb-error-box p { color: var(--text-secondary); font-size: 0.9rem; }
+
+/* ── Footer ─────────────────────────────────────────────────────── */
+.jb-footer {
+  text-align: center;
+  padding: 1.5rem;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: auto;
+}
+
+/* ── Responsive ────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .jb-header { padding: 1rem 1rem 1.5rem; }
+  .jb-main   { padding: 1rem; }
+  .jb-filters { padding: 0.75rem 1rem; }
+  .jb-search-row { flex-direction: column; }
+  .jb-search-btn { width: 100%; justify-content: center; }
+  .jb-grid { grid-template-columns: 1fr; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
