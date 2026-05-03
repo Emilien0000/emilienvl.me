@@ -1,10 +1,12 @@
 // api/jobs.js — Vercel Edge Serverless Function
-// Sources : La Bonne Alternance + Adzuna
+// Sources : La Bonne Alternance + Adzuna + France Travail
 // ─────────────────────────────────────────────────────────────────────────────
 // Variables d'environnement Vercel :
-//   LBA_API_TOKEN      → token JWT depuis api.apprentissage.beta.gouv.fr
-//   ADZUNA_APP_ID      → ton app id Adzuna
-//   ADZUNA_APP_KEY     → ta app key Adzuna
+//   LBA_API_TOKEN         → token JWT depuis api.apprentissage.beta.gouv.fr
+//   ADZUNA_APP_ID         → ton app id Adzuna
+//   ADZUNA_APP_KEY        → ta app key Adzuna
+//   FT_CLIENT_ID          → client_id OAuth France Travail (ex-Pôle Emploi)
+//   FT_CLIENT_SECRET      → client_secret OAuth France Travail
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const config = { runtime: 'edge' };
@@ -100,13 +102,32 @@ function getCoords(location) {
   return GEO_MAP.france;
 }
 
+// ── Département par localisation (France Travail) ─────────────────────────────
+// France Travail filtre par code département (ex: "75" pour Paris)
+
+const DEPT_MAP = {
+  'paris':      '75',
+  'lyon':       '69',
+  'marseille':  '13',
+  'bordeaux':   '33',
+  'lille':      '59',
+  'nantes':     '44',
+  'toulouse':   '31',
+  'strasbourg': '67',
+  'rennes':     '35',
+  'grenoble':   '38',
+  'amiens':     '80',
+};
+
+function getDept(location) {
+  const l = location.toLowerCase();
+  for (const [key, dept] of Object.entries(DEPT_MAP)) {
+    if (l.includes(key)) return dept;
+  }
+  return null; // Pas de filtre département = toute la France
+}
+
 // ── 1. La Bonne Alternance ────────────────────────────────────────────────────
-//
-// Endpoint : GET https://api.apprentissage.beta.gouv.fr/job/v1/search
-// Auth     : Bearer token (api.apprentissage.beta.gouv.fr)
-// Params   : romes, latitude, longitude, radius (pas de "limit" ni "caller")
-// Réponse  : { jobs: { offers: [], recruiters: [] } }
-//            OU { offers: [], recruiters: [] } selon version
 
 async function scrapeLBA(query, location, limit) {
   const token = process.env.LBA_API_TOKEN;
@@ -115,9 +136,6 @@ async function scrapeLBA(query, location, limit) {
   const coords = getCoords(location);
   const romes  = getRomes(query);
 
-  // ⚠️  Dans le swagger LBA les exemples sont inversés :
-  //     latitude = coordonnée Nord/Sud (ex: 48.8566 pour Paris)
-  //     longitude = coordonnée Est/Ouest (ex: 2.3522 pour Paris)
   const params = new URLSearchParams({
     romes,
     latitude:  String(coords.lat),
@@ -127,9 +145,6 @@ async function scrapeLBA(query, location, limit) {
 
   const url = `https://api.apprentissage.beta.gouv.fr/job/v1/search?${params}`;
 
-  // Le runtime Vercel Edge peut stripper le header Authorization sur les fetch() sortants.
-  // On envoie le token à la fois en header Bearer ET en header api-key (les deux sont
-  // acceptés par l'API apprentissage selon leur swagger).
   const res = await fetch(url, {
     headers: {
       "Authorization": `Bearer ${token}`,
@@ -152,10 +167,8 @@ async function scrapeLBA(query, location, limit) {
 
   const data = await res.json();
 
-  // La réponse contient { jobs: { offers: [], recruiters: [] } }
-  // ou directement { offers: [], recruiters: [] } selon la version
-  const root      = data.jobs ?? data;
-  const offers    = Array.isArray(root.offers)    ? root.offers    : [];
+  const root       = data.jobs ?? data;
+  const offers     = Array.isArray(root.offers)     ? root.offers     : [];
   const recruiters = Array.isArray(root.recruiters) ? root.recruiters : [];
 
   return [
@@ -165,10 +178,6 @@ async function scrapeLBA(query, location, limit) {
 }
 
 function mapLBAOffer(o, fallbackLocation) {
-  // Format /job/v1/search :
-  //   o.offer.title, o.workplace.name, o.workplace.location.address
-  //   o.apply.url, o.offer.description, o.offer.publication.creation
-  //   o.identifier.id
   const title    = o.offer?.title       ?? "Offre d'alternance";
   const company  = o.workplace?.name    ?? '';
   const address  = o.workplace?.location?.address ?? fallbackLocation;
@@ -250,6 +259,127 @@ async function scrapeAdzuna(query, location, limit) {
   });
 }
 
+// ── 3. France Travail (ex Pôle Emploi) ───────────────────────────────────────
+//
+// Doc : https://pole-emploi.io/data/api/offres-emploi
+// Auth : OAuth2 client_credentials
+//   POST https://entreprise.francetravail.fr/connexion/oauth2/access_token
+//   ?realm=/partenaire
+//   Body: grant_type=client_credentials&client_id=...&client_secret=...
+//         &scope=api_offresdemploiv2+o2dsoffre
+//
+// Endpoint : GET https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search
+// Params clés :
+//   motsCles, departement, typeContrat (CA=apprentissage, CDD, CDI, SAI=stage)
+//   range (ex: 0-14 pour les 15 premiers)
+
+// Cache token en mémoire pour la durée du worker (Edge runtime)
+let ftTokenCache = { token: null, expiresAt: 0 };
+
+async function getFTToken() {
+  if (ftTokenCache.token && Date.now() < ftTokenCache.expiresAt - 30_000) {
+    return ftTokenCache.token;
+  }
+
+  const clientId     = process.env.FT_CLIENT_ID;
+  const clientSecret = process.env.FT_CLIENT_SECRET;
+  if (!clientId || !clientSecret) throw new Error('FT_CLIENT_ID / FT_CLIENT_SECRET manquants');
+
+  const res = await fetch(
+    'https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire',
+    {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type:    'client_credentials',
+        client_id:     clientId,
+        client_secret: clientSecret,
+        scope:         'api_offresdemploiv2 o2dsoffre',
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`FT OAuth ${res.status}: ${txt.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  ftTokenCache = {
+    token:     data.access_token,
+    expiresAt: Date.now() + (data.expires_in ?? 1500) * 1000,
+  };
+  return ftTokenCache.token;
+}
+
+async function scrapeFranceTravail(query, location, limit) {
+  const token = await getFTToken();
+  const dept  = getDept(location);
+
+  // On fait deux appels en parallèle : contrats d'apprentissage (CA) + stages (SAI)
+  // typeContrat : CA = Contrat d'apprentissage, CDD, CDI, SAI = Saisonnier (utilisé aussi pour stages)
+  const buildParams = (typeContrat) => {
+    const p = new URLSearchParams({
+      motsCles:    query,
+      sort:        1,        // tri par date
+      range:       `0-${Math.min(limit, 149)}`,
+    });
+    if (dept)         p.set('departement', dept);
+    if (typeContrat)  p.set('typeContrat', typeContrat);
+    return p;
+  };
+
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'Accept':        'application/json',
+  };
+
+  const baseUrl = 'https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search';
+
+  const [resAlt, resStg] = await Promise.all([
+    fetch(`${baseUrl}?${buildParams('CA')}`,  { headers }),
+    fetch(`${baseUrl}?${buildParams('SAI')}`, { headers }),
+  ]);
+
+  const parseBody = async (res) => {
+    if (!res.ok) {
+      // 204 = aucun résultat, c'est normal
+      if (res.status === 204) return [];
+      const txt = await res.text().catch(() => '');
+      throw new Error(`France Travail ${res.status}: ${txt.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    return data.resultats ?? [];
+  };
+
+  const [altOffres, stgOffres] = await Promise.all([
+    parseBody(resAlt),
+    parseBody(resStg),
+  ]);
+
+  const mapOffer = (o, type) => {
+    const desc = (o.description ?? '').slice(0, 280);
+    return {
+      id:          `ft-${uid(o.id)}`,
+      source:      'France Travail',
+      title:       o.intitule ?? 'Offre France Travail',
+      company:     o.entreprise?.nom ?? '',
+      location:    o.lieuTravail?.libelle ?? location,
+      url:         o.origineOffre?.urlOrigine
+                    ?? `https://candidat.francetravail.fr/offres/recherche/detail/${o.id}`,
+      description: desc,
+      date:        parseDate(o.dateCreation),
+      type,
+    };
+  };
+
+  const half = Math.ceil(limit / 2);
+  return [
+    ...altOffres.slice(0, half).map(o => mapOffer(o, 'alternance')),
+    ...stgOffres.slice(0, limit - Math.min(altOffres.length, half)).map(o => mapOffer(o, 'stage')),
+  ];
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export default async function handler(req) {
@@ -260,12 +390,13 @@ export default async function handler(req) {
   const { searchParams } = new URL(req.url);
   const query    = searchParams.get('q')        || 'alternance développeur';
   const location = searchParams.get('location') || 'France';
-  const sources  = (searchParams.get('sources') || 'lba,adzuna').split(',');
+  const sources  = (searchParams.get('sources') || 'lba,adzuna,ft').split(',');
   const limit    = Math.min(parseInt(searchParams.get('limit') || '12', 10), 20);
 
   const scrapers = {
     lba:    () => scrapeLBA(query, location, limit),
     adzuna: () => scrapeAdzuna(query, location, limit),
+    ft:     () => scrapeFranceTravail(query, location, limit),
   };
 
   const results = await Promise.allSettled(
