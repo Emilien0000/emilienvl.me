@@ -3,8 +3,8 @@
 // Usage dans App.jsx : <Route path="/admin" element={<AdminPage />} />
 
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { useAdminAuth } from '../hooks/useAdminAuth';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminPage() {
   // ── États d'authentification ──
