@@ -39,6 +39,7 @@ const ROME_MAP = {
   'dev':                'M1805,M1806',
   'web':                'M1805,M1806',
   'fullstack':          'M1805,M1806',
+  'cyber':              'M1802',
   'frontend':           'M1805',
   'backend':            'M1806',
   'javascript':         'M1805,M1806',
@@ -167,14 +168,9 @@ async function scrapeLBA(query, location, limit) {
 
   const data = await res.json();
 
-  const root       = data.jobs ?? data;
-  const offers     = Array.isArray(root.offers)     ? root.offers     : [];
-  const recruiters = Array.isArray(root.recruiters) ? root.recruiters : [];
+  const offers = Array.isArray(data.jobs) ? data.jobs : [];
 
-  return [
-    ...offers.slice(0, limit).map(o => mapLBAOffer(o, location)),
-    ...recruiters.slice(0, Math.max(0, limit - offers.length)).map(r => mapLBARecruiter(r, location)),
-  ];
+  return offers.slice(0, limit).map(o => mapLBAOffer(o, location));
 }
 
 function mapLBAOffer(o, fallbackLocation) {
