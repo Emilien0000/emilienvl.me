@@ -50,7 +50,6 @@ const IconCalendar = () => (
 const SOURCES = [
   { id: 'lba',    label: 'La Bonne Alternance', color: '#1a73e8', emoji: '🎓' },
   { id: 'adzuna', label: 'Adzuna',              color: '#e64c1f', emoji: '🔍' },
-  { id: 'ft',     label: 'France Travail',      color: '#005f86', emoji: '🏛️' },
 ];
 
 const TYPE_LABELS = {
@@ -158,7 +157,7 @@ export default function JobBoard() {
 
   const [query,      setQuery]      = useState('alternance développeur');
   const [location,   setLocation]   = useState('France');
-  const [sources,    setSources]    = useState(['lba', 'adzuna', 'ft']);
+  const [sources,    setSources]    = useState(['lba', 'adzuna']);
   const [typeFilter, setTypeFilter] = useState('all');
   const [jobs,       setJobs]       = useState([]);
   const [loading,    setLoading]    = useState(false);
@@ -218,7 +217,7 @@ export default function JobBoard() {
             Trouve ton <span className="highlight">alternance</span>
           </h1>
           <p className="jb-hero-sub">
-            Annonces officielles — La Bonne Alternance · Adzuna · France Travail
+            Annonces officielles — La Bonne Alternance · Adzuna
           </p>
         </motion.div>
 
@@ -324,7 +323,7 @@ export default function JobBoard() {
       </main>
 
       <footer className="jb-footer">
-        <p>Données officielles — La Bonne Alternance · Adzuna · France Travail</p>
+        <p>Données officielles — La Bonne Alternance · Adzuna</p>
         <p style={{ marginTop: '0.25rem', opacity: 0.6, fontSize: '0.75rem' }}>
           © 2026 Émilien Vitry-Lhotte
         </p>
