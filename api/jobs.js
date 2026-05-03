@@ -102,49 +102,60 @@ function getCoords(location) {
 
 // ── 1. La Bonne Alternance ────────────────────────────────────────────────────
 //
-// Endpoint : api.apprentissage.beta.gouv.fr/job/v1/search
-// Params   : romes, longitude, latitude, radius, caller
-// Auth     : Bearer token depuis api.apprentissage.beta.gouv.fr
-//
-// Structure réponse :
-//   { jobs: [ { identifier, workplace, apply, offer, contract, ... } ] }
+// Endpoint : GET https://api.apprentissage.beta.gouv.fr/job/v1/search
+// Auth     : Bearer token (api.apprentissage.beta.gouv.fr)
+// Params   : romes, latitude, longitude, radius (pas de "limit" ni "caller")
+// Réponse  : { jobs: { offers: [], recruiters: [] } }
+//            OU { offers: [], recruiters: [] } selon version
 
 async function scrapeLBA(query, location, limit) {
   const token = process.env.LBA_API_TOKEN;
-  if (!token) throw new Error('LBA_API_TOKEN manquant');
+  if (!token) throw new Error("LBA_API_TOKEN manquant");
 
   const coords = getCoords(location);
   const romes  = getRomes(query);
 
+  // ⚠️  Dans le swagger LBA les exemples sont inversés :
+  //     latitude = coordonnée Nord/Sud (ex: 48.8566 pour Paris)
+  //     longitude = coordonnée Est/Ouest (ex: 2.3522 pour Paris)
   const params = new URLSearchParams({
     romes,
     latitude:  String(coords.lat),
     longitude: String(coords.lon),
-    radius:    '100',
-    caller:    'emilienvl.me',
-    limit:     String(limit),
+    radius:    "100",
   });
 
   const url = `https://api.apprentissage.beta.gouv.fr/job/v1/search?${params}`;
 
   const res = await fetch(url, {
     headers: {
-      'Authorization': `Bearer ${token}`,
-      'Accept':        'application/json',
+      "Authorization": `Bearer ${token}`,
+      "Accept":        "application/json",
     },
   });
 
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
+  const contentType = res.headers.get("content-type") ?? "";
+
+  if (!res.ok || contentType.includes("text/html")) {
+    const txt = await res.text().catch(() => "");
+    if (contentType.includes("text/html")) {
+      throw new Error(`LBA ${res.status}: réponse HTML — URL: ${url}`);
+    }
     throw new Error(`LBA ${res.status}: ${txt.slice(0, 300)}`);
   }
 
   const data = await res.json();
 
-  // Nouveau format : { jobs: [] } tableau plat
-  const allOffers = Array.isArray(data.jobs) ? data.jobs : [];
+  // La réponse contient { jobs: { offers: [], recruiters: [] } }
+  // ou directement { offers: [], recruiters: [] } selon la version
+  const root      = data.jobs ?? data;
+  const offers    = Array.isArray(root.offers)    ? root.offers    : [];
+  const recruiters = Array.isArray(root.recruiters) ? root.recruiters : [];
 
-  return allOffers.slice(0, limit).map(o => mapLBAOffer(o, location));
+  return [
+    ...offers.slice(0, limit).map(o => mapLBAOffer(o, location)),
+    ...recruiters.slice(0, Math.max(0, limit - offers.length)).map(r => mapLBARecruiter(r, location)),
+  ];
 }
 
 function mapLBAOffer(o, fallbackLocation) {
@@ -170,6 +181,20 @@ function mapLBAOffer(o, fallbackLocation) {
     description: desc,
     date:        parseDate(created),
     type:        'alternance',
+  };
+}
+
+function mapLBARecruiter(r, fallbackLocation) {
+  return {
+    id:          `lba-rec-${uid(r.identifier?.id ?? Math.random())}`,
+    source:      "La Bonne Alternance",
+    title:       `Candidature spontanée — ${r.workplace?.name ?? "Entreprise"}`,
+    company:     r.workplace?.name ?? "",
+    location:    r.workplace?.location?.address ?? fallbackLocation,
+    url:         r.apply?.url ?? "https://labonnealternance.apprentissage.beta.gouv.fr",
+    description: r.workplace?.description ?? "",
+    date:        new Date().toISOString(),
+    type:        "alternance",
   };
 }
 
