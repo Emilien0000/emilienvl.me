@@ -127,10 +127,15 @@ async function scrapeLBA(query, location, limit) {
 
   const url = `https://api.apprentissage.beta.gouv.fr/job/v1/search?${params}`;
 
+  // Le runtime Vercel Edge peut stripper le header Authorization sur les fetch() sortants.
+  // On envoie le token à la fois en header Bearer ET en header api-key (les deux sont
+  // acceptés par l'API apprentissage selon leur swagger).
   const res = await fetch(url, {
     headers: {
       "Authorization": `Bearer ${token}`,
+      "api-key":       token,
       "Accept":        "application/json",
+      "Content-Type":  "application/json",
     },
   });
 
@@ -139,7 +144,8 @@ async function scrapeLBA(query, location, limit) {
   if (!res.ok || contentType.includes("text/html")) {
     const txt = await res.text().catch(() => "");
     if (contentType.includes("text/html")) {
-      throw new Error(`LBA ${res.status}: réponse HTML — URL: ${url}`);
+      const firstBytes = txt.slice(0, 100);
+      throw new Error(`LBA ${res.status}: HTML reçu (token invalide ou expiré ?). Début: ${firstBytes}`);
     }
     throw new Error(`LBA ${res.status}: ${txt.slice(0, 300)}`);
   }
