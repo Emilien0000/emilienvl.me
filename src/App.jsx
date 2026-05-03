@@ -5,9 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
 import { supabase } from './supabase';
 import JobBoard from './pages/JobBoard';
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
 import { useAdminAuth } from '../hooks/useAdminAuth';
+import { motion, AnimatePresence } from 'framer-motion';
 
 
 
@@ -383,10 +382,6 @@ function DarkModeToggle({ dark, onToggle }) {
     </button>
   );
 }
-
-import React, { useState, useEffect } from 'react';
-import { supabase } from './supabase'; // Ajuste l'import si besoin
-import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminPage() {
   // ── États d'authentification ──
