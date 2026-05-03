@@ -6,7 +6,6 @@ import './App.css';
 import { supabase } from './supabase';
 import JobBoard from './pages/JobBoard';
 import { useAdminAuth } from '../hooks/useAdminAuth';
-import { motion, AnimatePresence } from 'framer-motion';
 
 
 
@@ -383,18 +382,13 @@ function DarkModeToggle({ dark, onToggle }) {
   );
 }
 
-export default function AdminPage() {
-  // ── États d'authentification ──
-  const [authed, setAuthed] = useState(() => sessionStorage.getItem('adm_auth') === 'true');
-  const [step, setStep] = useState(1); // 1 = Mot de passe, 2 = Code A2F
-  const [pw, setPw] = useState('');
-  const [otp, setOtp] = useState('');
-  const [tempToken, setTempToken] = useState(null);
-  const [authSubmitting, setAuthSubmitting] = useState(false);
-  const [authError, setAuthError] = useState('');
+const ADMIN_HASH = '69050a418734442c99d69f8af69717668620e83172e1f4b9812494c3e43bd2c3';
 
-  // ── États du Dashboard Admin ──
+function AdminPage() {
+  const [authed, setAuthed] = useState(() => sessionStorage.getItem('adm_auth') === 'true');
+  const [pw, setPw] = useState('');
   const [activeTab, setActiveTab] = useState('projects'); 
+  
   const [projectsList, setProjectsList] = useState([]);
   const [expList, setExpList] = useState([]);
   const [skillsList, setSkillsList] = useState([]);
@@ -404,75 +398,7 @@ export default function AdminPage() {
   const [previewItem, setPreviewItem] = useState(null);
   const [draggedId, setDraggedId] = useState(null);
   const [cropperSrc, setCropperSrc] = useState(null);
-  const [cropperTarget, setCropperTarget] = useState(null);
-
-  // ── 1. LOGIQUE D'AUTHENTIFICATION ──
-
-  const handlePasswordSubmit = async (e) => {
-    if (e) e.preventDefault();
-    if (!pw.trim()) return;
-    setAuthSubmitting(true);
-    setAuthError('');
-    
-    try {
-      const res = await fetch('/api/admin-auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ step: 1, password: pw })
-      });
-      const data = await res.json();
-      
-      if (!res.ok) throw new Error(data.error || 'Erreur de connexion');
-      
-      if (data.requireOtp) {
-        setTempToken(data.tempToken);
-        setStep(2);
-        setPw(''); // On vide le mdp par sécurité
-      }
-    } catch (err) {
-      setAuthError(err.message);
-    } finally {
-      setAuthSubmitting(false);
-    }
-  };
-
-  const handleOtpSubmit = async (e) => {
-    if (e) e.preventDefault();
-    if (!otp.trim()) return;
-    setAuthSubmitting(true);
-    setAuthError('');
-    
-    try {
-      const res = await fetch('/api/admin-auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ step: 2, otp, tempToken })
-      });
-      const data = await res.json();
-      
-      if (!res.ok) throw new Error(data.error || 'Code invalide');
-      
-      // Succès de l'A2F
-      sessionStorage.setItem('adm_auth', 'true');
-      sessionStorage.setItem('adm_token', data.token); // Optionnel : pour sécuriser tes requêtes futures
-      setAuthed(true);
-    } catch (err) {
-      setAuthError(err.message);
-      setOtp(''); // On vide le champ si erreur
-    } finally {
-      setAuthSubmitting(false);
-    }
-  };
-
-  const handleLogout = () => {
-    setAuthed(false);
-    setStep(1);
-    setTempToken(null);
-    sessionStorage.removeItem('adm_auth');
-    sessionStorage.removeItem('adm_token');
-  };
-
-  // ── 2. LOGIQUE DU DASHBOARD (Inchangée) ──
+  const [cropperTarget, setCropperTarget] = useState(null); // 'new' | index
 
   const fetchAll = async () => {
     setLoading(true);
@@ -494,41 +420,60 @@ export default function AdminPage() {
 
   useEffect(() => { if (authed) fetchAll(); }, [authed]);
 
-  const saveItem = async () => {
-    setLoading(true);
-    const table = activeTab === 'projects' ? 'projets' : activeTab === 'exp' ? 'experiences' : 'skills';
-    
-    const { isDuplicate, id, ...cleanItem } = editItem;
-
-    if (activeTab !== 'skills' && !cleanItem.slug?.trim()) {
-      cleanItem.slug = (cleanItem.title || 'item')
-        .toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '')
-        + '-' + Date.now();
-    }
-
-    if (typeof cleanItem.tags === 'string') cleanItem.tags = cleanItem.tags.split(',').map(s => s.trim()).filter(Boolean);
-    if (typeof cleanItem.images === 'string') cleanItem.images = cleanItem.images.split(',').map(s => s.trim()).filter(Boolean);
-
-    let res;
-    if (id && !isDuplicate) {
-      res = await supabase.from(table).update(cleanItem).eq('id', id);
+  const tryLogin = async () => {
+    const encoder = new TextEncoder();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(pw));
+    const hashHex = Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+    if (hashHex === ADMIN_HASH) {
+      setAuthed(true);
+      sessionStorage.setItem('adm_auth', 'true');
     } else {
-      res = await supabase.from(table).insert([cleanItem]);
+      alert("Mot de passe incorrect");
     }
-
-    if (res.error) {
-      if (res.error.code === '23505') alert("Erreur : Ce slug ou nom existe déjà. Modifie le slug manuellement.");
-      else alert("Erreur : " + res.error.message);
-    } else { 
-      setEditItem(null); 
-      setPreviewItem(null);
-      fetchAll(); 
-    }
-    setLoading(false);
   };
+
+  const handleLogout = () => {
+    setAuthed(false);
+    sessionStorage.removeItem('adm_auth');
+  };
+
+  const saveItem = async () => {
+  setLoading(true);
+  const table = activeTab === 'projects' ? 'projets' : activeTab === 'exp' ? 'experiences' : 'skills';
+  
+  const { isDuplicate, id, ...cleanItem } = editItem;
+
+  // ✅ Génère un slug si vide
+  if (activeTab !== 'skills' && !cleanItem.slug?.trim()) {
+    cleanItem.slug = (cleanItem.title || 'item')
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, '') // retire les accents
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      + '-' + Date.now();
+  }
+
+  if (typeof cleanItem.tags === 'string') cleanItem.tags = cleanItem.tags.split(',').map(s => s.trim()).filter(Boolean);
+  if (typeof cleanItem.images === 'string') cleanItem.images = cleanItem.images.split(',').map(s => s.trim()).filter(Boolean);
+
+  let res;
+  if (id && !isDuplicate) {
+    res = await supabase.from(table).update(cleanItem).eq('id', id);
+  } else {
+    res = await supabase.from(table).insert([cleanItem]);
+  }
+
+  if (res.error) {
+    if (res.error.code === '23505') alert("Erreur : Ce slug ou nom existe déjà. Modifie le slug manuellement.");
+    else alert("Erreur : " + res.error.message);
+  } else { 
+    setEditItem(null); 
+    setPreviewItem(null);
+    fetchAll(); 
+  }
+  setLoading(false);
+};
 
   const togglePublish = async (item) => {
     const table = activeTab === 'projects' ? 'projets' : 'experiences';
@@ -549,6 +494,7 @@ export default function AdminPage() {
 
   const saveOrder = async (newList) => {
     const table = activeTab === 'projects' ? 'projets' : 'experiences';
+    // Met à jour la colonne `position` dans Supabase
     await Promise.all(
       newList.map((item, idx) =>
         supabase.from(table).update({ position: idx }).eq('id', item.id)
@@ -582,12 +528,14 @@ export default function AdminPage() {
     setDraggedId(null);
   };
 
+  // Cropper handlers
   const openCropper = (src, target) => {
     setCropperSrc(src);
     setCropperTarget(target);
   };
 
   const handleCropSave = (dataUrl) => {
+    // dataUrl → on l'uploade en Supabase storage
     (async () => {
       try {
         const blob = await fetch(dataUrl).then(r => r.blob());
@@ -611,6 +559,7 @@ export default function AdminPage() {
       setCropperTarget(null);
     })();
   };
+
 
   const initNew = () => {
     if (activeTab === 'projects') setEditItem({ title: '', slug: '', is_published: true, details: '', date: '', tech: '', link: '', images: [], desc_short: '', image_fit: 'cover' });
@@ -639,52 +588,16 @@ export default function AdminPage() {
     }
   };
 
-  // ── 3. RENDU DE L'AUTHENTIFICATION ──
   if (!authed) {
     return (
       <div className="admin-page">
         <div className="admin-login">
           <div className="admin-lock">🔐</div>
           <h1 className="admin-title">Panel Admin</h1>
-          
-          {step === 1 ? (
-            <>
-              <p className="admin-sub">Entre ton mot de passe pour continuer.</p>
-              <form className="admin-input-row" onSubmit={handlePasswordSubmit}>
-                <input 
-                  type="password" 
-                  placeholder="Mot de passe" 
-                  className={`admin-input ${authError ? 'admin-input--err' : ''}`} 
-                  value={pw} 
-                  onChange={e => setPw(e.target.value)} 
-                  autoFocus
-                />
-                <button type="submit" className="admin-btn" disabled={authSubmitting || !pw}>
-                  {authSubmitting ? '...' : 'Entrer'}
-                </button>
-              </form>
-            </>
-          ) : (
-            <>
-              <p className="admin-sub">Un code à 6 chiffres a été envoyé par email.</p>
-              <form className="admin-input-row" onSubmit={handleOtpSubmit}>
-                <input 
-                  type="text" 
-                  placeholder="Code A2F" 
-                  maxLength="6"
-                  className={`admin-input ${authError ? 'admin-input--err' : ''}`} 
-                  value={otp} 
-                  onChange={e => setOtp(e.target.value)} 
-                  autoFocus
-                />
-                <button type="submit" className="admin-btn" disabled={authSubmitting || !otp}>
-                  {authSubmitting ? '...' : 'Valider'}
-                </button>
-              </form>
-            </>
-          )}
-          
-          {authError && <p className="admin-err">{authError}</p>}
+          <div className="admin-input-row">
+            <input type="password" placeholder="Mdp" className="admin-input" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && tryLogin()} />
+            <button className="admin-btn" onClick={tryLogin}>Entrer</button>
+          </div>
         </div>
       </div>
     );
@@ -692,7 +605,6 @@ export default function AdminPage() {
 
   const currentList = activeTab === 'projects' ? projectsList : activeTab === 'exp' ? expList : skillsList;
 
-  // ── 4. RENDU DU DASHBOARD ADMIN ──
   return (
     <div className="adm-layout">
       <aside className="adm-sidebar">
@@ -875,7 +787,6 @@ export default function AdminPage() {
         )}
       </main>
 
-{/* ── Prévisualisation Modal ── */}
       <AnimatePresence>
         {previewItem && (
           <motion.div className="cv-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ zIndex: 99999 }} onClick={() => setPreviewItem(null)}>
@@ -887,7 +798,6 @@ export default function AdminPage() {
               <div className={activeTab === 'projects' ? "project-modal-body" : "exp-modal-body"}>
                 {activeTab === 'projects' ? (
                   <>
-                    {/* On affiche la galerie d'images */}
                     <ImageGallery images={previewItem.images} imageFit={previewItem.imageFit} title={previewItem.title} />
                     <div className="project-modal-content">
                       <h2>{previewItem.title}</h2>
@@ -929,6 +839,7 @@ export default function AdminPage() {
     </div>
   );
 }
+
 function LinksPage() {
   const links = [
     {
