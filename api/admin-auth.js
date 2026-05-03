@@ -59,7 +59,7 @@ export default async function handler(req, res) {
       await resend.emails.send({
         from: 'Admin <onboarding@resend.dev>', // Modifie avec ton domaine vérifié si tu en as un
         to: process.env.ADMIN_EMAIL,
-        subject: '🔒 Code de connexion Admin',
+        subject: '🔒 Code de connexion Admin ${generatedOtp}',
         text: `Ton code A2F est : ${generatedOtp}`,
       });
     } catch (e) {
