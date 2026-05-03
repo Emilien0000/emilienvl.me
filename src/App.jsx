@@ -102,9 +102,16 @@ function ImageCropper({ src, onSave, onCancel, borderOptions = true }) {
   const drawCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    // S'assure que le canvas interne est bien en haute résolution
+    if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+    }
     const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const img = imgRef.current;
-    if (!img || !img.complete) return;
+    if (!img || !img.complete || !img.naturalWidth) return;
 
     ctx.clearRect(0, 0, W, H);
 
@@ -189,6 +196,15 @@ function ImageCropper({ src, onSave, onCancel, borderOptions = true }) {
     drawCanvas();
   };
 
+  // Charge avec crossOrigin pour éviter le tainted canvas
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img) {
+      img.crossOrigin = 'anonymous';
+      img.src = src;
+    }
+  }, [src]);
+
   const getPos = (e) => {
     const r = canvasRef.current.getBoundingClientRect();
     const scaleX = W / r.width;
@@ -212,8 +228,14 @@ function ImageCropper({ src, onSave, onCancel, borderOptions = true }) {
   const onPointerUp = () => setDragging(false);
 
   const handleSave = () => {
-    const canvas = canvasRef.current;
-    const dataUrl = canvas.toDataURL('image/png');
+    // Export dans un canvas propre à la taille logique pour éviter tout problème
+    const src = canvasRef.current;
+    const out = document.createElement('canvas');
+    out.width = W;
+    out.height = H;
+    const ctx = out.getContext('2d');
+    ctx.drawImage(src, 0, 0, W, H);
+    const dataUrl = out.toDataURL('image/png');
     onSave(dataUrl);
   };
 
@@ -239,7 +261,7 @@ function ImageCropper({ src, onSave, onCancel, borderOptions = true }) {
             style={{ cursor: dragging ? 'grabbing' : 'grab' }}
           >
             <canvas ref={canvasRef} width={W} height={H} className="cropper-canvas" />
-            <img ref={imgRef} src={src} alt="source" style={{ display: 'none' }} onLoad={onImgLoad} />
+            <img ref={imgRef} alt="source" crossOrigin="anonymous" style={{ display: 'none' }} onLoad={onImgLoad} />
           </div>
 
           <div className="cropper-controls">
@@ -1402,17 +1424,17 @@ function MainLayout({ dark, onToggleDark }) {
                 <div className="cv-modal-actions">
                   <button
                     className="modal-share-btn"
-                    title="Copier le lien"
+                    title="Copier le lien du projet"
                     onClick={() => {
                       showCopy(
-                        `${window.location.origin}/projects/${selectedProject.slug}`,
+                        selectedProject.link,
                         `Lien "${selectedProject.title}" copié !`
                       );
                     }}
                   >
                     🔗
                   </button>
-                  <a href={selectedProject.link} target="_blank" rel="noopener noreferrer" className="modal-dl-btn">Voir le lien</a>
+                  <a href={selectedProject.link} target="_blank" rel="noopener noreferrer" className="modal-dl-btn">Accéder au projet</a>
                   <button className="modal-close-btn" onClick={closeProject}>✕</button>
                 </div>
               </div>
