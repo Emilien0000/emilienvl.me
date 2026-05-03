@@ -20,22 +20,24 @@
 
 /* ── Root / Design tokens ─────────────────────────────────────────────────── */
 .jb-root {
-  --bg:          #07111e;
-  --bg-card:     #0d1e30;
-  --bg-card-h:   #112438;
-  --bg-input:    #0d1e30;
-  --border:      rgba(19, 201, 237, 0.12);
-  --border-h:    rgba(19, 201, 237, 0.32);
-  --cyan:        #13c9ed;
+  /* On récupère tes variables globales de App.css */
+  --bg:          var(--bg-color);
+  --bg-card:     var(--card-bg);
+  --bg-card-h:   var(--card-bg); 
+  --bg-input:    var(--bg-color);
+  --border:      var(--border-subtle);
+  --border-h:    var(--highlight-color);
+  --cyan:        var(--highlight-color);
   --cyan-dim:    rgba(19, 201, 237, 0.15);
   --cyan-glow:   rgba(19, 201, 237, 0.08);
-  --text:        #e8f4f8;
-  --text-muted:  #7a99ae;
-  --text-dim:    #4a6778;
+  --text:        var(--text-main);
+  --text-muted:  var(--text-secondary);
+  --text-dim:    var(--text-secondary);
   --accent:      #1a73e8;
   --radius:      14px;
   --radius-sm:   8px;
-  font-family: 'DM Sans', sans-serif;
+
+  font-family: 'DM Sans', var(--font-main);
   background:  var(--bg);
   color:       var(--text);
   min-height:  100vh;
@@ -43,9 +45,9 @@
   flex-direction: column;
 }
 
-/* ── Header ───────────────────────────────────────────────────────────────── */
+/* 2. Enlever le gros dégradé sombre forcé du header */
 .jb-header {
-  background: linear-gradient(180deg, #07111e 0%, #0a1827 100%);
+  background: var(--card-bg); /* Remplacé le linear-gradient sombre */
   border-bottom: 1px solid var(--border);
   padding: 1.5rem 1.5rem 2rem;
   position: relative;
@@ -103,8 +105,9 @@
   font-family: 'Syne', sans-serif;
   font-size: clamp(1.8rem, 4vw, 3rem);
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.35; /* <-- CHANGÉ DE 1.1 à 1.35 pour décompresser le texte */
   margin: 0 0 0.6rem;
+  padding-bottom: 5px; /* Laisse de la place pour le bas des lettres */
   color: var(--text);
 }
 .jb-hero-title .highlight {
@@ -212,7 +215,7 @@
 .jb-filters {
   padding: 0.75rem 1.5rem;
   border-bottom: 1px solid var(--border);
-  background: #08131e;
+  background: var(--bg-color); /* Remplacé le #08131e en dur */
   position: sticky;
   top: 0;
   z-index: 10;

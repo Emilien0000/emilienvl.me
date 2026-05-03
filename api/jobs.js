@@ -143,7 +143,7 @@ async function scrapeLBA(query, location, limit) {
     radius:    "100",
   });
 
-  const url = `https://api.apprentissage.beta.gouv.fr/job/v1/search?${params}`;
+  const url = `https://api.apprentissage.beta.gouv.fr/api/job/v1/search?${params}`;
 
   const res = await fetch(url, {
     headers: {
