@@ -36,6 +36,227 @@ const modalVariants = {
   exit: { opacity: 0, transition: { duration: 0.15 } }
 };
 
+// ─── Toast "Lien copié" ────────────────────────────────────────────────────────
+
+function CopyToast({ message, visible }) {
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          className="copy-toast"
+          initial={{ opacity: 0, y: 16, scale: 0.92 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 8, scale: 0.95 }}
+          transition={{ duration: 0.22 }}
+        >
+          <span className="copy-toast-icon">🔗</span>
+          <span>{message || 'Lien copié !'}</span>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ─── Hook useCopyToast ─────────────────────────────────────────────────────────
+
+function useCopyToast() {
+  const [toast, setToast] = useState({ visible: false, message: '' });
+  const timerRef = useRef(null);
+
+  const showCopy = useCallback((url, message = 'Lien copié !') => {
+    navigator.clipboard.writeText(url).catch(() => {});
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setToast({ visible: true, message });
+    timerRef.current = setTimeout(() => setToast({ visible: false, message: '' }), 2200);
+  }, []);
+
+  return { toast, showCopy };
+}
+
+// ─── Composant ImageCropper (style Discord) ────────────────────────────────────
+
+function ImageCropper({ src, onSave, onCancel, borderOptions = true }) {
+  const canvasRef = useRef(null);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [border, setBorder] = useState('none');
+  const [borderColor, setBorderColor] = useState('#13c9ed');
+  const imgRef = useRef(null);
+  const SIZE = 200;
+
+  const borders = [
+    { id: 'none', label: 'Aucune' },
+    { id: 'circle', label: 'Cercle' },
+    { id: 'rounded', label: 'Arrondi' },
+    { id: 'glow', label: 'Lueur' },
+    { id: 'double', label: 'Double' },
+  ];
+
+  useEffect(() => {
+    drawCanvas();
+  }, [scale, offset, border, borderColor, src]);
+
+  const drawCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const img = imgRef.current;
+    if (!img || !img.complete) return;
+
+    ctx.clearRect(0, 0, SIZE, SIZE);
+
+    // Clip circle
+    ctx.save();
+    ctx.beginPath();
+    if (border === 'circle') {
+      ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 2, 0, Math.PI * 2);
+    } else if (border === 'rounded') {
+      roundRect(ctx, 8, 8, SIZE - 16, SIZE - 16, 24);
+    } else {
+      ctx.rect(0, 0, SIZE, SIZE);
+    }
+    ctx.clip();
+
+    const w = img.naturalWidth * scale;
+    const h = img.naturalHeight * scale;
+    ctx.drawImage(img, (SIZE - w) / 2 + offset.x, (SIZE - h) / 2 + offset.y, w, h);
+    ctx.restore();
+
+    // Borders
+    if (border === 'circle') {
+      ctx.beginPath();
+      ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 2, 0, Math.PI * 2);
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 4;
+      ctx.stroke();
+    } else if (border === 'glow') {
+      ctx.shadowColor = borderColor;
+      ctx.shadowBlur = 18;
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(3, 3, SIZE - 6, SIZE - 6);
+      ctx.shadowBlur = 0;
+    } else if (border === 'double') {
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(3, 3, SIZE - 6, SIZE - 6);
+      ctx.strokeRect(8, 8, SIZE - 16, SIZE - 16);
+    } else if (border === 'rounded') {
+      ctx.beginPath();
+      roundRect(ctx, 8, 8, SIZE - 16, SIZE - 16, 24);
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+  };
+
+  const roundRect = (ctx, x, y, w, h, r) => {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  };
+
+  const onMouseDown = (e) => {
+    setDragging(true);
+    setDragStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
+  };
+  const onMouseMove = (e) => {
+    if (!dragging) return;
+    setOffset({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+  };
+  const onMouseUp = () => setDragging(false);
+
+  const handleSave = () => {
+    const canvas = canvasRef.current;
+    const dataUrl = canvas.toDataURL('image/png');
+    onSave(dataUrl);
+  };
+
+  return (
+    <div className="cropper-overlay" onClick={onCancel}>
+      <div className="cropper-box" onClick={e => e.stopPropagation()}>
+        <div className="cropper-header">
+          <span>Recadrer l'image</span>
+          <button className="modal-close-btn" onClick={onCancel}>✕</button>
+        </div>
+
+        <div className="cropper-body">
+          <div className="cropper-canvas-wrap"
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseUp={onMouseUp}
+            onMouseLeave={onMouseUp}
+            style={{ cursor: dragging ? 'grabbing' : 'grab' }}
+          >
+            <canvas
+              ref={canvasRef}
+              width={SIZE}
+              height={SIZE}
+              className="cropper-canvas"
+            />
+            <img
+              ref={imgRef}
+              src={src}
+              alt="source"
+              style={{ display: 'none' }}
+              onLoad={drawCanvas}
+            />
+          </div>
+
+          <div className="cropper-controls">
+            <label className="cropper-label">Zoom</label>
+            <input
+              type="range"
+              min="0.2"
+              max="3"
+              step="0.02"
+              value={scale}
+              onChange={e => setScale(parseFloat(e.target.value))}
+              className="cropper-range"
+            />
+            <span className="cropper-zoom-val">{Math.round(scale * 100)}%</span>
+          </div>
+
+          {borderOptions && (
+            <>
+              <div className="cropper-border-btns">
+                {borders.map(b => (
+                  <button
+                    key={b.id}
+                    className={`cropper-border-btn${border === b.id ? ' active' : ''}`}
+                    onClick={() => setBorder(b.id)}
+                  >{b.label}</button>
+                ))}
+              </div>
+              {border !== 'none' && (
+                <div className="cropper-color-row">
+                  <label className="cropper-label">Couleur de bordure</label>
+                  <input type="color" value={borderColor} onChange={e => setBorderColor(e.target.value)} className="cropper-color-input" />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="cropper-footer">
+          <button className="adm-mini-btn" onClick={onCancel}>Annuler</button>
+          <button className="adm-primary-btn" onClick={handleSave}>Appliquer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Composant galerie ─────────────────────────────────────────────────────────
 
 function ImageGallery({ images, imageFit, title }) {
@@ -125,13 +346,16 @@ function AdminPage() {
   const [uploading, setUploading] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [previewItem, setPreviewItem] = useState(null);
+  const [draggedId, setDraggedId] = useState(null);
+  const [cropperSrc, setCropperSrc] = useState(null);
+  const [cropperTarget, setCropperTarget] = useState(null); // 'new' | index
 
   const fetchAll = async () => {
     setLoading(true);
     try {
       const [p, e, s] = await Promise.all([
-        supabase.from('projets').select('*').order('id', { ascending: false }),
-        supabase.from('experiences').select('*').order('id', { ascending: false }),
+        supabase.from('projets').select('*').order('position', { ascending: true }).order('id', { ascending: false }),
+        supabase.from('experiences').select('*').order('position', { ascending: true }).order('id', { ascending: false }),
         supabase.from('skills').select('*').order('id', { ascending: false })
       ]);
       setProjectsList(p.data || []);
@@ -217,6 +441,75 @@ function AdminPage() {
       isDuplicate: true 
     });
   };
+
+  const saveOrder = async (newList) => {
+    const table = activeTab === 'projects' ? 'projets' : 'experiences';
+    // Met à jour la colonne `position` dans Supabase
+    await Promise.all(
+      newList.map((item, idx) =>
+        supabase.from(table).update({ position: idx }).eq('id', item.id)
+      )
+    );
+  };
+
+  const handleDragStart = (e, id) => {
+    setDraggedId(id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, id) => {
+    e.preventDefault();
+    if (id === draggedId) return;
+    const setter = activeTab === 'projects' ? setProjectsList : setExpList;
+    const list = activeTab === 'projects' ? projectsList : expList;
+    const from = list.findIndex(x => x.id === draggedId);
+    const to = list.findIndex(x => x.id === id);
+    if (from === -1 || to === -1) return;
+    const next = [...list];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setter(next);
+  };
+
+  const handleDrop = async () => {
+    if (activeTab === 'skills') return;
+    const list = activeTab === 'projects' ? projectsList : expList;
+    await saveOrder(list);
+    setDraggedId(null);
+  };
+
+  // Cropper handlers
+  const openCropper = (src, target) => {
+    setCropperSrc(src);
+    setCropperTarget(target);
+  };
+
+  const handleCropSave = (dataUrl) => {
+    // dataUrl → on l'uploade en Supabase storage
+    (async () => {
+      try {
+        const blob = await fetch(dataUrl).then(r => r.blob());
+        const fileName = `cropped_${Date.now()}.png`;
+        const { error } = await supabase.storage.from('images').upload(fileName, blob, { contentType: 'image/png' });
+        if (error) throw error;
+        const { data } = supabase.storage.from('images').getPublicUrl(fileName);
+        if (cropperTarget === 'new') {
+          setEditItem(prev => ({ ...prev, images: [...(prev.images || []), data.publicUrl] }));
+        } else if (typeof cropperTarget === 'number') {
+          setEditItem(prev => {
+            const imgs = [...(prev.images || [])];
+            imgs[cropperTarget] = data.publicUrl;
+            return { ...prev, images: imgs };
+          });
+        }
+      } catch (err) {
+        alert("Erreur upload image rognée : " + err.message);
+      }
+      setCropperSrc(null);
+      setCropperTarget(null);
+    })();
+  };
+
 
   const initNew = () => {
     if (activeTab === 'projects') setEditItem({ title: '', slug: '', is_published: true, details: '', date: '', tech: '', link: '', images: [], desc_short: '', image_fit: 'cover' });
@@ -320,6 +613,7 @@ function AdminPage() {
                             <div key={i} className="adm-img-preview">
                               <img src={img} alt="preview" />
                               <button className="adm-img-del" onClick={() => setEditItem({...editItem, images: editItem.images.filter((_, idx) => idx !== i)})}>×</button>
+                              <button className="adm-img-crop" onClick={() => openCropper(img, i)} title="Recadrer">✂️</button>
                             </div>
                           ))}
                         </div>
@@ -400,30 +694,45 @@ function AdminPage() {
             </div>
           </div>
         ) : (
-          <div className="adm-grid">
-            {currentList.map(item => (
-              <div key={item.id} className="adm-card">
-                <div className="adm-card-header">
-                  {activeTab !== 'skills' ? (
-                    <span className={`status-badge ${item.is_published ? 'status-published' : 'status-draft'}`}>
-                      {item.is_published ? 'Public' : 'Brouillon'}
-                    </span>
-                  ) : <span className="status-badge" style={{background: 'rgba(19, 201, 237, 0.1)', color: 'var(--highlight-color)'}}>Compétence</span>}
-                  <span className="adm-card-id">#{item.id}</span>
+          <div>
+            {activeTab !== 'skills' && (
+              <p className="adm-drag-hint">↕ Glisse les cartes pour réordonner</p>
+            )}
+            <div className="adm-grid">
+              {currentList.map(item => (
+                <div
+                  key={item.id}
+                  className={`adm-card${draggedId === item.id ? ' adm-card--dragging' : ''}`}
+                  draggable={activeTab !== 'skills'}
+                  onDragStart={e => handleDragStart(e, item.id)}
+                  onDragOver={e => handleDragOver(e, item.id)}
+                  onDrop={handleDrop}
+                >
+                  <div className="adm-card-header">
+                    {activeTab !== 'skills' ? (
+                      <>
+                        <span className="adm-drag-handle">⠿</span>
+                        <span className={`status-badge ${item.is_published ? 'status-published' : 'status-draft'}`}>
+                          {item.is_published ? 'Public' : 'Brouillon'}
+                        </span>
+                      </>
+                    ) : <span className="status-badge" style={{background: 'rgba(19, 201, 237, 0.1)', color: 'var(--highlight-color)'}}>Compétence</span>}
+                    <span className="adm-card-id">#{item.id}</span>
+                  </div>
+                  <h3 className="adm-card-title">{item.title || item.label}</h3>
+                  <div className="adm-actions-row">
+                    <button className="adm-mini-btn" onClick={() => setEditItem(item)}>✏️ Modifier</button>
+                    {activeTab !== 'skills' && (
+                      <>
+                        <button className="adm-mini-btn" onClick={() => togglePublish(item)}>{item.is_published ? '👁️‍🗨️ Masquer' : '🚀 Publier'}</button>
+                        <button className="adm-mini-btn" onClick={() => duplicate(item)}>📄 Dupliquer</button>
+                      </>
+                    )}
+                    <button className="adm-mini-btn adm-mini-btn--del" onClick={async () => { if(window.confirm("Supprimer ?")) { await supabase.from(activeTab === 'projects' ? 'projets' : activeTab === 'exp' ? 'experiences' : 'skills').delete().eq('id', item.id); fetchAll(); } }}>🗑️ Supprimer</button>
+                  </div>
                 </div>
-                <h3 className="adm-card-title">{item.title || item.label}</h3>
-                <div className="adm-actions-row">
-                  <button className="adm-mini-btn" onClick={() => setEditItem(item)}>✏️ Modifier</button>
-                  {activeTab !== 'skills' && (
-                    <>
-                      <button className="adm-mini-btn" onClick={() => togglePublish(item)}>{item.is_published ? '👁️‍🗨️ Masquer' : '🚀 Publier'}</button>
-                      <button className="adm-mini-btn" onClick={() => duplicate(item)}>📄 Dupliquer</button>
-                    </>
-                  )}
-                  <button className="adm-mini-btn adm-mini-btn--del" onClick={async () => { if(window.confirm("Supprimer ?")) { await supabase.from(activeTab === 'projects' ? 'projets' : activeTab === 'exp' ? 'experiences' : 'skills').delete().eq('id', item.id); fetchAll(); } }}>🗑️ Supprimer</button>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </main>
@@ -468,10 +777,18 @@ function AdminPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Cropper d'image ── */}
+      {cropperSrc && (
+        <ImageCropper
+          src={cropperSrc}
+          onSave={handleCropSave}
+          onCancel={() => { setCropperSrc(null); setCropperTarget(null); }}
+        />
+      )}
     </div>
   );
 }
-// ─── Page Linktree (cachée) ────────────────────────────────────────────────────
 
 function LinksPage() {
   const links = [
@@ -571,6 +888,7 @@ function MainLayout({ dark, onToggleDark }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeTechFilter, setActiveTechFilter] = useState(null);
   const [selectedExp, setSelectedExp] = useState(null);
+  const { toast: copyToast, showCopy } = useCopyToast();
 
   // 2. --- STATES DE LA BASE DE DONNÉES ---
   const [projects, setProjects] = useState([]);
@@ -585,9 +903,9 @@ function MainLayout({ dark, onToggleDark }) {
       setDbStatus('loading');
       try {
             const [projRes, skillRes, expRes] = await Promise.all([
-            supabase.from('projets').select('*').eq('is_published', true).order('id', { ascending: false }),
+            supabase.from('projets').select('*').eq('is_published', true).order('position', { ascending: true }).order('id', { ascending: false }),
             supabase.from('skills').select('*'),
-            supabase.from('experiences').select('*').eq('is_published', true)
+            supabase.from('experiences').select('*').eq('is_published', true).order('position', { ascending: true })
           ]);
 
         if (projRes.error || skillRes.error || expRes.error) throw new Error("Erreur SQL");
@@ -729,6 +1047,9 @@ function MainLayout({ dark, onToggleDark }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* --- COPY TOAST --- */}
+      <CopyToast visible={copyToast.visible} message={copyToast.message} />
 
       {/* --- HEADER --- */}
       <header className="app-header">
@@ -1059,7 +1380,10 @@ function MainLayout({ dark, onToggleDark }) {
                     className="modal-share-btn"
                     title="Copier le lien"
                     onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/projects/${selectedProject.slug}`);
+                      showCopy(
+                        `${window.location.origin}/projects/${selectedProject.slug}`,
+                        `Lien "${selectedProject.title}" copié !`
+                      );
                     }}
                   >
                     🔗
@@ -1098,7 +1422,10 @@ function MainLayout({ dark, onToggleDark }) {
                     <button
                       className="modal-share-btn"
                       title="Copier le lien"
-                      onClick={() => navigator.clipboard.writeText(`${window.location.origin}/experiences/${selectedExp.slug}`)}
+                      onClick={() => showCopy(
+                        `${window.location.origin}/experiences/${selectedExp.slug}`,
+                        `Lien "${selectedExp.title}" copié !`
+                      )}
                     >🔗</button>
                   )}
                   <button className="modal-close-btn" onClick={closeExp}>✕</button>

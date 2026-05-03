@@ -1865,3 +1865,223 @@ h2 {
   font-size: 0.9rem; color: var(--text-main); cursor: pointer;
 }
 .adm-checkbox-label input { accent-color: var(--highlight-color); width: 16px; height: 16px; }
+/* ─── FEATURE 1 : Copy Toast ────────────────────────────────────────────────── */
+
+.copy-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99998;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card-bg);
+  border: 1.5px solid var(--highlight-color);
+  border-radius: 40px;
+  padding: 10px 20px;
+  box-shadow: 0 4px 24px rgba(19, 201, 237, 0.22), 0 2px 8px rgba(0,0,0,0.1);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-main);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.copy-toast-icon {
+  font-size: 1rem;
+}
+
+/* ─── FEATURE 2 : Drag & Drop Admin ─────────────────────────────────────────── */
+
+.adm-drag-hint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-bottom: 12px;
+  letter-spacing: 0.01em;
+}
+
+.adm-drag-handle {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  cursor: grab;
+  margin-right: 6px;
+  line-height: 1;
+  user-select: none;
+}
+
+.adm-card {
+  transition: opacity 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.adm-card--dragging {
+  opacity: 0.45;
+  transform: scale(0.97);
+  box-shadow: 0 0 0 2px var(--highlight-color);
+}
+
+.adm-img-crop {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.adm-img-crop:hover { background: var(--highlight-color); }
+
+/* ─── FEATURE 3 : Image Cropper ─────────────────────────────────────────────── */
+
+.cropper-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(6px);
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cropper-box {
+  background: var(--modal-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  width: 360px;
+  max-width: 95vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+
+.cropper-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-main);
+}
+
+.cropper-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.cropper-canvas-wrap {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(19,201,237,0.15);
+  touch-action: none;
+}
+
+.cropper-canvas {
+  display: block;
+  width: 200px;
+  height: 200px;
+}
+
+.cropper-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.cropper-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.cropper-range {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--border-subtle);
+  outline: none;
+  cursor: pointer;
+}
+.cropper-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--highlight-color);
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(19,201,237,0.4);
+}
+
+.cropper-zoom-val {
+  font-size: 0.78rem;
+  color: var(--highlight-color);
+  font-weight: 700;
+  min-width: 36px;
+  text-align: right;
+}
+
+.cropper-border-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  justify-content: center;
+}
+
+.cropper-border-btn {
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-main);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.cropper-border-btn.active,
+.cropper-border-btn:hover {
+  border-color: var(--highlight-color);
+  background: rgba(19,201,237,0.1);
+  color: var(--highlight-color);
+}
+
+.cropper-color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.cropper-color-input {
+  width: 36px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 0;
+  background: none;
+}
+
+.cropper-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-subtle);
+}
+
