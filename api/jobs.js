@@ -121,16 +121,14 @@ async function scrapeLBA(query, location, limit) {
 
   const params = new URLSearchParams({
     romes,
-    caller:    'emilienvl.me',
     latitude:  String(coords.lat),
     longitude: String(coords.lon),
     radius:    '100',
-    insee:     '',
-    zipcode:   '',
+    caller:    'emilienvl.me',
   });
 
-  // Bon endpoint : labonnealternance.apprentissage.beta.gouv.fr/api/V1/jobs
-  const url = `https://labonnealternance.apprentissage.beta.gouv.fr/api/V1/jobs?${params}`;
+  // ✅ Nouveau endpoint
+  const url = `https://api.apprentissage.beta.gouv.fr/api/jobs/search?${params}`;
 
   const res = await fetch(url, {
     headers: {
@@ -146,27 +144,21 @@ async function scrapeLBA(query, location, limit) {
 
   const data = await res.json();
 
-  // Fusionner les deux types d'offres
-  const lbaOffers       = data.jobs?.peJobOffers?.results ?? [];
-  const partnerOffers   = data.jobs?.matchas?.results ?? [];
-  const allOffers       = [...lbaOffers, ...partnerOffers];
+  // ✅ Nouvelle structure : data.jobs est un tableau plat
+  const allOffers = data.jobs ?? [];
 
-  return allOffers.slice(0, limit).map(o => {
-    // Structure différente selon le type
-    const isLba = !!o.job;
-    return {
-      id:          `lba-${uid(o.id ?? o.ideaType ?? Math.random())}`,
-      source:      'La Bonne Alternance',
-      title:       o.job?.name ?? o.title ?? "Offre d'alternance",
-      company:     o.company?.name ?? o.workplace?.name ?? '',
-      location:    o.place?.fullAddress ?? o.workplace?.address?.city ?? location,
-      url:         o.url
-                   ?? (o.id ? `https://labonnealternance.apprentissage.beta.gouv.fr/recherche-apprentissage?type=${isLba ? 'matcha' : 'peJob'}&itemId=${o.id}` : 'https://labonnealternance.apprentissage.beta.gouv.fr'),
-      description: (o.job?.description ?? o.description ?? '').slice(0, 280),
-      date:        parseDate(o.job?.creationDate ?? o.createdAt ?? null),
-      type:        'alternance',
-    };
-  });
+  return allOffers.slice(0, limit).map(o => ({
+    id:          `lba-${uid(o.identifier?.id ?? Math.random())}`,
+    source:      'La Bonne Alternance',
+    title:       o.offer?.title ?? "Offre d'alternance",
+    company:     o.workplace?.name ?? o.workplace?.brand ?? '',
+    location:    o.workplace?.location?.address ?? location,
+    url:         o.apply?.url
+                 ?? `https://labonnealternance.apprentissage.beta.gouv.fr/recherche-apprentissage?itemId=${o.identifier?.id}`,
+    description: (o.offer?.description ?? '').slice(0, 280),
+    date:        parseDate(o.publication?.creation ?? null),
+    type:        'alternance',
+  }));
 }
 
 // ── 2. Adzuna ─────────────────────────────────────────────────────────────────
