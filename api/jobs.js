@@ -1,11 +1,10 @@
 // api/jobs.js — Vercel Edge Serverless Function
-// Sources : La Bonne Alternance (/api/V1/jobs) + Adzuna
+// Sources : La Bonne Alternance + Adzuna
 // ─────────────────────────────────────────────────────────────────────────────
-// Variables d'environnement Vercel (Settings → Environment Variables) :
-//
-//   LBA_API_TOKEN      → ton token JWT La Bonne Alternance
-//   ADZUNA_APP_ID      → 44af61ed
-//   ADZUNA_APP_KEY     → 7289612901e65a2425476345113b9f5f
+// Variables d'environnement Vercel :
+//   LBA_API_TOKEN      → token JWT depuis api.apprentissage.beta.gouv.fr
+//   ADZUNA_APP_ID      → ton app id Adzuna
+//   ADZUNA_APP_KEY     → ta app key Adzuna
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const config = { runtime: 'edge' };
@@ -30,50 +29,42 @@ function uid(str) {
     .slice(0, 12);
 }
 
-// ── Codes ROME fréquents par mot-clé ─────────────────────────────────────────
-// L'API LBA exige des codes ROME (pas de recherche texte libre)
-// On mappe les mots-clés courants → codes ROME pertinents
+// ── Codes ROME par mot-clé ────────────────────────────────────────────────────
 
 const ROME_MAP = {
-  // Dev / Informatique
-  'développeur':       'M1805,M1806',
-  'developpeur':       'M1805,M1806',
-  'dev':               'M1805,M1806',
-  'web':               'M1805,M1806',
-  'fullstack':         'M1805,M1806',
-  'frontend':          'M1805',
-  'backend':           'M1806',
-  'javascript':        'M1805,M1806',
-  'python':            'M1805,M1806',
-  'react':             'M1805',
-  'node':              'M1806',
-  'data':              'M1811,M1805',
-  'machine learning':  'M1811',
-  'ia':                'M1811',
-  'cybersécurité':     'M1802',
-  'reseau':            'M1801',
-  'réseau':            'M1801',
-  'cloud':             'M1806',
-  'devops':            'M1806',
-  'mobile':            'M1805',
-  // Marketing / Commerce
-  'marketing':         'M1703,M1705',
-  'commercial':        'D1401,D1403',
-  'vente':             'D1401',
-  'communication':     'E1103,M1707',
-  // Finance / Compta
-  'comptable':         'M1203,M1206',
-  'finance':           'M1203,M1205',
-  'audit':             'M1202',
-  // RH
+  'développeur':        'M1805,M1806',
+  'developpeur':        'M1805,M1806',
+  'dev':                'M1805,M1806',
+  'web':                'M1805,M1806',
+  'fullstack':          'M1805,M1806',
+  'frontend':           'M1805',
+  'backend':            'M1806',
+  'javascript':         'M1805,M1806',
+  'python':             'M1805,M1806',
+  'react':              'M1805',
+  'node':               'M1806',
+  'data':               'M1811,M1805',
+  'machine learning':   'M1811',
+  'ia':                 'M1811',
+  'cybersécurité':      'M1802',
+  'reseau':             'M1801',
+  'réseau':             'M1801',
+  'cloud':              'M1806',
+  'devops':             'M1806',
+  'mobile':             'M1805',
+  'marketing':          'M1703,M1705',
+  'commercial':         'D1401,D1403',
+  'vente':              'D1401',
+  'communication':      'E1103,M1707',
+  'comptable':          'M1203,M1206',
+  'finance':            'M1203,M1205',
+  'audit':              'M1202',
   'ressources humaines':'M1501,M1502',
-  'rh':                'M1501',
-  // Design
-  'design':            'B1805,L1503',
-  'graphique':         'B1805',
-  'ux':                'B1805',
-  // Default si rien ne matche
-  'default':           'M1805,M1806,M1703,M1801',
+  'rh':                 'M1501',
+  'design':             'B1805,L1503',
+  'graphique':          'B1805',
+  'ux':                 'B1805',
+  'default':            'M1805,M1806,M1703,M1801',
 };
 
 function getRomes(query) {
@@ -84,20 +75,21 @@ function getRomes(query) {
   return ROME_MAP.default;
 }
 
-// ── Coordonnées par ville/région ──────────────────────────────────────────────
+// ── Coordonnées par ville ─────────────────────────────────────────────────────
+
 const GEO_MAP = {
-  'paris':       { lat: 48.8566, lon: 2.3522 },
-  'lyon':        { lat: 45.7640, lon: 4.8357 },
-  'marseille':   { lat: 43.2965, lon: 5.3698 },
-  'bordeaux':    { lat: 44.8378, lon: -0.5792 },
-  'lille':       { lat: 50.6292, lon: 3.0573 },
-  'nantes':      { lat: 47.2184, lon: -1.5536 },
-  'toulouse':    { lat: 43.6047, lon: 1.4442 },
-  'strasbourg':  { lat: 48.5734, lon: 7.7521 },
-  'rennes':      { lat: 48.1173, lon: -1.6778 },
-  'grenoble':    { lat: 45.1885, lon: 5.7245 },
-  'amiens':      { lat: 49.8942, lon: 2.2957 },
-  'france':      { lat: 46.2276, lon: 2.2137 },
+  'paris':      { lat: 48.8566, lon: 2.3522 },
+  'lyon':       { lat: 45.7640, lon: 4.8357 },
+  'marseille':  { lat: 43.2965, lon: 5.3698 },
+  'bordeaux':   { lat: 44.8378, lon: -0.5792 },
+  'lille':      { lat: 50.6292, lon: 3.0573 },
+  'nantes':     { lat: 47.2184, lon: -1.5536 },
+  'toulouse':   { lat: 43.6047, lon: 1.4442 },
+  'strasbourg': { lat: 48.5734, lon: 7.7521 },
+  'rennes':     { lat: 48.1173, lon: -1.6778 },
+  'grenoble':   { lat: 45.1885, lon: 5.7245 },
+  'amiens':     { lat: 49.8942, lon: 2.2957 },
+  'france':     { lat: 46.2276, lon: 2.2137 },
 };
 
 function getCoords(location) {
@@ -105,12 +97,20 @@ function getCoords(location) {
   for (const [key, coords] of Object.entries(GEO_MAP)) {
     if (l.includes(key)) return coords;
   }
-  return GEO_MAP.france; // fallback centre France
+  return GEO_MAP.france;
 }
 
-// ── 1. La Bonne Alternance — /api/V1/jobs ─────────────────────────────────────
-// Doc : https://labonnealternance.apprentissage.beta.gouv.fr/espace-developpeurs
-// Le bon endpoint est labonnealternance.apprentissage.beta.gouv.fr (pas api.apprentissage...)
+// ── 1. La Bonne Alternance ────────────────────────────────────────────────────
+//
+// Endpoint confirmé : labonnealternance.apprentissage.beta.gouv.fr/api/V1/jobs
+// Params (noms exacts du swagger LBA) : romes, latitude, longitude, radius, caller
+// Auth : Bearer token depuis api.apprentissage.beta.gouv.fr
+//
+// Structure réponse :
+//   { jobs: { peJobOffers: {results:[]}, matchas: {results:[]}, ... }, recruiters: [] }
+//   OU (selon version) : { jobs: [], recruiters: [] }
+//
+// On gère les deux formats pour être robuste.
 
 async function scrapeLBA(query, location, limit) {
   const token = process.env.LBA_API_TOKEN;
@@ -119,6 +119,7 @@ async function scrapeLBA(query, location, limit) {
   const coords = getCoords(location);
   const romes  = getRomes(query);
 
+  // Params exacts du swagger LBA (latitude/longitude, pas lat/lon)
   const params = new URLSearchParams({
     romes,
     latitude:  String(coords.lat),
@@ -127,38 +128,89 @@ async function scrapeLBA(query, location, limit) {
     caller:    'emilienvl.me',
   });
 
-  // ✅ Nouveau endpoint
-  const url = `https://api.apprentissage.beta.gouv.fr/api/jobs/search?${params}`;
+  // Route confirmée : /api/V1/jobs sur labonnealternance (retourne 403 sans token, pas 404)
+  const url = `https://labonnealternance.apprentissage.beta.gouv.fr/api/V1/jobs?${params}`;
 
   const res = await fetch(url, {
     headers: {
       'Authorization': `Bearer ${token}`,
-      'Accept': 'application/json',
+      'Accept':        'application/json',
     },
   });
 
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
-    throw new Error(`LBA ${res.status}: ${txt.slice(0, 200)}`);
+    throw new Error(`LBA ${res.status}: ${txt.slice(0, 300)}`);
   }
 
   const data = await res.json();
 
-  // ✅ Nouvelle structure : data.jobs est un tableau plat
-  const allOffers = data.jobs ?? [];
+  // Normalisation : supporte les deux formats de réponse LBA
+  let allOffers = [];
 
-  return allOffers.slice(0, limit).map(o => ({
-    id:          `lba-${uid(o.identifier?.id ?? Math.random())}`,
+  if (Array.isArray(data.jobs)) {
+    // Format nouveau : tableau plat
+    allOffers = data.jobs;
+  } else if (data.jobs && typeof data.jobs === 'object') {
+    // Format ancien : objet avec sous-clés
+    const pe      = data.jobs?.peJobOffers?.results  ?? [];
+    const matchas = data.jobs?.matchas?.results       ?? [];
+    const lba     = data.jobs?.lbaCompanies?.results  ?? [];
+    allOffers = [...pe, ...matchas, ...lba];
+  }
+
+  // Inclure aussi les recruteurs LBA (candidatures spontanées)
+  const recruiters = Array.isArray(data.recruiters) ? data.recruiters : [];
+
+  return [
+    ...allOffers.slice(0, limit).map(o => mapLBAOffer(o, location)),
+    ...recruiters.slice(0, Math.max(0, limit - allOffers.length)).map(o => mapLBARecruiter(o, location)),
+  ];
+}
+
+function mapLBAOffer(o, fallbackLocation) {
+  // Supporte l'ancien format (champs imbriqués sous o.job) ET le nouveau
+  const title   = o.offer?.title       ?? o.job?.name       ?? o.title       ?? "Offre d'alternance";
+  const company = o.workplace?.name    ?? o.company?.name   ?? '';
+  const address = o.workplace?.location?.address
+                ?? o.place?.fullAddress
+                ?? fallbackLocation;
+  const applyUrl = o.apply?.url
+                ?? o.url
+                ?? 'https://labonnealternance.apprentissage.beta.gouv.fr';
+  const desc    = (o.offer?.description ?? o.job?.description ?? o.description ?? '').slice(0, 280);
+  const created = o.offer?.publication?.creation
+               ?? o.publication?.creation
+               ?? o.job?.creationDate
+               ?? o.createdAt
+               ?? null;
+  const id      = o.identifier?.id ?? o.id ?? o.ideaType ?? Math.random();
+
+  return {
+    id:          `lba-${uid(id)}`,
     source:      'La Bonne Alternance',
-    title:       o.offer?.title ?? "Offre d'alternance",
-    company:     o.workplace?.name ?? o.workplace?.brand ?? '',
-    location:    o.workplace?.location?.address ?? location,
-    url:         o.apply?.url
-                 ?? `https://labonnealternance.apprentissage.beta.gouv.fr/recherche-apprentissage?itemId=${o.identifier?.id}`,
-    description: (o.offer?.description ?? '').slice(0, 280),
-    date:        parseDate(o.publication?.creation ?? null),
+    title,
+    company,
+    location:    address,
+    url:         applyUrl,
+    description: desc,
+    date:        parseDate(created),
     type:        'alternance',
-  }));
+  };
+}
+
+function mapLBARecruiter(o, fallbackLocation) {
+  return {
+    id:          `lba-rec-${uid(o.identifier?.id ?? o.id ?? Math.random())}`,
+    source:      'La Bonne Alternance',
+    title:       `Candidature spontanée — ${o.workplace?.name ?? o.company?.name ?? 'Entreprise'}`,
+    company:     o.workplace?.name ?? o.company?.name ?? '',
+    location:    o.workplace?.location?.address ?? o.place?.fullAddress ?? fallbackLocation,
+    url:         o.apply?.url ?? 'https://labonnealternance.apprentissage.beta.gouv.fr',
+    description: o.workplace?.description ?? o.company?.description ?? '',
+    date:        new Date().toISOString(),
+    type:        'alternance',
+  };
 }
 
 // ── 2. Adzuna ─────────────────────────────────────────────────────────────────
@@ -166,7 +218,7 @@ async function scrapeLBA(query, location, limit) {
 async function scrapeAdzuna(query, location, limit) {
   const appId  = process.env.ADZUNA_APP_ID;
   const appKey = process.env.ADZUNA_APP_KEY;
-  if (!appId || !appKey) throw new Error('ADZUNA_APP_ID / ADZUNA_APP_KEY manquants dans Vercel');
+  if (!appId || !appKey) throw new Error('ADZUNA_APP_ID / ADZUNA_APP_KEY manquants');
 
   const params = new URLSearchParams({
     app_id:           appId,
