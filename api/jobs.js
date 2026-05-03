@@ -68,6 +68,8 @@ const ROME_MAP = {
   'graphique':          'B1805',
   'ux':                 'B1805',
   'default':            'M1805,M1806,M1703,M1801',
+  'cyber':              'M1802,M1801,M1805,M1806', // <-- ON RATISSE TRES LARGE
+  'cybersécurité':      'M1802,M1801,M1805,M1806',
 };
 
 function getRomes(query) {
