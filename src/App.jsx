@@ -77,6 +77,7 @@ function useCopyToast() {
 
 function ImageCropper({ src, onSave, onCancel, borderOptions = true }) {
   const canvasRef = useRef(null);
+  const containerRef = useRef(null);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
@@ -84,19 +85,19 @@ function ImageCropper({ src, onSave, onCancel, borderOptions = true }) {
   const [border, setBorder] = useState('none');
   const [borderColor, setBorderColor] = useState('#13c9ed');
   const imgRef = useRef(null);
-  const SIZE = 200;
+  // Ratio card projet : largeur libre, hauteur fixe 180px → on travaille en 360x180
+  const W = 360;
+  const H = 180;
 
   const borders = [
     { id: 'none', label: 'Aucune' },
-    { id: 'circle', label: 'Cercle' },
     { id: 'rounded', label: 'Arrondi' },
     { id: 'glow', label: 'Lueur' },
     { id: 'double', label: 'Double' },
+    { id: 'circle', label: 'Cercle' },
   ];
 
-  useEffect(() => {
-    drawCanvas();
-  }, [scale, offset, border, borderColor, src]);
+  useEffect(() => { drawCanvas(); }, [scale, offset, border, borderColor, src]);
 
   const drawCanvas = () => {
     const canvas = canvasRef.current;
@@ -105,29 +106,31 @@ function ImageCropper({ src, onSave, onCancel, borderOptions = true }) {
     const img = imgRef.current;
     if (!img || !img.complete) return;
 
-    ctx.clearRect(0, 0, SIZE, SIZE);
+    ctx.clearRect(0, 0, W, H);
 
-    // Clip circle
+    // Clip shape
     ctx.save();
     ctx.beginPath();
     if (border === 'circle') {
-      ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 2, 0, Math.PI * 2);
+      const r = Math.min(W, H) / 2 - 2;
+      ctx.arc(W / 2, H / 2, r, 0, Math.PI * 2);
     } else if (border === 'rounded') {
-      roundRect(ctx, 8, 8, SIZE - 16, SIZE - 16, 24);
+      roundRect(ctx, 4, 4, W - 8, H - 8, 12);
     } else {
-      ctx.rect(0, 0, SIZE, SIZE);
+      ctx.rect(0, 0, W, H);
     }
     ctx.clip();
 
     const w = img.naturalWidth * scale;
     const h = img.naturalHeight * scale;
-    ctx.drawImage(img, (SIZE - w) / 2 + offset.x, (SIZE - h) / 2 + offset.y, w, h);
+    ctx.drawImage(img, (W - w) / 2 + offset.x, (H - h) / 2 + offset.y, w, h);
     ctx.restore();
 
-    // Borders
+    // Overlay border
     if (border === 'circle') {
+      const r = Math.min(W, H) / 2 - 2;
       ctx.beginPath();
-      ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 2, 0, Math.PI * 2);
+      ctx.arc(W / 2, H / 2, r, 0, Math.PI * 2);
       ctx.strokeStyle = borderColor;
       ctx.lineWidth = 4;
       ctx.stroke();
@@ -136,20 +139,30 @@ function ImageCropper({ src, onSave, onCancel, borderOptions = true }) {
       ctx.shadowBlur = 18;
       ctx.strokeStyle = borderColor;
       ctx.lineWidth = 3;
-      ctx.strokeRect(3, 3, SIZE - 6, SIZE - 6);
+      ctx.strokeRect(3, 3, W - 6, H - 6);
       ctx.shadowBlur = 0;
     } else if (border === 'double') {
       ctx.strokeStyle = borderColor;
       ctx.lineWidth = 2;
-      ctx.strokeRect(3, 3, SIZE - 6, SIZE - 6);
-      ctx.strokeRect(8, 8, SIZE - 16, SIZE - 16);
+      ctx.strokeRect(2, 2, W - 4, H - 4);
+      ctx.strokeRect(7, 7, W - 14, H - 14);
     } else if (border === 'rounded') {
       ctx.beginPath();
-      roundRect(ctx, 8, 8, SIZE - 16, SIZE - 16, 24);
+      roundRect(ctx, 4, 4, W - 8, H - 8, 12);
       ctx.strokeStyle = borderColor;
       ctx.lineWidth = 3;
       ctx.stroke();
     }
+
+    // Grille d'aide au cadrage (légère)
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(W / 3, 0); ctx.lineTo(W / 3, H);
+    ctx.moveTo((W / 3) * 2, 0); ctx.lineTo((W / 3) * 2, H);
+    ctx.moveTo(0, H / 3); ctx.lineTo(W, H / 3);
+    ctx.moveTo(0, (H / 3) * 2); ctx.lineTo(W, (H / 3) * 2);
+    ctx.stroke();
   };
 
   const roundRect = (ctx, x, y, w, h, r) => {
@@ -166,15 +179,37 @@ function ImageCropper({ src, onSave, onCancel, borderOptions = true }) {
     ctx.closePath();
   };
 
-  const onMouseDown = (e) => {
+  // Auto-fit image au premier chargement
+  const onImgLoad = () => {
+    const img = imgRef.current;
+    const scaleW = W / img.naturalWidth;
+    const scaleH = H / img.naturalHeight;
+    setScale(Math.max(scaleW, scaleH));
+    setOffset({ x: 0, y: 0 });
+    drawCanvas();
+  };
+
+  const getPos = (e) => {
+    const r = canvasRef.current.getBoundingClientRect();
+    const scaleX = W / r.width;
+    const scaleY = H / r.height;
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY);
+    return { x: (cx - r.left) * scaleX, y: (cy - r.top) * scaleY };
+  };
+
+  const onPointerDown = (e) => {
+    e.preventDefault();
     setDragging(true);
-    setDragStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
+    const pos = getPos(e);
+    setDragStart({ x: pos.x - offset.x, y: pos.y - offset.y });
   };
-  const onMouseMove = (e) => {
+  const onPointerMove = (e) => {
     if (!dragging) return;
-    setOffset({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+    const pos = getPos(e);
+    setOffset({ x: pos.x - dragStart.x, y: pos.y - dragStart.y });
   };
-  const onMouseUp = () => setDragging(false);
+  const onPointerUp = () => setDragging(false);
 
   const handleSave = () => {
     const canvas = canvasRef.current;
@@ -186,40 +221,31 @@ function ImageCropper({ src, onSave, onCancel, borderOptions = true }) {
     <div className="cropper-overlay" onClick={onCancel}>
       <div className="cropper-box" onClick={e => e.stopPropagation()}>
         <div className="cropper-header">
-          <span>Recadrer l'image</span>
+          <span>✂️ Recadrer l'image</span>
           <button className="modal-close-btn" onClick={onCancel}>✕</button>
         </div>
 
         <div className="cropper-body">
+          <p className="cropper-hint">Glisse pour repositionner · Zoom pour cadrer</p>
           <div className="cropper-canvas-wrap"
-            onMouseDown={onMouseDown}
-            onMouseMove={onMouseMove}
-            onMouseUp={onMouseUp}
-            onMouseLeave={onMouseUp}
+            ref={containerRef}
+            onMouseDown={onPointerDown}
+            onMouseMove={onPointerMove}
+            onMouseUp={onPointerUp}
+            onMouseLeave={onPointerUp}
+            onTouchStart={onPointerDown}
+            onTouchMove={onPointerMove}
+            onTouchEnd={onPointerUp}
             style={{ cursor: dragging ? 'grabbing' : 'grab' }}
           >
-            <canvas
-              ref={canvasRef}
-              width={SIZE}
-              height={SIZE}
-              className="cropper-canvas"
-            />
-            <img
-              ref={imgRef}
-              src={src}
-              alt="source"
-              style={{ display: 'none' }}
-              onLoad={drawCanvas}
-            />
+            <canvas ref={canvasRef} width={W} height={H} className="cropper-canvas" />
+            <img ref={imgRef} src={src} alt="source" style={{ display: 'none' }} onLoad={onImgLoad} />
           </div>
 
           <div className="cropper-controls">
             <label className="cropper-label">Zoom</label>
             <input
-              type="range"
-              min="0.2"
-              max="3"
-              step="0.02"
+              type="range" min="0.1" max="4" step="0.01"
               value={scale}
               onChange={e => setScale(parseFloat(e.target.value))}
               className="cropper-range"
@@ -231,11 +257,9 @@ function ImageCropper({ src, onSave, onCancel, borderOptions = true }) {
             <>
               <div className="cropper-border-btns">
                 {borders.map(b => (
-                  <button
-                    key={b.id}
-                    className={`cropper-border-btn${border === b.id ? ' active' : ''}`}
-                    onClick={() => setBorder(b.id)}
-                  >{b.label}</button>
+                  <button key={b.id} className={`cropper-border-btn${border === b.id ? ' active' : ''}`} onClick={() => setBorder(b.id)}>
+                    {b.label}
+                  </button>
                 ))}
               </div>
               {border !== 'none' && (
