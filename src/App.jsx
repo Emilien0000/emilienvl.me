@@ -5,8 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
 import { supabase } from './supabase';
 import JobBoard from './pages/JobBoard';
-import { useAdminAuth } from '../hooks/useAdminAuth';
-
 
 
 // ─── Variants animations ───────────────────────────────────────────────────────
