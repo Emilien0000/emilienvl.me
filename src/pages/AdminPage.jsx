@@ -2,7 +2,7 @@
 // Remplace ton ancienne page /admin
 // Usage dans App.jsx : <Route path="/admin" element={<AdminPage />} />
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAdminAuth } from '../hooks/useAdminAuth';
 
