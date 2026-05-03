@@ -74,23 +74,29 @@ function guessType(text) {
 function parseIndeed(html, sourceUrl) {
   const jobs = [];
 
-  // Stratégie 1 : JSON dans window.mosaic.providerData
-  const mosaicMatch = html.match(/window\.mosaic\.providerData\s*=\s*({.+?});\s*window/s);
+  // Strategie 1 : JSON dans window.mosaic.providerData (plusieurs chemins possibles)
+  const mosaicMatch = html.match(/window\.mosaic\.providerData\s*=\s*(\{.+?\});\s*(?:window|<)/s);
   if (mosaicMatch) {
     try {
       const mosaic = JSON.parse(mosaicMatch[1]);
-      const results = mosaic?.['mosaic-provider-jobcards']?.metaData?.mosaicProviderJobCardsModel?.results ?? [];
+      const results =
+        mosaic?.['mosaic-provider-jobcards']?.metaData?.mosaicProviderJobCardsModel?.results ??
+        mosaic?.['mosaic-provider-jobcards']?.metaData?.jobcards?.results ??
+        mosaic?.['mosaic-provider-jobcards']?.results ??
+        [];
       for (const r of results) {
-        const title = r.displayTitle ?? r.jobTitle ?? '';
+        const jk    = r.jobkey ?? r.jobKey ?? '';
+        const title = r.displayTitle ?? r.jobTitle ?? r.title ?? '';
+        if (!title) continue;
         jobs.push({
-          id:          `indeed-${uid(r.jobkey ?? r.jobKey ?? Math.random())}`,
+          id:          `indeed-${uid(jk || title + Math.random())}`,
           sourceUrl,
           title,
           company:     r.company ?? r.companyName ?? '',
           location:    r.formattedLocation ?? r.location ?? '',
-          url:         r.thirdPartyApplyUrl ?? `https://fr.indeed.com/viewjob?jk=${r.jobkey ?? ''}`,
+          url:         r.thirdPartyApplyUrl ?? (jk ? `https://fr.indeed.com/viewjob?jk=${jk}` : sourceUrl),
           description: (r.snippet ?? '').replace(/<[^>]+>/g, ' ').trim().slice(0, 300),
-          date:        parseDate(r.pubDate ?? r.createDate),
+          date:        parseDate(r.pubDate ?? r.createDate ?? r.postedAt),
           type:        guessType(title + ' ' + (r.snippet ?? '') + ' ' + (r.jobTypes?.join(' ') ?? '')),
         });
       }
@@ -98,26 +104,56 @@ function parseIndeed(html, sourceUrl) {
     } catch {}
   }
 
-  // Stratégie 2 : balises <div class="job_seen_beacon"> / data-jk
-  const jobCardRe = /<div[^>]*data-jk="([^"]+)"[^>]*>([\s\S]+?)<\/div>\s*<\/div>\s*<\/div>/g;
+  // Strategie 2 : JSON-LD JobPosting
+  const jsonLdRe = /<script type="application\/ld\+json">([\s\S]+?)<\/script>/g;
   let m;
-  while ((m = jobCardRe.exec(html)) !== null && jobs.length < 30) {
-    const jk   = m[1];
-    const body = m[2];
-    const title = (body.match(/<span[^>]*jobTitle[^>]*>([^<]+)<\/span>/i) ?? [])[1] ?? '';
-    const co    = (body.match(/class="companyName"[^>]*>([^<]+)<\/span>/i) ?? [])[1] ?? '';
-    const loc   = (body.match(/class="companyLocation"[^>]*>([^<]+)<\/span>/i) ?? [])[1] ?? '';
+  while ((m = jsonLdRe.exec(html)) !== null && jobs.length < 30) {
+    try {
+      const d = JSON.parse(m[1]);
+      const candidates = Array.isArray(d) ? d.flat() : [d];
+      for (const item of candidates) {
+        const job = item['@type'] === 'ListItem' ? item.item : item;
+        if (job?.['@type'] !== 'JobPosting') continue;
+        const title = job.title ?? '';
+        jobs.push({
+          id:          `indeed-${uid(job.identifier?.value ?? title + Math.random())}`,
+          sourceUrl,
+          title,
+          company:     job.hiringOrganization?.name ?? '',
+          location:    job.jobLocation?.address?.addressLocality ?? '',
+          url:         job.url ?? sourceUrl,
+          description: (job.description ?? '').replace(/<[^>]+>/g, ' ').slice(0, 300),
+          date:        parseDate(job.datePosted),
+          type:        guessType(title + ' ' + (job.employmentType ?? '')),
+        });
+      }
+    } catch {}
+  }
+  if (jobs.length) return jobs;
+
+  // Strategie 3 : data-jk dans le HTML rendu
+  const jkRe = /data-jk="([^"]{8,30})"/g;
+  const seen  = new Set();
+  while ((m = jkRe.exec(html)) !== null && jobs.length < 30) {
+    const jk = m[1];
+    if (seen.has(jk)) continue;
+    seen.add(jk);
+    const chunk  = html.slice(Math.max(0, m.index - 200), m.index + 1800);
+    const titleM = chunk.match(/class="[^"]*jobTitle[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{5,120})/i);
+    const coM    = chunk.match(/class="[^"]*companyName[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{2,80})/i);
+    const locM   = chunk.match(/class="[^"]*companyLocation[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{2,80})/i);
+    const title  = titleM?.[1]?.trim() ?? '';
     if (!title) continue;
     jobs.push({
-      id:       `indeed-${uid(jk)}`,
+      id:          `indeed-${uid(jk)}`,
       sourceUrl,
-      title:    title.trim(),
-      company:  co.trim(),
-      location: loc.trim(),
-      url:      `https://fr.indeed.com/viewjob?jk=${jk}`,
+      title,
+      company:     coM?.[1]?.trim() ?? '',
+      location:    locM?.[1]?.trim() ?? '',
+      url:         `https://fr.indeed.com/viewjob?jk=${jk}`,
       description: '',
-      date:     new Date().toISOString(),
-      type:     guessType(title),
+      date:        new Date().toISOString(),
+      type:        guessType(title),
     });
   }
 
@@ -303,7 +339,8 @@ async function scrapeUrl(targetUrl, apiKey) {
   // LBA API officielle (si token dispo) → on délègue à l'ancienne logique
   // mais on s'assure que l'URL LBA est scrapée directement si pas de token
 
-  const needsRender = ['linkedin', 'wtj', 'monster'].includes(platform);
+  // Indeed charge ses résultats via React/JS → render obligatoire
+  const needsRender = ['indeed', 'linkedin', 'wtj', 'monster', 'ft'].includes(platform);
 
   const res  = await fetchWithScraper(targetUrl, apiKey, { render: needsRender });
   const html = await res.text();
