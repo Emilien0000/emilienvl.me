@@ -203,7 +203,7 @@ function LinksPage() {
         <motion.div className="links-identity" variants={itemVariants}>
           <div className="links-avatar"><img src="/cv.webp" alt="Émilien Vitry-Lhotte" /></div>
           <h1 className="links-name">Émilien <span className="highlight">Vitry-Lhotte</span></h1>
-          <p className="links-bio">Apprenti ingénieur · Réseaux & Cybersécurité</p>
+          <p className="links-bio">Etudiant ingénieur · Réseaux & Cybersécurité</p>
           <div className="links-badge">UniLaSalle Amiens</div>
         </motion.div>
         <motion.div className="links-list" variants={containerVariants}>

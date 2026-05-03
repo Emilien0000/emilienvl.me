@@ -1,12 +1,14 @@
 // api/jobs.js — Vercel Edge Serverless Function
-// Sources : La Bonne Alternance + Adzuna + France Travail
+// Sources : La Bonne Alternance + Adzuna + France Travail + Indeed + HelloWork + Stage.fr
 // ─────────────────────────────────────────────────────────────────────────────
-// Variables d'environnement Vercel :
+// Variables d'environnement :
 //   LBA_API_TOKEN         → token JWT depuis api.apprentissage.beta.gouv.fr
-//   ADZUNA_APP_ID         → ton app id Adzuna
-//   ADZUNA_APP_KEY        → ta app key Adzuna
-//   FT_CLIENT_ID          → client_id OAuth France Travail (ex-Pôle Emploi)
+//   ADZUNA_APP_ID         → app id Adzuna
+//   ADZUNA_APP_KEY        → app key Adzuna
+//   FT_CLIENT_ID          → client_id OAuth France Travail
 //   FT_CLIENT_SECRET      → client_secret OAuth France Travail
+//   SCRAPE_API_KEY        → clé ScraperAPI (pour Indeed / HelloWork / Stage.fr)
+//                           https://www.scraperapi.com — plan gratuit = 1000 req/mois
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const config = { runtime: 'edge' };
@@ -27,11 +29,10 @@ function parseDate(raw) {
 
 function uid(str) {
   return btoa(unescape(encodeURIComponent(String(str ?? Math.random()))))
-    .replace(/[^a-zA-Z0-9]/g, '')
-    .slice(0, 12);
+    .replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
 }
 
-// ── Codes ROME par mot-clé ────────────────────────────────────────────────────
+// ── Codes ROME par mot-clé ───────────────────────────────────────────────────
 
 const ROME_MAP = {
   'développeur':        'M1805,M1806',
@@ -39,7 +40,6 @@ const ROME_MAP = {
   'dev':                'M1805,M1806',
   'web':                'M1805,M1806',
   'fullstack':          'M1805,M1806',
-  'cyber':              'M1802',
   'frontend':           'M1805',
   'backend':            'M1806',
   'javascript':         'M1805,M1806',
@@ -49,7 +49,8 @@ const ROME_MAP = {
   'data':               'M1811,M1805',
   'machine learning':   'M1811',
   'ia':                 'M1811',
-  'cybersécurité':      'M1802',
+  'cyber':              'M1802,M1801,M1805,M1806',
+  'cybersécurité':      'M1802,M1801,M1805,M1806',
   'reseau':             'M1801',
   'réseau':             'M1801',
   'cloud':              'M1806',
@@ -57,19 +58,13 @@ const ROME_MAP = {
   'mobile':             'M1805',
   'marketing':          'M1703,M1705',
   'commercial':         'D1401,D1403',
-  'vente':              'D1401',
-  'communication':      'E1103,M1707',
   'comptable':          'M1203,M1206',
   'finance':            'M1203,M1205',
-  'audit':              'M1202',
-  'ressources humaines':'M1501,M1502',
   'rh':                 'M1501',
+  'ressources humaines':'M1501,M1502',
   'design':             'B1805,L1503',
-  'graphique':          'B1805',
   'ux':                 'B1805',
   'default':            'M1805,M1806,M1703,M1801',
-  'cyber':              'M1802,M1801,M1805,M1806', // <-- ON RATISSE TRES LARGE
-  'cybersécurité':      'M1802,M1801,M1805,M1806',
 };
 
 function getRomes(query) {
@@ -80,7 +75,7 @@ function getRomes(query) {
   return ROME_MAP.default;
 }
 
-// ── Coordonnées par ville ─────────────────────────────────────────────────────
+// ── Géo ─────────────────────────────────────────────────────────────────────
 
 const GEO_MAP = {
   'paris':      { lat: 48.8566, lon: 2.3522 },
@@ -97,6 +92,12 @@ const GEO_MAP = {
   'france':     { lat: 46.2276, lon: 2.2137 },
 };
 
+const DEPT_MAP = {
+  'paris': '75', 'lyon': '69', 'marseille': '13', 'bordeaux': '33',
+  'lille': '59', 'nantes': '44', 'toulouse': '31', 'strasbourg': '67',
+  'rennes': '35', 'grenoble': '38', 'amiens': '80',
+};
+
 function getCoords(location) {
   const l = location.toLowerCase();
   for (const [key, coords] of Object.entries(GEO_MAP)) {
@@ -105,36 +106,19 @@ function getCoords(location) {
   return GEO_MAP.france;
 }
 
-// ── Département par localisation (France Travail) ─────────────────────────────
-// France Travail filtre par code département (ex: "75" pour Paris)
-
-const DEPT_MAP = {
-  'paris':      '75',
-  'lyon':       '69',
-  'marseille':  '13',
-  'bordeaux':   '33',
-  'lille':      '59',
-  'nantes':     '44',
-  'toulouse':   '31',
-  'strasbourg': '67',
-  'rennes':     '35',
-  'grenoble':   '38',
-  'amiens':     '80',
-};
-
 function getDept(location) {
   const l = location.toLowerCase();
   for (const [key, dept] of Object.entries(DEPT_MAP)) {
     if (l.includes(key)) return dept;
   }
-  return null; // Pas de filtre département = toute la France
+  return null;
 }
 
-// ── 1. La Bonne Alternance ────────────────────────────────────────────────────
+// ── 1. La Bonne Alternance ───────────────────────────────────────────────────
 
 async function scrapeLBA(query, location, limit) {
   const token = process.env.LBA_API_TOKEN;
-  if (!token) throw new Error("LBA_API_TOKEN manquant");
+  if (!token) throw new Error('LBA_API_TOKEN manquant');
 
   const coords = getCoords(location);
   const romes  = getRomes(query);
@@ -143,75 +127,38 @@ async function scrapeLBA(query, location, limit) {
     romes,
     latitude:  String(coords.lat),
     longitude: String(coords.lon),
-    radius:    "100",
+    radius:    '100',
   });
 
-  const url = `https://api.apprentissage.beta.gouv.fr/api/job/v1/search?${params}`;
-
-  const res = await fetch(url, {
+  const res = await fetch(`https://api.apprentissage.beta.gouv.fr/api/job/v1/search?${params}`, {
     headers: {
-      "Authorization": `Bearer ${token}`,
-      "api-key":       token,
-      "Accept":        "application/json",
-      "Content-Type":  "application/json",
+      'Authorization': `Bearer ${token}`,
+      'api-key': token,
+      'Accept': 'application/json',
     },
   });
 
-  const contentType = res.headers.get("content-type") ?? "";
-
-  if (!res.ok || contentType.includes("text/html")) {
-    const txt = await res.text().catch(() => "");
-    if (contentType.includes("text/html")) {
-      const firstBytes = txt.slice(0, 100);
-      throw new Error(`LBA ${res.status}: HTML reçu (token invalide ou expiré ?). Début: ${firstBytes}`);
-    }
-    throw new Error(`LBA ${res.status}: ${txt.slice(0, 300)}`);
+  const ct = res.headers.get('content-type') ?? '';
+  if (!res.ok || ct.includes('text/html')) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`LBA ${res.status}: ${txt.slice(0, 200)}`);
   }
 
   const data = await res.json();
-
-  const offers = Array.isArray(data.jobs) ? data.jobs : [];
-
-  return offers.slice(0, limit).map(o => mapLBAOffer(o, location));
-}
-
-function mapLBAOffer(o, fallbackLocation) {
-  const title    = o.offer?.title       ?? "Offre d'alternance";
-  const company  = o.workplace?.name    ?? '';
-  const address  = o.workplace?.location?.address ?? fallbackLocation;
-  const applyUrl = o.apply?.url         ?? 'https://labonnealternance.apprentissage.beta.gouv.fr';
-  const desc     = (o.offer?.description ?? '').slice(0, 280);
-  const created  = o.offer?.publication?.creation ?? o.createdAt ?? null;
-  const id       = o.identifier?.id ?? Math.random();
-
-  return {
-    id:          `lba-${uid(id)}`,
+  return (Array.isArray(data.jobs) ? data.jobs : []).slice(0, limit).map(o => ({
+    id:          `lba-${uid(o.identifier?.id ?? Math.random())}`,
     source:      'La Bonne Alternance',
-    title,
-    company,
-    location:    address,
-    url:         applyUrl,
-    description: desc,
-    date:        parseDate(created),
+    title:       o.offer?.title ?? "Offre d'alternance",
+    company:     o.workplace?.name ?? '',
+    location:    o.workplace?.location?.address ?? location,
+    url:         o.apply?.url ?? 'https://labonnealternance.apprentissage.beta.gouv.fr',
+    description: (o.offer?.description ?? '').slice(0, 280),
+    date:        parseDate(o.offer?.publication?.creation ?? o.createdAt),
     type:        'alternance',
-  };
+  }));
 }
 
-function mapLBARecruiter(r, fallbackLocation) {
-  return {
-    id:          `lba-rec-${uid(r.identifier?.id ?? Math.random())}`,
-    source:      "La Bonne Alternance",
-    title:       `Candidature spontanée — ${r.workplace?.name ?? "Entreprise"}`,
-    company:     r.workplace?.name ?? "",
-    location:    r.workplace?.location?.address ?? fallbackLocation,
-    url:         r.apply?.url ?? "https://labonnealternance.apprentissage.beta.gouv.fr",
-    description: r.workplace?.description ?? "",
-    date:        new Date().toISOString(),
-    type:        "alternance",
-  };
-}
-
-// ── 2. Adzuna ─────────────────────────────────────────────────────────────────
+// ── 2. Adzuna ────────────────────────────────────────────────────────────────
 
 async function scrapeAdzuna(query, location, limit) {
   const appId  = process.env.ADZUNA_APP_ID;
@@ -219,30 +166,22 @@ async function scrapeAdzuna(query, location, limit) {
   if (!appId || !appKey) throw new Error('ADZUNA_APP_ID / ADZUNA_APP_KEY manquants');
 
   const params = new URLSearchParams({
-    app_id:           appId,
-    app_key:          appKey,
+    app_id: appId, app_key: appKey,
     results_per_page: String(limit),
-    what:             query,
-    where:            location,
-    sort_by:          'date',
+    what: query, where: location, sort_by: 'date',
   });
 
   const res = await fetch(`https://api.adzuna.com/v1/api/jobs/fr/search/1?${params}`, {
     headers: { 'Accept': 'application/json' },
   });
 
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(`Adzuna ${res.status}: ${txt.slice(0, 120)}`);
-  }
-
+  if (!res.ok) throw new Error(`Adzuna ${res.status}`);
   const data = await res.json();
 
   return (data.results ?? []).slice(0, limit).map(job => {
     const desc  = (job.description ?? '').replace(/<[^>]+>/g, ' ').trim();
-    const isAlt = /alternance|apprentissage|contrat d.app/i.test(desc + job.title);
+    const isAlt = /alternance|apprentissage/i.test(desc + job.title);
     const isStg = /stage|intern/i.test(desc + job.title);
-
     return {
       id:          `adzuna-${uid(job.id)}`,
       source:      'Adzuna',
@@ -257,27 +196,12 @@ async function scrapeAdzuna(query, location, limit) {
   });
 }
 
-// ── 3. France Travail (ex Pôle Emploi) ───────────────────────────────────────
-//
-// Doc : https://pole-emploi.io/data/api/offres-emploi
-// Auth : OAuth2 client_credentials
-//   POST https://entreprise.francetravail.fr/connexion/oauth2/access_token
-//   ?realm=/partenaire
-//   Body: grant_type=client_credentials&client_id=...&client_secret=...
-//         &scope=api_offresdemploiv2+o2dsoffre
-//
-// Endpoint : GET https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search
-// Params clés :
-//   motsCles, departement, typeContrat (CA=apprentissage, CDD, CDI, SAI=stage)
-//   range (ex: 0-14 pour les 15 premiers)
+// ── 3. France Travail ────────────────────────────────────────────────────────
 
-// Cache token en mémoire pour la durée du worker (Edge runtime)
 let ftTokenCache = { token: null, expiresAt: 0 };
 
 async function getFTToken() {
-  if (ftTokenCache.token && Date.now() < ftTokenCache.expiresAt - 30_000) {
-    return ftTokenCache.token;
-  }
+  if (ftTokenCache.token && Date.now() < ftTokenCache.expiresAt - 30_000) return ftTokenCache.token;
 
   const clientId     = process.env.FT_CLIENT_ID;
   const clientSecret = process.env.FT_CLIENT_SECRET;
@@ -286,27 +210,18 @@ async function getFTToken() {
   const res = await fetch(
     'https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire',
     {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        grant_type:    'client_credentials',
-        client_id:     clientId,
-        client_secret: clientSecret,
-        scope:         'api_offresdemploiv2 o2dsoffre',
+        grant_type: 'client_credentials',
+        client_id: clientId, client_secret: clientSecret,
+        scope: 'api_offresdemploiv2 o2dsoffre',
       }),
     }
   );
-
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    throw new Error(`FT OAuth ${res.status}: ${txt.slice(0, 200)}`);
-  }
-
+  if (!res.ok) throw new Error(`FT OAuth ${res.status}`);
   const data = await res.json();
-  ftTokenCache = {
-    token:     data.access_token,
-    expiresAt: Date.now() + (data.expires_in ?? 1500) * 1000,
-  };
+  ftTokenCache = { token: data.access_token, expiresAt: Date.now() + (data.expires_in ?? 1500) * 1000 };
   return ftTokenCache.token;
 }
 
@@ -314,62 +229,41 @@ async function scrapeFranceTravail(query, location, limit) {
   const token = await getFTToken();
   const dept  = getDept(location);
 
-  // On fait deux appels en parallèle : contrats d'apprentissage (CA) + stages (SAI)
-  // typeContrat : CA = Contrat d'apprentissage, CDD, CDI, SAI = Saisonnier (utilisé aussi pour stages)
   const buildParams = (typeContrat) => {
-    const p = new URLSearchParams({
-      motsCles:    query,
-      sort:        1,        // tri par date
-      range:       `0-${Math.min(limit, 149)}`,
-    });
-    if (dept)         p.set('departement', dept);
-    if (typeContrat)  p.set('typeContrat', typeContrat);
+    const p = new URLSearchParams({ motsCles: query, sort: 1, range: `0-${Math.min(limit, 149)}` });
+    if (dept)        p.set('departement', dept);
+    if (typeContrat) p.set('typeContrat', typeContrat);
     return p;
   };
 
-  const headers = {
-    'Authorization': `Bearer ${token}`,
-    'Accept':        'application/json',
-  };
-
-  const baseUrl = 'https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search';
+  const headers = { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' };
+  const base = 'https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search';
 
   const [resAlt, resStg] = await Promise.all([
-    fetch(`${baseUrl}?${buildParams('CA')}`,  { headers }),
-    fetch(`${baseUrl}?${buildParams('SAI')}`, { headers }),
+    fetch(`${base}?${buildParams('CA')}`, { headers }),
+    fetch(`${base}?${buildParams('SAI')}`, { headers }),
   ]);
 
-  const parseBody = async (res) => {
-    if (!res.ok) {
-      // 204 = aucun résultat, c'est normal
-      if (res.status === 204) return [];
-      const txt = await res.text().catch(() => '');
-      throw new Error(`France Travail ${res.status}: ${txt.slice(0, 200)}`);
-    }
-    const data = await res.json();
-    return data.resultats ?? [];
+  const parse = async (res) => {
+    if (res.status === 204) return [];
+    if (!res.ok) throw new Error(`France Travail ${res.status}`);
+    const d = await res.json();
+    return d.resultats ?? [];
   };
 
-  const [altOffres, stgOffres] = await Promise.all([
-    parseBody(resAlt),
-    parseBody(resStg),
-  ]);
+  const [altOffres, stgOffres] = await Promise.all([parse(resAlt), parse(resStg)]);
 
-  const mapOffer = (o, type) => {
-    const desc = (o.description ?? '').slice(0, 280);
-    return {
-      id:          `ft-${uid(o.id)}`,
-      source:      'France Travail',
-      title:       o.intitule ?? 'Offre France Travail',
-      company:     o.entreprise?.nom ?? '',
-      location:    o.lieuTravail?.libelle ?? location,
-      url:         o.origineOffre?.urlOrigine
-                    ?? `https://candidat.francetravail.fr/offres/recherche/detail/${o.id}`,
-      description: desc,
-      date:        parseDate(o.dateCreation),
-      type,
-    };
-  };
+  const mapOffer = (o, type) => ({
+    id:          `ft-${uid(o.id)}`,
+    source:      'France Travail',
+    title:       o.intitule ?? 'Offre France Travail',
+    company:     o.entreprise?.nom ?? '',
+    location:    o.lieuTravail?.libelle ?? location,
+    url:         o.origineOffre?.urlOrigine ?? `https://candidat.francetravail.fr/offres/recherche/detail/${o.id}`,
+    description: (o.description ?? '').slice(0, 280),
+    date:        parseDate(o.dateCreation),
+    type,
+  });
 
   const half = Math.ceil(limit / 2);
   return [
@@ -378,7 +272,148 @@ async function scrapeFranceTravail(query, location, limit) {
   ];
 }
 
-// ── Handler ───────────────────────────────────────────────────────────────────
+// ── 4. Indeed (via ScraperAPI structured endpoint) ───────────────────────────
+// ScraperAPI propose un endpoint Indeed structuré (pas de parsing HTML)
+// Doc : https://docs.scraperapi.com/structured-data-collection/indeed
+
+async function scrapeIndeed(query, location, limit) {
+  const apiKey = process.env.SCRAPE_API_KEY;
+  if (!apiKey) throw new Error('SCRAPE_API_KEY manquant (ScraperAPI)');
+
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    query,
+    location: location || 'France',
+    country: 'fr',
+    limit: String(Math.min(limit, 15)),
+  });
+
+  const res = await fetch(`https://api.scraperapi.com/structured/indeed/search?${params}`, {
+    headers: { 'Accept': 'application/json' },
+  });
+
+  if (!res.ok) throw new Error(`Indeed/ScraperAPI ${res.status}`);
+  const data = await res.json();
+  const items = Array.isArray(data.jobs) ? data.jobs : (data.organic_results ?? []);
+
+  return items.slice(0, limit).map(job => {
+    const title = job.title ?? job.job_title ?? '';
+    const desc  = (job.description ?? job.snippet ?? '').replace(/<[^>]+>/g, ' ').trim();
+    const isAlt = /alternance|apprentissage/i.test(title + desc);
+    const isStg = /stage|intern/i.test(title + desc);
+    return {
+      id:          `indeed-${uid(job.job_id ?? job.id ?? Math.random())}`,
+      source:      'Indeed',
+      title,
+      company:     job.company ?? job.company_name ?? '',
+      location:    job.location ?? location,
+      url:         job.url ?? job.job_url ?? `https://fr.indeed.com`,
+      description: desc.slice(0, 280),
+      date:        parseDate(job.date ?? job.posted_at),
+      type:        isAlt ? 'alternance' : isStg ? 'stage' : 'emploi',
+    };
+  });
+}
+
+// ── 5. HelloWork (scraping léger via ScraperAPI) ──────────────────────────────
+// HelloWork n'a pas d'API publique — on scrape leur page de résultats JSON
+// URL : https://www.hellowork.com/fr-fr/emploi/recherche.html?k=...&l=...&c=...
+
+async function scrapeHelloWork(query, location, limit) {
+  const apiKey = process.env.SCRAPE_API_KEY;
+  if (!apiKey) throw new Error('SCRAPE_API_KEY manquant (ScraperAPI)');
+
+  // HelloWork expose une API interne JSON pour ses résultats de recherche
+  const contractMap = { alternance: 'apprentissage', stage: 'stage', emploi: 'cdi,cdd' };
+  const hwQuery  = encodeURIComponent(query);
+  const hwLoc    = encodeURIComponent(location || 'France');
+
+  // On tente l'API interne JSON de HelloWork
+  const targetUrl = `https://www.hellowork.com/fr-fr/emploi/recherche.html?k=${hwQuery}&l=${hwLoc}&jt=alternance%2Cstage&jsonResults=true`;
+
+  const proxyUrl = `https://api.scraperapi.com/?api_key=${apiKey}&url=${encodeURIComponent(targetUrl)}&render=false`;
+
+  const res = await fetch(proxyUrl, { headers: { 'Accept': 'application/json, text/html' } });
+  if (!res.ok) throw new Error(`HelloWork ${res.status}`);
+
+  // HelloWork renvoie du JSON si jsonResults=true
+  let data;
+  const ct = res.headers.get('content-type') ?? '';
+  if (ct.includes('json')) {
+    data = await res.json();
+  } else {
+    // Fallback : extrait le JSON embarqué dans le HTML (window.__INITIAL_STATE__)
+    const html = await res.text();
+    const match = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.+?\});/s);
+    if (!match) throw new Error('HelloWork : structure HTML non reconnue');
+    data = JSON.parse(match[1]);
+  }
+
+  // Les offres peuvent être dans data.jobs, data.results, data.offers ou data.offerList
+  const items = data?.jobs ?? data?.results ?? data?.offers ?? data?.offerList ?? [];
+
+  return items.slice(0, limit).map(job => {
+    const title = job.title ?? job.label ?? '';
+    const desc  = (job.description ?? job.resume ?? '').replace(/<[^>]+>/g, ' ').trim();
+    const isAlt = /alternance|apprentissage/i.test(title + desc);
+    const isStg = /stage|intern/i.test(title + desc);
+    return {
+      id:          `hw-${uid(job.id ?? job.offerId ?? Math.random())}`,
+      source:      'HelloWork',
+      title,
+      company:     job.company ?? job.companyName ?? '',
+      location:    job.location ?? job.city ?? location,
+      url:         job.url ?? job.applyUrl ?? `https://www.hellowork.com/fr-fr/emploi/recherche.html?k=${hwQuery}`,
+      description: desc.slice(0, 280),
+      date:        parseDate(job.date ?? job.publishedAt ?? job.createdAt),
+      type:        isAlt ? 'alternance' : isStg ? 'stage' : 'emploi',
+    };
+  });
+}
+
+// ── 6. Stage.fr (scraping via ScraperAPI) ────────────────────────────────────
+// Stage.fr : https://www.stage.fr/offres?q=...&localisation=...
+
+async function scrapeStage(query, location, limit) {
+  const apiKey = process.env.SCRAPE_API_KEY;
+  if (!apiKey) throw new Error('SCRAPE_API_KEY manquant (ScraperAPI)');
+
+  const targetUrl = `https://www.stage.fr/offres?q=${encodeURIComponent(query)}&localisation=${encodeURIComponent(location || 'France')}`;
+  const proxyUrl  = `https://api.scraperapi.com/?api_key=${apiKey}&url=${encodeURIComponent(targetUrl)}&render=true`;
+
+  const res = await fetch(proxyUrl, { headers: { 'Accept': 'text/html' } });
+  if (!res.ok) throw new Error(`Stage.fr ${res.status}`);
+
+  const html = await res.text();
+
+  // Stage.fr expose son état React dans un script JSON
+  const jsonMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]+?)<\/script>/);
+  if (!jsonMatch) throw new Error('Stage.fr : structure HTML non reconnue');
+
+  const nextData = JSON.parse(jsonMatch[1]);
+  const offers   = nextData?.props?.pageProps?.offers
+                ?? nextData?.props?.pageProps?.initialOffers
+                ?? nextData?.props?.pageProps?.jobs
+                ?? [];
+
+  return offers.slice(0, limit).map(o => ({
+    id:          `stage-${uid(o.id ?? Math.random())}`,
+    source:      'Stage.fr',
+    title:       o.title ?? o.name ?? 'Offre Stage.fr',
+    company:     o.company?.name ?? o.companyName ?? '',
+    location:    o.location ?? o.city ?? location,
+    url:         o.url ?? `https://www.stage.fr/offres/${o.id ?? ''}`,
+    description: (o.description ?? o.excerpt ?? '').replace(/<[^>]+>/g, ' ').trim().slice(0, 280),
+    date:        parseDate(o.publishedAt ?? o.createdAt ?? o.date),
+    type:        /alternance|apprentissage/i.test(o.title ?? '') ? 'alternance' : 'stage',
+  }));
+}
+
+// ── Handler principal ─────────────────────────────────────────────────────────
+//
+// Nouvelle logique : on supporte plusieurs mots-clés ET plusieurs localisations.
+// Pour chaque combinaison (keyword × location), on lance un scrape de chaque source.
+// Les résultats sont dédupliqués par URL puis triés par date.
 
 export default async function handler(req) {
   if (req.method === 'OPTIONS') {
@@ -386,34 +421,67 @@ export default async function handler(req) {
   }
 
   const { searchParams } = new URL(req.url);
-  const query    = searchParams.get('q')        || 'alternance développeur';
-  const location = searchParams.get('location') || 'France';
-  const sources  = (searchParams.get('sources') || 'lba,adzuna,ft').split(',');
-  const limit    = Math.min(parseInt(searchParams.get('limit') || '12', 10), 20);
 
-  const scrapers = {
-    lba:    () => scrapeLBA(query, location, limit),
-    adzuna: () => scrapeAdzuna(query, location, limit),
-    ft:     () => scrapeFranceTravail(query, location, limit),
+  // Paramètres multi-valeurs (séparés par virgule)
+  const rawKeywords  = searchParams.get('keywords')  || searchParams.get('q') || 'alternance développeur';
+  const rawLocations = searchParams.get('locations')  || searchParams.get('location') || 'France';
+  const rawSources   = searchParams.get('sources')   || 'lba,adzuna,ft,indeed,hellowork,stagefr';
+
+  const keywords  = rawKeywords.split(',').map(k => k.trim()).filter(Boolean);
+  const locations = rawLocations.split(',').map(l => l.trim()).filter(Boolean);
+  const sources   = rawSources.split(',').map(s => s.trim()).filter(Boolean);
+  const limit     = Math.min(parseInt(searchParams.get('limit') || '12', 10), 20);
+
+  // Nombre de résultats par combinaison (on répartit le budget)
+  const perCombo = Math.max(3, Math.ceil(limit / (keywords.length * locations.length)));
+
+  const scraperMap = {
+    lba:       scrapeLBA,
+    adzuna:    scrapeAdzuna,
+    ft:        scrapeFranceTravail,
+    indeed:    scrapeIndeed,
+    hellowork: scrapeHelloWork,
+    stagefr:   scrapeStage,
   };
 
-  const results = await Promise.allSettled(
-    sources.map(s => scrapers[s]?.() ?? Promise.resolve([]))
-  );
+  // On lance toutes les combinaisons keyword × location × source en parallèle
+  const tasks = [];
+  for (const kw of keywords) {
+    for (const loc of locations) {
+      for (const src of sources) {
+        if (scraperMap[src]) {
+          tasks.push({ src, kw, loc, fn: () => scraperMap[src](kw, loc, perCombo) });
+        }
+      }
+    }
+  }
 
-  const jobs = results
-    .flatMap(r => r.status === 'fulfilled' ? r.value : [])
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  const settled = await Promise.allSettled(tasks.map(t => t.fn()));
 
-  const errors = results
-    .map((r, i) => r.status === 'rejected'
-      ? `${sources[i]}: ${r.reason?.message ?? 'Erreur'}`
-      : null
-    )
-    .filter(Boolean);
+  // Déduplique par URL
+  const seen = new Set();
+  const jobs = settled
+    .flatMap((r, i) => r.status === 'fulfilled' ? r.value : [])
+    .filter(j => {
+      if (!j.url || seen.has(j.url)) return false;
+      seen.add(j.url);
+      return true;
+    })
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 60); // max 60 résultats
+
+  // Erreurs uniques par source
+  const errorMap = {};
+  settled.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      const src = tasks[i].src;
+      if (!errorMap[src]) errorMap[src] = r.reason?.message ?? 'Erreur';
+    }
+  });
+  const errors = Object.entries(errorMap).map(([src, msg]) => `${src}: ${msg}`);
 
   return new Response(
-    JSON.stringify({ jobs, total: jobs.length, errors, query, location }),
+    JSON.stringify({ jobs, total: jobs.length, errors, keywords, locations }),
     { status: 200, headers: corsHeaders() }
   );
 }
