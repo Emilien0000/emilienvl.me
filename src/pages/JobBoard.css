@@ -649,3 +649,182 @@
   .jb-filter-row { padding: 0.6rem 0.7rem; }
   .jb-filter-url { font-size: 0.75rem; }
 }
+
+/* ─── Ajouts JobBoard.css — v2 session + scraping async ─────────────────────
+   À COLLER à la fin de ton JobBoard.css existant
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ── Écran de login ──────────────────────────────────────────────────────────*/
+
+.jb-login-overlay {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg, #0f0f13);
+  padding: 1.5rem;
+}
+
+.jb-login-box {
+  background: var(--card-bg, #16161c);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px;
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+}
+
+.jb-login-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.jb-login-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+  color: var(--text, #e8e8f0);
+}
+
+.jb-login-sub {
+  font-size: 0.875rem;
+  color: var(--text-muted, #888);
+  margin: 0 0 1.75rem;
+  line-height: 1.5;
+}
+
+.jb-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  text-align: left;
+}
+
+.jb-login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.jb-login-field label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.jb-login-error {
+  font-size: 0.82rem;
+  color: #ef4444;
+  text-align: center;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  background: rgba(239,68,68,0.1);
+  border-radius: 8px;
+}
+
+.jb-login-toggle {
+  background: none;
+  border: none;
+  color: #13c9ed;
+  font-size: 0.82rem;
+  cursor: pointer;
+  margin-top: 1rem;
+  padding: 0.25rem;
+  transition: opacity 0.15s;
+}
+.jb-login-toggle:hover { opacity: 0.7; }
+
+.jb-login-note {
+  font-size: 0.75rem;
+  color: var(--text-muted, #666);
+  margin: 1rem 0 0;
+  line-height: 1.5;
+  padding: 0.75rem;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+}
+
+/* ── Session info dans le header ─────────────────────────────────────────────*/
+
+.jb-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.jb-session-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.jb-session-email {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-muted, #888);
+  background: rgba(255,255,255,0.05);
+  padding: 0.3rem 0.7rem;
+  border-radius: 20px;
+}
+
+.jb-logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: none;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  color: var(--text-muted, #888);
+  font-size: 0.78rem;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.jb-logout-btn:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+/* ── Bandeau "scraping en arrière-plan" ──────────────────────────────────────*/
+
+.jb-scrape-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(19, 201, 237, 0.08);
+  border: 1px solid rgba(19, 201, 237, 0.2);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  color: #13c9ed;
+  margin-bottom: 1rem;
+}
+
+.jb-scrape-spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+  font-size: 1.1em;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Responsive ajustements ──────────────────────────────────────────────────*/
+
+@media (max-width: 480px) {
+  .jb-login-box {
+    padding: 2rem 1.25rem;
+  }
+  .jb-session-email {
+    display: none; /* Trop étroit sur mobile, le bouton logout suffit */
+  }
+}

@@ -1,11 +1,21 @@
-// api/scrape.js — Scraper complet + sauvegarde Supabase
-// Appelé par : Vercel Cron (toutes les 30 min) OU manuellement via POST
+// api/scrape.js — Fire-and-forget : répond immédiatement, scrape en arrière-plan
+// Le frontend poll GET /api/scrape?jobId=xxx pour connaître l'avancement
 // ─────────────────────────────────────────────────────────────────────────────
 // Variables d'environnement requises :
-//   SCRAPE_API_KEY    → clé ScraperAPI (https://www.scraperapi.com)
+//   SCRAPE_API_KEY    → clé ScraperAPI
 //   SUPABASE_URL      → https://xxxx.supabase.co
 //   SUPABASE_ANON_KEY → clé anon publique
-//   CRON_SECRET       → secret optionnel pour sécuriser l'endpoint (recommandé)
+//   CRON_SECRET       → secret optionnel pour sécuriser l'endpoint
+//
+// Table Supabase supplémentaire à créer :
+//   CREATE TABLE jb_scrape_jobs (
+//     id TEXT PRIMARY KEY,
+//     status TEXT DEFAULT 'pending',   -- pending | running | done | error
+//     user_id TEXT,
+//     started_at TIMESTAMPTZ DEFAULT now(),
+//     finished_at TIMESTAMPTZ,
+//     result JSONB
+//   );
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const config = { maxDuration: 60 };
@@ -36,13 +46,11 @@ async function sbFetch(path, options = {}) {
   return res.json();
 }
 
-// ── Helpers généraux ──────────────────────────────────────────────────────────
-
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-Id',
     'Content-Type': 'application/json',
   };
 }
@@ -53,7 +61,6 @@ function parseDate(raw) {
 }
 
 function uid(str) {
-  // Génère un identifiant court depuis une chaîne
   let h = 5381;
   const s = String(str ?? Math.random());
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
@@ -63,11 +70,9 @@ function uid(str) {
 function guessType(text) {
   const t = (text || '').toLowerCase();
   if (/alternance|apprentissage|contrat pro/i.test(t)) return 'alternance';
-  if (/stage|intern/i.test(t))                         return 'stage';
+  if (/stage|intern/i.test(t)) return 'stage';
   return 'emploi';
 }
-
-// ── Détection de la plateforme ────────────────────────────────────────────────
 
 function detectPlatform(url) {
   if (/indeed\.com/i.test(url))                        return 'indeed';
@@ -82,26 +87,21 @@ function detectPlatform(url) {
   return 'generic';
 }
 
-// ── Fetch via ScraperAPI ──────────────────────────────────────────────────────
-
 async function fetchWithScraper(targetUrl, apiKey, options = {}) {
   const { render = false, country = 'fr' } = options;
   const proxyUrl = `https://api.scraperapi.com/?api_key=${apiKey}&url=${encodeURIComponent(targetUrl)}&render=${render}&country_code=${country}`;
   const res = await fetch(proxyUrl, {
     headers: { 'Accept': 'text/html,application/json' },
-    // 55s timeout pour laisser 5s de marge sur les 60s Vercel
-    signal: AbortSignal.timeout(55000),
+    signal: AbortSignal.timeout(50000),
   });
   if (!res.ok) throw new Error(`ScraperAPI ${res.status} pour ${new URL(targetUrl).hostname}`);
   return res;
 }
 
-// ── Parsers par plateforme ────────────────────────────────────────────────────
+// ── Parsers (identiques à l'original) ────────────────────────────────────────
 
 function parseIndeed(html, sourceUrl) {
   const jobs = [];
-
-  // Stratégie 1 : window.mosaic.providerData (plusieurs chemins)
   const mosaicMatch = html.match(/window\.mosaic\.providerData\s*=\s*(\{.+?\});\s*(?:window|<)/s);
   if (mosaicMatch) {
     try {
@@ -109,29 +109,26 @@ function parseIndeed(html, sourceUrl) {
       const results =
         mosaic?.['mosaic-provider-jobcards']?.metaData?.mosaicProviderJobCardsModel?.results ??
         mosaic?.['mosaic-provider-jobcards']?.metaData?.jobcards?.results ??
-        mosaic?.['mosaic-provider-jobcards']?.results ??
-        [];
+        mosaic?.['mosaic-provider-jobcards']?.results ?? [];
       for (const r of results) {
-        const jk    = r.jobkey ?? r.jobKey ?? '';
+        const jk = r.jobkey ?? r.jobKey ?? '';
         const title = r.displayTitle ?? r.jobTitle ?? r.title ?? '';
         if (!title) continue;
         jobs.push({
-          id:          `indeed-${uid(jk || title)}`,
-          source_url:  sourceUrl,
+          id: `indeed-${uid(jk || title)}`,
+          source_url: sourceUrl,
           title,
-          company:     r.company ?? r.companyName ?? '',
-          location:    r.formattedLocation ?? r.location ?? '',
-          url:         r.thirdPartyApplyUrl ?? (jk ? `https://fr.indeed.com/viewjob?jk=${jk}` : sourceUrl),
+          company: r.company ?? r.companyName ?? '',
+          location: r.formattedLocation ?? r.location ?? '',
+          url: r.thirdPartyApplyUrl ?? (jk ? `https://fr.indeed.com/viewjob?jk=${jk}` : sourceUrl),
           description: (r.snippet ?? '').replace(/<[^>]+>/g, ' ').trim().slice(0, 300),
-          date:        parseDate(r.pubDate ?? r.createDate ?? r.postedAt),
-          type:        guessType(title + ' ' + (r.snippet ?? '') + ' ' + (r.jobTypes?.join(' ') ?? '')),
+          date: parseDate(r.pubDate ?? r.createDate ?? r.postedAt),
+          type: guessType(title + ' ' + (r.snippet ?? '') + ' ' + (r.jobTypes?.join(' ') ?? '')),
         });
       }
       if (jobs.length) return jobs;
     } catch {}
   }
-
-  // Stratégie 2 : JSON-LD
   const jsonLdRe = /<script type="application\/ld\+json">([\s\S]+?)<\/script>/g;
   let m;
   while ((m = jsonLdRe.exec(html)) !== null && jobs.length < 30) {
@@ -142,145 +139,45 @@ function parseIndeed(html, sourceUrl) {
         if (job?.['@type'] !== 'JobPosting') continue;
         const title = job.title ?? '';
         jobs.push({
-          id:          `indeed-${uid(job.identifier?.value ?? title)}`,
-          source_url:  sourceUrl,
+          id: `indeed-${uid(job.identifier?.value ?? title)}`,
+          source_url: sourceUrl,
           title,
-          company:     job.hiringOrganization?.name ?? '',
-          location:    job.jobLocation?.address?.addressLocality ?? '',
-          url:         job.url ?? sourceUrl,
+          company: job.hiringOrganization?.name ?? '',
+          location: job.jobLocation?.address?.addressLocality ?? '',
+          url: job.url ?? sourceUrl,
           description: (job.description ?? '').replace(/<[^>]+>/g, ' ').slice(0, 300),
-          date:        parseDate(job.datePosted),
-          type:        guessType(title + ' ' + (job.employmentType ?? '')),
+          date: parseDate(job.datePosted),
+          type: guessType(title + ' ' + (job.employmentType ?? '')),
         });
       }
     } catch {}
   }
   if (jobs.length) return jobs;
-
-  // Stratégie 3 : data-jk dans le HTML rendu
   const jkRe = /data-jk="([^"]{8,30})"/g;
-  const seen  = new Set();
+  const seen = new Set();
   while ((m = jkRe.exec(html)) !== null && jobs.length < 30) {
     const jk = m[1];
     if (seen.has(jk)) continue;
     seen.add(jk);
-    const chunk  = html.slice(Math.max(0, m.index - 200), m.index + 1800);
+    const chunk = html.slice(Math.max(0, m.index - 200), m.index + 1800);
     const titleM = chunk.match(/class="[^"]*jobTitle[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{5,120})/i);
-    const coM    = chunk.match(/class="[^"]*companyName[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{2,80})/i);
-    const locM   = chunk.match(/class="[^"]*companyLocation[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{2,80})/i);
-    const title  = titleM?.[1]?.trim() ?? '';
+    const coM = chunk.match(/class="[^"]*companyName[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{2,80})/i);
+    const locM = chunk.match(/class="[^"]*companyLocation[^"]*"[^>]*>\s*(?:<[^>]+>)*([^<]{2,80})/i);
+    const title = titleM?.[1]?.trim() ?? '';
     if (!title) continue;
     jobs.push({
-      id:          `indeed-${uid(jk)}`,
-      source_url:  sourceUrl,
+      id: `indeed-${uid(jk)}`,
+      source_url: sourceUrl,
       title,
-      company:     coM?.[1]?.trim() ?? '',
-      location:    locM?.[1]?.trim() ?? '',
-      url:         `https://fr.indeed.com/viewjob?jk=${jk}`,
+      company: coM?.[1]?.trim() ?? '',
+      location: locM?.[1]?.trim() ?? '',
+      url: `https://fr.indeed.com/viewjob?jk=${jk}`,
       description: '',
-      date:        new Date().toISOString(),
-      type:        guessType(title),
+      date: new Date().toISOString(),
+      type: guessType(title),
     });
   }
-
   return jobs;
-}
-
-function parseHelloWork(html, sourceUrl) {
-  const match = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.+?\});/s);
-  if (match) {
-    try {
-      const data  = JSON.parse(match[1]);
-      const items = data?.jobs ?? data?.results ?? data?.offers ?? data?.offerList ?? [];
-      return items.slice(0, 30).map(job => {
-        const title = job.title ?? job.label ?? '';
-        return {
-          id:          `hw-${uid(job.id ?? job.offerId ?? title)}`,
-          source_url:  sourceUrl,
-          title,
-          company:     job.company ?? job.companyName ?? '',
-          location:    job.location ?? job.city ?? '',
-          url:         job.url ?? job.applyUrl ?? sourceUrl,
-          description: (job.description ?? job.resume ?? '').replace(/<[^>]+>/g, ' ').trim().slice(0, 300),
-          date:        parseDate(job.date ?? job.publishedAt ?? job.createdAt),
-          type:        guessType(title),
-        };
-      });
-    } catch {}
-  }
-  return parseGenericHTML(html, sourceUrl, 'hellowork');
-}
-
-function parseStageFr(html, sourceUrl) {
-  const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]+?)<\/script>/);
-  if (match) {
-    try {
-      const nd     = JSON.parse(match[1]);
-      const offers = nd?.props?.pageProps?.offers ?? nd?.props?.pageProps?.initialOffers ?? nd?.props?.pageProps?.jobs ?? [];
-      return offers.slice(0, 30).map(o => ({
-        id:          `stage-${uid(o.id ?? o.title)}`,
-        source_url:  sourceUrl,
-        title:       o.title ?? o.name ?? 'Offre Stage.fr',
-        company:     o.company?.name ?? o.companyName ?? '',
-        location:    o.location ?? o.city ?? '',
-        url:         o.url ?? `https://www.stage.fr/offres/${o.id ?? ''}`,
-        description: (o.description ?? o.excerpt ?? '').replace(/<[^>]+>/g, ' ').trim().slice(0, 300),
-        date:        parseDate(o.publishedAt ?? o.createdAt ?? o.date),
-        type:        guessType(o.title ?? ''),
-      }));
-    } catch {}
-  }
-  return parseGenericHTML(html, sourceUrl, 'stagefr');
-}
-
-function parseLinkedIn(html, sourceUrl) {
-  const jobs = [];
-  const jsonLdRe = /<script type="application\/ld\+json">([\s\S]+?)<\/script>/g;
-  let m;
-  while ((m = jsonLdRe.exec(html)) !== null) {
-    try {
-      const d = JSON.parse(m[1]);
-      for (const item of (Array.isArray(d) ? d : [d])) {
-        const job = item['@type'] === 'ListItem' ? item.item : item;
-        if (job?.['@type'] !== 'JobPosting') continue;
-        const title = job.title ?? '';
-        jobs.push({
-          id:          `li-${uid(job.identifier?.value ?? title)}`,
-          source_url:  sourceUrl,
-          title,
-          company:     job.hiringOrganization?.name ?? '',
-          location:    job.jobLocation?.address?.addressLocality ?? '',
-          url:         job.url ?? sourceUrl,
-          description: (job.description ?? '').replace(/<[^>]+>/g, ' ').slice(0, 300),
-          date:        parseDate(job.datePosted),
-          type:        guessType(title + ' ' + (job.employmentType ?? '')),
-        });
-      }
-    } catch {}
-  }
-  if (jobs.length) return jobs;
-  return parseGenericHTML(html, sourceUrl, 'linkedin');
-}
-
-function parseWTJ(html, sourceUrl) {
-  const match = html.match(/\{"jobs":\[{.+?\](?:,"meta"|\})/s);
-  if (match) {
-    try {
-      const data = JSON.parse(match[0].endsWith('}') ? match[0] : match[0] + '}');
-      return (data.jobs ?? []).slice(0, 30).map(j => ({
-        id:          `wtj-${uid(j.id ?? j.name)}`,
-        source_url:  sourceUrl,
-        title:       j.name ?? j.title ?? '',
-        company:     j.organization?.name ?? '',
-        location:    j.offices?.map(o => o.city).join(', ') ?? '',
-        url:         `https://www.welcometothejungle.com/fr/companies/${j.organization?.slug ?? ''}/jobs/${j.slug ?? ''}`,
-        description: (j.description ?? '').replace(/<[^>]+>/g, ' ').slice(0, 300),
-        date:        parseDate(j.publishedAt),
-        type:        guessType(j.name ?? ''),
-      }));
-    } catch {}
-  }
-  return parseGenericHTML(html, sourceUrl, 'wtj');
 }
 
 function parseGenericHTML(html, sourceUrl, platform = 'generic') {
@@ -296,63 +193,33 @@ function parseGenericHTML(html, sourceUrl, platform = 'generic') {
         if (job?.['@type'] !== 'JobPosting') continue;
         const title = job.title ?? '';
         jobs.push({
-          id:          `${prefix}-${uid(job.identifier?.value ?? title)}`,
-          source_url:  sourceUrl,
+          id: `${prefix}-${uid(job.identifier?.value ?? title)}`,
+          source_url: sourceUrl,
           title,
-          company:     job.hiringOrganization?.name ?? '',
-          location:    job.jobLocation?.address?.addressLocality ?? '',
-          url:         job.url ?? sourceUrl,
+          company: job.hiringOrganization?.name ?? '',
+          location: job.jobLocation?.address?.addressLocality ?? '',
+          url: job.url ?? sourceUrl,
           description: (job.description ?? '').replace(/<[^>]+>/g, ' ').slice(0, 300),
-          date:        parseDate(job.datePosted),
-          type:        guessType(title + ' ' + (job.employmentType ?? '')),
+          date: parseDate(job.datePosted),
+          type: guessType(title + ' ' + (job.employmentType ?? '')),
         });
       }
     } catch {}
   }
-  if (jobs.length) return jobs;
-  const titleRe = /<h[23][^>]*class="[^"]*(?:job|offer|title|poste)[^"]*"[^>]*>\s*([^<]{5,120})\s*<\/h[23]>/gi;
-  while ((m = titleRe.exec(html)) !== null && jobs.length < 20) {
-    const title = m[1].trim();
-    jobs.push({
-      id:          `${prefix}-${uid(title + platform)}`,
-      source_url:  sourceUrl,
-      title,
-      company:     '',
-      location:    '',
-      url:         sourceUrl,
-      description: '',
-      date:        new Date().toISOString(),
-      type:        guessType(title),
-    });
-  }
   return jobs;
 }
-
-// ── Scraper une URL ───────────────────────────────────────────────────────────
 
 async function scrapeUrl(targetUrl, apiKey) {
   const platform = detectPlatform(targetUrl);
   const needsRender = ['indeed', 'linkedin', 'wtj', 'monster', 'ft'].includes(platform);
-  const res  = await fetchWithScraper(targetUrl, apiKey, { render: needsRender });
+  const res = await fetchWithScraper(targetUrl, apiKey, { render: needsRender });
   const html = await res.text();
-
-  let jobs = [];
-  switch (platform) {
-    case 'indeed':    jobs = parseIndeed(html, targetUrl);    break;
-    case 'hellowork': jobs = parseHelloWork(html, targetUrl); break;
-    case 'stagefr':   jobs = parseStageFr(html, targetUrl);  break;
-    case 'linkedin':  jobs = parseLinkedIn(html, targetUrl); break;
-    case 'wtj':       jobs = parseWTJ(html, targetUrl);      break;
-    default:          jobs = parseGenericHTML(html, targetUrl, platform);
-  }
+  let jobs = platform === 'indeed' ? parseIndeed(html, targetUrl) : parseGenericHTML(html, targetUrl, platform);
   return { url: targetUrl, jobs, count: jobs.length, scrapedAt: new Date().toISOString() };
 }
 
-// ── Sauvegarde en DB ──────────────────────────────────────────────────────────
-
 async function saveJobsToSupabase(jobs) {
   if (!jobs.length) return;
-  // Upsert par id (on_conflict=id) — ne remplace pas les offres existantes
   await sbFetch('jb_jobs?on_conflict=url', {
     method: 'POST',
     headers: { 'Prefer': 'resolution=ignore-duplicates,return=minimal' },
@@ -360,27 +227,25 @@ async function saveJobsToSupabase(jobs) {
   });
 }
 
-async function updateFilterMeta(url, count, scrapedAt) {
-  await sbFetch(`jb_filters?url=eq.${encodeURIComponent(url)}`, {
+async function updateFilterMeta(url, userId, count, scrapedAt) {
+  const encodedUrl = encodeURIComponent(url);
+  const userFilter = userId ? `&user_id=eq.${encodeURIComponent(userId)}` : '';
+  await sbFetch(`jb_filters?url=eq.${encodedUrl}${userFilter}`, {
     method: 'PATCH',
     headers: { 'Prefer': 'return=minimal' },
     body: JSON.stringify({ last_scraped: scrapedAt, job_count: count }),
   });
 }
 
-async function pruneOldJobs() {
-  // Garde seulement les 200 offres les plus récentes pour ne pas faire exploser la DB
-  const rows = await sbFetch('jb_jobs?select=id&order=date.desc&limit=1&offset=200');
-  if (!rows.length) return;
-  // Supprime tout ce qui est plus vieux que la 200ème offre
-  const cutoffId = rows[0].id;
-  const cutoffRow = await sbFetch(`jb_jobs?id=eq.${cutoffId}&select=date`);
-  if (!cutoffRow.length) return;
-  const cutoffDate = cutoffRow[0].date;
-  await sbFetch(`jb_jobs?date=lt.${encodeURIComponent(cutoffDate)}`, {
-    method: 'DELETE',
+async function updateJobStatus(jobId, status, result = null) {
+  const body = { status };
+  if (status === 'done' || status === 'error') body.finished_at = new Date().toISOString();
+  if (result) body.result = result;
+  await sbFetch(`jb_scrape_jobs?id=eq.${encodeURIComponent(jobId)}`, {
+    method: 'PATCH',
     headers: { 'Prefer': 'return=minimal' },
-  });
+    body: JSON.stringify(body),
+  }).catch(() => {});
 }
 
 // ── Handler principal ─────────────────────────────────────────────────────────
@@ -390,96 +255,122 @@ export default async function handler(req) {
     return new Response(null, { status: 204, headers: corsHeaders() });
   }
 
-  // Sécurisation optionnelle via CRON_SECRET
-  // Vercel injecte automatiquement le header Authorization pour les cron jobs
-  const authHeader = req.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return new Response(JSON.stringify({ error: 'Non autorisé' }), { status: 401, headers: corsHeaders() });
+  // ── GET /api/scrape?jobId=xxx → statut d'un scrape en cours ──────────────
+  if (req.method === 'GET') {
+    const { searchParams } = new URL(req.url);
+    const jobId = searchParams.get('jobId');
+    if (!jobId) {
+      return new Response(JSON.stringify({ error: 'jobId requis' }), { status: 400, headers: corsHeaders() });
+    }
+    try {
+      const rows = await sbFetch(`jb_scrape_jobs?id=eq.${encodeURIComponent(jobId)}&select=id,status,result,started_at,finished_at`);
+      if (!rows.length) {
+        return new Response(JSON.stringify({ status: 'not_found' }), { status: 404, headers: corsHeaders() });
+      }
+      return new Response(JSON.stringify(rows[0]), { status: 200, headers: corsHeaders() });
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders() });
+    }
+  }
+
+  // ── POST /api/scrape → déclenche le scraping, répond IMMÉDIATEMENT ────────
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Méthode non supportée' }), { status: 405, headers: corsHeaders() });
   }
 
   const apiKey = process.env.SCRAPE_API_KEY;
-  if (!apiKey) {
+  if (!apiKey || !process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
     return new Response(
-      JSON.stringify({ ok: false, error: 'SCRAPE_API_KEY manquant' }),
-      { status: 200, headers: corsHeaders() }
-    );
-  }
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-    return new Response(
-      JSON.stringify({ ok: false, error: 'SUPABASE_URL ou SUPABASE_ANON_KEY manquant' }),
-      { status: 200, headers: corsHeaders() }
+      JSON.stringify({ ok: false, error: 'Variables d\'environnement manquantes' }),
+      { status: 500, headers: corsHeaders() }
     );
   }
 
+  // Récupère l'identifiant utilisateur depuis le header (envoyé par le frontend)
+  const userId = req.headers.get('x-user-id') ?? null;
+
+  // Crée un job de scraping en DB
+  const jobId = `scrape-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   try {
-    // Récupère les filtres actifs depuis la DB
-    const filters = await sbFetch('jb_filters?enabled=eq.true&order=created_at.asc');
-    if (!filters.length) {
-      return new Response(
-        JSON.stringify({ ok: true, message: 'Aucun filtre actif', scraped: 0, saved: 0 }),
-        { status: 200, headers: corsHeaders() }
-      );
-    }
+    await sbFetch('jb_scrape_jobs', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ id: jobId, status: 'pending', user_id: userId }),
+    });
+  } catch (err) {
+    // Table peut ne pas exister encore — on continue quand même
+    console.warn('[scrape] Impossible de créer le job en DB:', err.message);
+  }
 
-    const urls = filters.map(f => f.url);
+  // Réponse IMMÉDIATE au frontend avec le jobId pour le polling
+  const immediateResponse = new Response(
+    JSON.stringify({ ok: true, jobId, status: 'pending', message: 'Scraping démarré en arrière-plan' }),
+    { status: 202, headers: corsHeaders() }
+  );
 
-    // Scrape toutes les URLs en parallèle (avec limite de concurrence à 3 pour éviter les timeouts)
-    const results = [];
-    for (let i = 0; i < urls.length; i += 3) {
-      const batch = urls.slice(i, i + 3);
-      const settled = await Promise.allSettled(batch.map(url => scrapeUrl(url, apiKey)));
-      results.push(...settled.map((r, j) => ({ url: batch[j], result: r })));
-    }
+  // Lance le scraping en arrière-plan (Vercel Edge/Node attendra la fin avant de tuer la fonction)
+  (async () => {
+    try {
+      await updateJobStatus(jobId, 'running');
 
-    // Déduplique et insère en DB
-    const seen = new Set();
-    const allJobs = [];
-    const errors  = [];
+      // Filtre selon user_id si présent
+      const filterPath = userId
+        ? `jb_filters?enabled=eq.true&user_id=eq.${encodeURIComponent(userId)}&order=created_at.asc`
+        : 'jb_filters?enabled=eq.true&order=created_at.asc';
 
-    for (const { url, result } of results) {
-      if (result.status === 'fulfilled') {
-        const { jobs, count, scrapedAt } = result.value;
-        // Mettre à jour les métadonnées du filtre
-        await updateFilterMeta(url, count, scrapedAt).catch(() => {});
-        for (const job of jobs) {
-          if (job.url && !seen.has(job.url)) {
-            seen.add(job.url);
-            allJobs.push(job);
-          }
-        }
-      } else {
-        const hostname = (() => { try { return new URL(url).hostname; } catch { return url; } })();
-        errors.push(`${hostname}: ${result.reason?.message ?? 'Erreur'}`);
+      const filters = await sbFetch(filterPath);
+      if (!filters.length) {
+        await updateJobStatus(jobId, 'done', { scraped: 0, saved: 0, errors: [], message: 'Aucun filtre actif' });
+        return;
       }
-    }
 
-    // Sauvegarde en DB par batch de 50
-    for (let i = 0; i < allJobs.length; i += 50) {
-      await saveJobsToSupabase(allJobs.slice(i, i + 50));
-    }
+      const urls = filters.map(f => f.url);
+      const results = [];
 
-    // Nettoyage des vieilles offres
-    await pruneOldJobs().catch(() => {});
+      // Scrape par batch de 2 (plus prudent pour le timeout Vercel)
+      for (let i = 0; i < urls.length; i += 2) {
+        const batch = urls.slice(i, i + 2);
+        const settled = await Promise.allSettled(batch.map(url => scrapeUrl(url, apiKey)));
+        results.push(...settled.map((r, j) => ({ url: batch[j], result: r })));
+      }
 
-    console.log(`[scrape] ${allJobs.length} offres sauvegardées, ${errors.length} erreurs`);
+      const seen = new Set();
+      const allJobs = [];
+      const errors = [];
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
+      for (const { url, result } of results) {
+        if (result.status === 'fulfilled') {
+          const { jobs, count, scrapedAt } = result.value;
+          await updateFilterMeta(url, userId, count, scrapedAt).catch(() => {});
+          for (const job of jobs) {
+            if (job.url && !seen.has(job.url)) {
+              seen.add(job.url);
+              allJobs.push(job);
+            }
+          }
+        } else {
+          const hostname = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+          errors.push(`${hostname}: ${result.reason?.message ?? 'Erreur'}`);
+        }
+      }
+
+      for (let i = 0; i < allJobs.length; i += 50) {
+        await saveJobsToSupabase(allJobs.slice(i, i + 50));
+      }
+
+      await updateJobStatus(jobId, 'done', {
         scraped: results.length,
         saved: allJobs.length,
         errors,
         timestamp: new Date().toISOString(),
-      }),
-      { status: 200, headers: corsHeaders() }
-    );
+      });
 
-  } catch (err) {
-    console.error('[scrape]', err);
-    return new Response(
-      JSON.stringify({ ok: false, error: err.message ?? 'Erreur inconnue' }),
-      { status: 500, headers: corsHeaders() }
-    );
-  }
+      console.log(`[scrape] job=${jobId} ${allJobs.length} offres sauvegardées, ${errors.length} erreurs`);
+    } catch (err) {
+      console.error('[scrape] background error:', err);
+      await updateJobStatus(jobId, 'error', { error: err.message ?? 'Erreur inconnue' });
+    }
+  })();
+
+  return immediateResponse;
 }

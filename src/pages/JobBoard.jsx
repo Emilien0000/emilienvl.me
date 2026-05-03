@@ -1,6 +1,5 @@
 // src/pages/JobBoard.jsx
-// Nouveau système : filtres = liens URL directs
-// Le scraper visite chaque lien et extrait les offres → refresh auto toutes les 30 min
+// v2 — Sessions utilisateur (email/mdp) + scraping non-bloquant (polling)
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,40 +8,46 @@ import './JobBoard.css';
 
 // ── Icônes SVG ────────────────────────────────────────────────────────────────
 
-const IconLink     = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
-const IconExternal = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>;
-const IconRefresh  = ({ spinning }) => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: spinning ? 'spin 0.8s linear infinite' : 'none' }}><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>;
-const IconBack     = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>;
-const IconBriefcase= () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>;
-const IconCalendar = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
-const IconMap      = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>;
-const IconBookmark = ({ filled }) => <svg width="14" height="14" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>;
-const IconBan      = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>;
-const IconPlus     = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
-const IconX        = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
-const IconTrash    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>;
-const IconClock    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
-const IconCheck    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
+const IconLink      = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
+const IconExternal  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>;
+const IconRefresh   = ({ spinning }) => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: spinning ? 'spin 0.8s linear infinite' : 'none' }}><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>;
+const IconBack      = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>;
+const IconBriefcase = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>;
+const IconCalendar  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+const IconMap       = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>;
+const IconBookmark  = ({ filled }) => <svg width="14" height="14" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>;
+const IconBan       = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>;
+const IconPlus      = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+const IconX         = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const IconTrash     = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>;
+const IconClock     = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+const IconCheck     = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
+const IconUser      = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+const IconLogout    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 
-// ── Détection de la source depuis l'URL ───────────────────────────────────────
+// ── Source detection ──────────────────────────────────────────────────────────
 
 const SOURCE_PATTERNS = [
-  { id: 'indeed',    label: 'Indeed',              color: '#2557a7', emoji: '💼', pattern: /indeed\.com/i },
-  { id: 'hellowork', label: 'HelloWork',           color: '#7c3aed', emoji: '👋', pattern: /hellowork\.com/i },
-  { id: 'stagefr',   label: 'Stage.fr',            color: '#f59e0b', emoji: '📋', pattern: /stage\.fr/i },
-  { id: 'lba',       label: 'La Bonne Alternance', color: '#1a73e8', emoji: '🎓', pattern: /labonnealternance\.apprentissage/i },
-  { id: 'adzuna',    label: 'Adzuna',              color: '#e64c1f', emoji: '🔍', pattern: /adzuna\.fr/i },
-  { id: 'ft',        label: 'France Travail',      color: '#00a651', emoji: '🏛️', pattern: /francetravail\.fr|pole-emploi\.fr/i },
-  { id: 'linkedin',  label: 'LinkedIn',            color: '#0a66c2', emoji: '🔗', pattern: /linkedin\.com/i },
+  { id: 'indeed',    label: 'Indeed',               color: '#2557a7', emoji: '💼', pattern: /indeed\.com/i },
+  { id: 'hellowork', label: 'HelloWork',            color: '#7c3aed', emoji: '👋', pattern: /hellowork\.com/i },
+  { id: 'stagefr',   label: 'Stage.fr',             color: '#f59e0b', emoji: '📋', pattern: /stage\.fr/i },
+  { id: 'lba',       label: 'La Bonne Alternance',  color: '#1a73e8', emoji: '🎓', pattern: /labonnealternance\.apprentissage/i },
+  { id: 'adzuna',    label: 'Adzuna',               color: '#e64c1f', emoji: '🔍', pattern: /adzuna\.fr/i },
+  { id: 'ft',        label: 'France Travail',       color: '#00a651', emoji: '🏛️', pattern: /francetravail\.fr|pole-emploi\.fr/i },
+  { id: 'linkedin',  label: 'LinkedIn',             color: '#0a66c2', emoji: '🔗', pattern: /linkedin\.com/i },
   { id: 'welcomejb', label: 'Welcome to the Jungle',color: '#ff4655', emoji: '🌴', pattern: /welcometothejungle\.com/i },
-  { id: 'monster',   label: 'Monster',             color: '#6600cc', emoji: '👾', pattern: /monster\.fr/i },
+  { id: 'monster',   label: 'Monster',              color: '#6600cc', emoji: '👾', pattern: /monster\.fr/i },
 ];
 
 function detectSource(url) {
   for (const src of SOURCE_PATTERNS) {
     if (src.pattern.test(url)) return src;
   }
-  return { id: 'other', label: new URL(url).hostname.replace('www.', ''), color: '#555', emoji: '🌐' };
+  try {
+    return { id: 'other', label: new URL(url).hostname.replace('www.', ''), color: '#555', emoji: '🌐' };
+  } catch {
+    return { id: 'other', label: 'Source', color: '#555', emoji: '🌐' };
+  }
 }
 
 const TYPE_LABELS = {
@@ -50,6 +55,140 @@ const TYPE_LABELS = {
   stage:      { label: 'Stage',      color: '#7c3aed' },
   emploi:     { label: 'Emploi',     color: '#1a73e8' },
 };
+
+// ── Session utilisateur ────────────────────────────────────────────────────────
+// On identifie l'utilisateur par son email (hashé côté serveur comme user_id).
+// Le "mot de passe" est juste une protection locale — pas de vraie auth serveur ici.
+// Le userId envoyé au serveur = btoa(email) pour être simple et déterministe.
+
+const SESSION_KEY = 'jb_session';
+
+function encodeUserId(email) {
+  // Hash simple déterministe à partir de l'email (pas de crypto nécessaire ici)
+  return btoa(email.toLowerCase().trim()).replace(/[+/=]/g, c => ({ '+': '-', '/': '_', '=': '' }[c]));
+}
+
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s?.userId || !s?.email) return null;
+    return s;
+  } catch { return null; }
+}
+
+function saveSession(email, password) {
+  const userId = encodeUserId(email);
+  const session = { email, userId, passwordHash: btoa(password) };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  return session;
+}
+
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
+// ── Écran de connexion ─────────────────────────────────────────────────────────
+
+function LoginScreen({ onLogin }) {
+  const [email,    setEmail]    = useState('');
+  const [password, setPassword] = useState('');
+  const [isNew,    setIsNew]    = useState(false);
+  const [error,    setError]    = useState('');
+
+  const handle = (e) => {
+    e.preventDefault();
+    if (!email.trim() || !password.trim()) {
+      setError('Email et mot de passe requis');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Email invalide');
+      return;
+    }
+    if (password.length < 4) {
+      setError('Mot de passe trop court (min. 4 caractères)');
+      return;
+    }
+
+    // Pour les utilisateurs existants : vérifier le mdp stocké localement
+    if (!isNew) {
+      const existing = loadSession();
+      if (existing && existing.email === email.toLowerCase().trim()) {
+        if (existing.passwordHash !== btoa(password)) {
+          setError('Mot de passe incorrect');
+          return;
+        }
+        onLogin(existing);
+        return;
+      }
+    }
+
+    // Nouvelle session ou premier login
+    const session = saveSession(email, password);
+    onLogin(session);
+  };
+
+  return (
+    <div className="jb-login-overlay">
+      <motion.div
+        className="jb-login-box"
+        initial={{ opacity: 0, y: 30, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.35 }}
+      >
+        <div className="jb-login-icon">🎯</div>
+        <h2 className="jb-login-title">Job Tracker</h2>
+        <p className="jb-login-sub">
+          Connecte-toi pour retrouver tes filtres depuis n'importe quel appareil.
+        </p>
+
+        <form onSubmit={handle} className="jb-login-form">
+          <div className="jb-login-field">
+            <label>Email</label>
+            <input
+              type="email"
+              className="jb-input"
+              value={email}
+              onChange={e => { setEmail(e.target.value); setError(''); }}
+              placeholder="toi@exemple.com"
+              autoComplete="email"
+            />
+          </div>
+          <div className="jb-login-field">
+            <label>Mot de passe</label>
+            <input
+              type="password"
+              className="jb-input"
+              value={password}
+              onChange={e => { setPassword(e.target.value); setError(''); }}
+              placeholder="••••••••"
+              autoComplete="current-password"
+            />
+          </div>
+
+          {error && <p className="jb-login-error">{error}</p>}
+
+          <button type="submit" className="jb-search-btn" style={{ width: '100%', marginTop: '0.5rem' }}>
+            {isNew ? 'Créer ma session' : 'Se connecter'}
+          </button>
+        </form>
+
+        <button
+          className="jb-login-toggle"
+          onClick={() => { setIsNew(v => !v); setError(''); }}
+        >
+          {isNew ? '← Déjà un compte ? Se connecter' : 'Nouveau ? Créer une session →'}
+        </button>
+
+        <p className="jb-login-note">
+          💡 Ton email sert d'identifiant pour retrouver tes filtres. Aucune donnée personnelle n'est transmise à des tiers.
+        </p>
+      </motion.div>
+    </div>
+  );
+}
 
 // ── LocalStorage helpers ──────────────────────────────────────────────────────
 
@@ -67,10 +206,10 @@ const LS = {
 
 function timeAgo(iso) {
   const diff = Date.now() - new Date(iso).getTime();
-  const mins  = Math.floor(diff / 60000);
-  const days  = Math.floor(diff / 86400000);
-  if (mins < 2)   return 'À l\'instant';
-  if (mins < 60)  return `Il y a ${mins} min`;
+  const mins = Math.floor(diff / 60000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 2)  return 'À l\'instant';
+  if (mins < 60) return `Il y a ${mins} min`;
   if (days === 0) return "Aujourd'hui";
   if (days === 1) return 'Hier';
   if (days < 7)  return `Il y a ${days} j`;
@@ -90,7 +229,7 @@ function formatNextRefresh(ms) {
   return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 }
 
-// ── Composant : carte d'une offre ─────────────────────────────────────────────
+// ── Composant JobCard ─────────────────────────────────────────────────────────
 
 function JobCard({ job, index, saved, onSave }) {
   const typeInfo = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
@@ -164,7 +303,7 @@ function Skeleton() {
   );
 }
 
-// ── Composant : ligne d'un filtre URL ─────────────────────────────────────────
+// ── FilterRow ─────────────────────────────────────────────────────────────────
 
 function FilterRow({ filter, onToggle, onDelete, isNew }) {
   let source = null;
@@ -192,13 +331,7 @@ function FilterRow({ filter, onToggle, onDelete, isNew }) {
               {source.emoji} {source.label}
             </span>
           )}
-          <a
-            href={filter.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="jb-filter-url"
-            title={filter.url}
-          >
+          <a href={filter.url} target="_blank" rel="noopener noreferrer" className="jb-filter-url" title={filter.url}>
             {filter.label || filter.url}
             <IconExternal />
           </a>
@@ -216,9 +349,13 @@ function FilterRow({ filter, onToggle, onDelete, isNew }) {
   );
 }
 
-// ── Panel : gestion des liens-filtres ─────────────────────────────────────────
+// ── IconClock (manquait dans la liste en haut) ────────────────────────────────
 
-function FiltersPanel({ filters, onChange, onScrapeNow }) {
+const IconClockInline = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+
+// ── FiltersPanel ──────────────────────────────────────────────────────────────
+
+function FiltersPanel({ filters, onChange, onScrapeNow, scrapeStatus }) {
   const [urlInput,   setUrlInput]   = useState('');
   const [labelInput, setLabelInput] = useState('');
   const [urlError,   setUrlError]   = useState('');
@@ -228,7 +365,6 @@ function FiltersPanel({ filters, onChange, onScrapeNow }) {
   const addFilter = () => {
     const url = urlInput.trim();
     if (!url) return;
-
     try { new URL(url); } catch {
       setUrlError('URL invalide — commence par https://');
       return;
@@ -237,7 +373,6 @@ function FiltersPanel({ filters, onChange, onScrapeNow }) {
       setUrlError('Ce lien est déjà dans la liste');
       return;
     }
-
     const id = `f-${Date.now()}`;
     const label = labelInput.trim() || null;
     onChange([...filters, { id, url, label, enabled: true, lastScraped: null, jobCount: null }]);
@@ -248,26 +383,23 @@ function FiltersPanel({ filters, onChange, onScrapeNow }) {
     setTimeout(() => setNewId(null), 2000);
   };
 
-  const toggleFilter = (id) => {
-    onChange(filters.map(f => f.id === id ? { ...f, enabled: !f.enabled } : f));
-  };
-
-  const deleteFilter = (id) => {
-    onChange(filters.filter(f => f.id !== id));
-  };
-
+  const toggleFilter = (id) => onChange(filters.map(f => f.id === id ? { ...f, enabled: !f.enabled } : f));
+  const deleteFilter = (id) => onChange(filters.filter(f => f.id !== id));
   const enabledCount = filters.filter(f => f.enabled).length;
+
+  const scrapeLabel =
+    scrapeStatus === 'running' || scrapeStatus === 'pending' ? '⟳ Scraping…'
+    : scrapeStatus === 'done'  ? '✓ Terminé'
+    : 'Scraper maintenant';
 
   return (
     <div className="jb-panel">
       <p className="jb-panel-hint">
-        Colle directement l'URL d'une page de résultats (Indeed, HelloWork, LBA…). Le scraper visitera chaque lien actif et en extraira les offres automatiquement toutes les 30 minutes.
+        Colle directement l'URL d'une page de résultats (Indeed, HelloWork, LBA…). Le scraper visitera chaque lien actif et en extraira les offres automatiquement.
       </p>
 
-      {/* Formulaire d'ajout */}
       <div className="jb-panel-section">
         <h4 className="jb-panel-label"><IconLink /> Ajouter un lien de recherche</h4>
-
         <div className="jb-url-form">
           <div className={`jb-url-input-wrap ${urlError ? 'error' : ''}`}>
             <span className="jb-url-prefix">🔗</span>
@@ -286,7 +418,6 @@ function FiltersPanel({ filters, onChange, onScrapeNow }) {
             )}
           </div>
           {urlError && <p className="jb-url-error">{urlError}</p>}
-
           <input
             className="jb-input jb-label-input"
             value={labelInput}
@@ -294,14 +425,12 @@ function FiltersPanel({ filters, onChange, onScrapeNow }) {
             onKeyDown={e => e.key === 'Enter' && addFilter()}
             placeholder="Nom optionnel (ex: Dev React Paris)"
           />
-
           <button className="jb-search-btn" onClick={addFilter} disabled={!urlInput.trim()}>
             <IconPlus /> Ajouter le lien
           </button>
         </div>
       </div>
 
-      {/* Liste des filtres */}
       {filters.length > 0 && (
         <div className="jb-panel-section">
           <div className="jb-panel-label-row">
@@ -312,9 +441,10 @@ function FiltersPanel({ filters, onChange, onScrapeNow }) {
               className="jb-ghost-btn"
               style={{ marginTop: 0, fontSize: '0.78rem' }}
               onClick={onScrapeNow}
-              title="Scraper maintenant tous les liens actifs"
+              disabled={scrapeStatus === 'running' || scrapeStatus === 'pending' || enabledCount === 0}
             >
-              <IconRefresh spinning={false} /> Scraper maintenant
+              <IconRefresh spinning={scrapeStatus === 'running' || scrapeStatus === 'pending'} />
+              {scrapeLabel}
             </button>
           </div>
 
@@ -351,11 +481,10 @@ function FiltersPanel({ filters, onChange, onScrapeNow }) {
   );
 }
 
-// ── Panel Banwords ────────────────────────────────────────────────────────────
+// ── BanwordsPanel ─────────────────────────────────────────────────────────────
 
 function BanwordsPanel({ banwords, onChange }) {
   const [val, setVal] = useState('');
-
   const add = () => {
     const trimmed = val.trim();
     if (trimmed && !banwords.includes(trimmed)) onChange([...banwords, trimmed]);
@@ -399,7 +528,7 @@ function BanwordsPanel({ banwords, onChange }) {
   );
 }
 
-// ── Panel Sauvegardes ─────────────────────────────────────────────────────────
+// ── SavesPanel ────────────────────────────────────────────────────────────────
 
 function SavesPanel({ saves, onRemove }) {
   if (!saves.length) return (
@@ -414,7 +543,7 @@ function SavesPanel({ saves, onRemove }) {
     <div className="jb-panel jb-saves-panel">
       <p className="jb-panel-hint">{saves.length} offre{saves.length > 1 ? 's' : ''} sauvegardée{saves.length > 1 ? 's' : ''}</p>
       <div className="jb-grid">
-        {saves.map((job, i) => {
+        {saves.map((job) => {
           let source = { color: '#555', emoji: '🌐', label: 'Source' };
           try { source = detectSource(job.sourceUrl || job.url || ''); } catch {}
           const typeInfo = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
@@ -452,34 +581,31 @@ function SavesPanel({ saves, onRemove }) {
   );
 }
 
-// ── Composant : barre de statut du refresh auto ───────────────────────────────
+// ── RefreshBar ────────────────────────────────────────────────────────────────
 
-function RefreshBar({ nextRefreshIn, lastRefresh, loading }) {
-  const INTERVAL = 30 * 60 * 1000; // 30 min
+function RefreshBar({ nextRefreshIn, lastRefresh, loading, scrapeStatus }) {
+  const INTERVAL = 30 * 60 * 1000;
   const pct = nextRefreshIn != null ? Math.max(0, Math.min(100, (nextRefreshIn / INTERVAL) * 100)) : 100;
+
+  const label =
+    scrapeStatus === 'running' || scrapeStatus === 'pending' ? '⟳ Scraping en arrière-plan…'
+    : scrapeStatus === 'done'  ? '✓ Scraping terminé — offres mises à jour'
+    : loading ? '⟳ Chargement…'
+    : nextRefreshIn != null ? `⟳ Prochain refresh dans ${formatNextRefresh(nextRefreshIn)}`
+    : lastRefresh ? `Dernière mise à jour ${timeAgo(lastRefresh)}`
+    : 'Prêt';
 
   return (
     <div className="jb-refresh-bar-wrap">
       <div className="jb-refresh-bar-track">
-        <div
-          className="jb-refresh-bar-fill"
-          style={{ width: `${100 - pct}%`, transition: 'width 1s linear' }}
-        />
+        <div className="jb-refresh-bar-fill" style={{ width: `${100 - pct}%`, transition: 'width 1s linear' }} />
       </div>
-      <span className="jb-refresh-bar-label">
-        {loading
-          ? '⟳ Scraping en cours…'
-          : nextRefreshIn != null
-            ? `⟳ Prochain refresh dans ${formatNextRefresh(nextRefreshIn)}`
-            : lastRefresh
-              ? `Dernière mise à jour ${timeAgo(lastRefresh)}`
-              : 'Prêt'}
-      </span>
+      <span className="jb-refresh-bar-label">{label}</span>
     </div>
   );
 }
 
-// ── Page principale ───────────────────────────────────────────────────────────
+// ── Constantes ────────────────────────────────────────────────────────────────
 
 const TABS = [
   { id: 'results',  label: 'Résultats',   icon: '🔍' },
@@ -488,50 +614,77 @@ const TABS = [
   { id: 'saves',    label: 'Sauvegardes', icon: '🔖' },
 ];
 
-const REFRESH_INTERVAL = 30 * 60 * 1000; // 30 min
+const REFRESH_INTERVAL = 30 * 60 * 1000;
+const POLL_INTERVAL    = 3000; // Poll le statut du scrape toutes les 3s
+
+// ── Helper : appels API avec header userId ────────────────────────────────────
+
+function apiFetch(url, options = {}, userId = null) {
+  const headers = { 'Content-Type': 'application/json', ...(options.headers ?? {}) };
+  if (userId) headers['X-User-Id'] = userId;
+  return fetch(url, { ...options, headers });
+}
+
+// ── Page principale ───────────────────────────────────────────────────────────
 
 export default function JobBoard() {
   const navigate = useNavigate();
 
-  const [activeTab,     setActiveTab]     = useState('results');
-  const [typeFilter,    setTypeFilter]    = useState('all');
-  const [jobs,          setJobs]          = useState([]);
-  const [loading,       setLoading]       = useState(false);
-  const [error,         setError]         = useState(null);
-  const [fetched,       setFetched]       = useState(false);
-  const [warnings,      setWarnings]      = useState([]);
-  const [lastRefresh,   setLastRefresh]   = useState(null);
-  const [nextRefreshIn, setNextRefreshIn] = useState(null);
+  // ── Session ──────────────────────────────────────────────────────────────
+  const [session, setSession] = useState(() => loadSession());
+
+  const handleLogin = (s) => setSession(s);
+  const handleLogout = () => {
+    clearSession();
+    setSession(null);
+    setUrlFilters([]);
+    setJobs([]);
+    setFetched(false);
+  };
+
+  const userId = session?.userId ?? null;
+
+  // ── State principal ───────────────────────────────────────────────────────
+  const [activeTab,      setActiveTab]      = useState('results');
+  const [typeFilter,     setTypeFilter]     = useState('all');
+  const [jobs,           setJobs]           = useState([]);
+  const [loading,        setLoading]        = useState(false);
+  const [error,          setError]          = useState(null);
+  const [fetched,        setFetched]        = useState(false);
+  const [warnings,       setWarnings]       = useState([]);
+  const [lastRefresh,    setLastRefresh]    = useState(null);
+  const [nextRefreshIn,  setNextRefreshIn]  = useState(null);
+
+  // Scrape async
+  const [scrapeJobId,    setScrapeJobId]    = useState(null);
+  const [scrapeStatus,   setScrapeStatus]   = useState(null); // pending | running | done | error
 
   // Persistent
-  const [urlFilters, setUrlFilters] = useState([]);
-  const [filtersLoaded, setFiltersLoaded] = useState(false);
-  const [banwords,   setBanwords]   = useState(() => LS.get('jb_banwords', []));
-  const [saves,      setSaves]      = useState(() => LS.get('jb_saves', []));
+  const [urlFilters,     setUrlFilters]     = useState([]);
+  const [filtersLoaded,  setFiltersLoaded]  = useState(false);
+  const [banwords,       setBanwords]       = useState(() => LS.get('jb_banwords', []));
+  const [saves,          setSaves]          = useState(() => LS.get('jb_saves', []));
 
-  const abortRef    = useRef(null);
-  const timerRef    = useRef(null);
-  const countdownRef= useRef(null);
-
-  // Persist
-  // urlFilters sont persistés en DB via /api/filters
+  const abortRef     = useRef(null);
+  const timerRef     = useRef(null);
+  const countdownRef = useRef(null);
+  const pollRef      = useRef(null);
   const filtersLoadedRef = useRef(false);
+
+  // ── Persist filtres en DB ──────────────────────────────────────────────────
   useEffect(() => {
-    // Ne pas écraser la DB lors du chargement initial
     if (!filtersLoadedRef.current) { filtersLoadedRef.current = filtersLoaded; return; }
-    if (!filtersLoaded) return;
-    fetch('/api/filters', {
+    if (!filtersLoaded || !session) return;
+    apiFetch('/api/filters', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ filters: urlFilters }),
-    }).catch(() => {});
-  }, [urlFilters, filtersLoaded]);
-  useEffect(() => { LS.set('jb_banwords',    banwords);   }, [banwords]);
-  useEffect(() => { LS.set('jb_saves',       saves);     }, [saves]);
+    }, userId).catch(() => {});
+  }, [urlFilters, filtersLoaded, session]);
 
-  // ── Fetch principal ───────────────────────────────────────────────────────
+  useEffect(() => { LS.set('jb_banwords', banwords); }, [banwords]);
+  useEffect(() => { LS.set('jb_saves',    saves);    }, [saves]);
 
-  // ── Charge les offres depuis Supabase (instantané) ───────────────────────
+  // ── Fetch offres depuis Supabase ───────────────────────────────────────────
   const fetchJobs = useCallback(async () => {
     if (abortRef.current) abortRef.current.abort();
     abortRef.current = new AbortController();
@@ -543,7 +696,7 @@ export default function JobBoard() {
     if (activeTab !== 'results') setActiveTab('results');
 
     try {
-      const res = await fetch('/api/jobs?limit=30', { signal: abortRef.current.signal });
+      const res = await apiFetch('/api/jobs?limit=30', { signal: abortRef.current.signal }, userId);
       if (!res.ok) throw new Error(`Erreur serveur : ${res.status}`);
       const data = await res.json();
 
@@ -553,7 +706,6 @@ export default function JobBoard() {
       setLastRefresh(Date.now());
       setNextRefreshIn(REFRESH_INTERVAL);
 
-      // Mettre à jour les métadonnées des filtres (lastScraped, jobCount)
       if (data.sourceMeta) {
         setUrlFilters(prev => prev.map(f => {
           const meta = data.sourceMeta[f.url];
@@ -565,31 +717,65 @@ export default function JobBoard() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab]);
+  }, [activeTab, userId]);
 
-  // ── Déclenche le scraping en arrière-plan (appel non-bloquant) ────────────
+  // ── Polling du statut du scrape ────────────────────────────────────────────
+  const startPolling = useCallback((jobId) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/scrape?jobId=${encodeURIComponent(jobId)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setScrapeStatus(data.status);
+
+        if (data.status === 'done') {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          // Recharge les offres maintenant que le scrape est fini
+          await fetchJobs();
+          setScrapeStatus('done');
+          // Reset après 5s
+          setTimeout(() => setScrapeStatus(null), 5000);
+        } else if (data.status === 'error') {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          setError(`Scraping échoué : ${data.result?.error ?? 'Erreur inconnue'}`);
+          setScrapeStatus(null);
+        }
+      } catch {}
+    }, POLL_INTERVAL);
+  }, [fetchJobs]);
+
+  // ── Déclenche le scraping (non-bloquant) ──────────────────────────────────
   const triggerScrape = useCallback(async () => {
-    setLoading(true);
+    setScrapeStatus('pending');
     setError(null);
     if (activeTab !== 'results') setActiveTab('results');
+
     try {
-      // Lance le scrape (peut prendre jusqu'à 60s côté serveur)
-      const res = await fetch('/api/scrape', { method: 'POST' });
+      const res = await apiFetch('/api/scrape', { method: 'POST' }, userId);
       if (!res.ok) throw new Error(`Erreur scraping : ${res.status}`);
-      // Une fois le scrape terminé, recharge les offres depuis la DB
-      await fetchJobs();
+      const data = await res.json();
+
+      if (data.jobId) {
+        setScrapeJobId(data.jobId);
+        setScrapeStatus('running');
+        startPolling(data.jobId);
+      } else {
+        // Fallback si pas de jobId (ancienne version du backend)
+        await fetchJobs();
+        setScrapeStatus(null);
+      }
     } catch (err) {
-      if (err.name !== 'AbortError') setError(err.message || 'Erreur inconnue');
-      setLoading(false);
+      setError(err.message || 'Erreur inconnue');
+      setScrapeStatus(null);
     }
-  }, [fetchJobs, activeTab]);
+  }, [fetchJobs, activeTab, userId, startPolling]);
 
   // ── Countdown + auto-refresh ───────────────────────────────────────────────
-
   useEffect(() => {
     if (!lastRefresh) return;
-
-    // Countdown chaque seconde
     countdownRef.current = setInterval(() => {
       setNextRefreshIn(prev => {
         if (prev == null) return null;
@@ -597,42 +783,39 @@ export default function JobBoard() {
         return next <= 0 ? null : next;
       });
     }, 1000);
-
-    // Refresh auto
-    timerRef.current = setTimeout(() => {
-      fetchJobs();
-    }, REFRESH_INTERVAL);
-
+    timerRef.current = setTimeout(() => { fetchJobs(); }, REFRESH_INTERVAL);
     return () => {
       clearInterval(countdownRef.current);
       clearTimeout(timerRef.current);
     };
   }, [lastRefresh]);
 
-  // ── Chargement initial : filtres depuis DB puis offres ───────────────────
+  // ── Cleanup polling au démontage ──────────────────────────────────────────
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
+  // ── Chargement initial (quand session disponible) ─────────────────────────
   useEffect(() => {
+    if (!session) return;
     async function init() {
+      filtersLoadedRef.current = false;
+      setFiltersLoaded(false);
       try {
-        const res = await fetch('/api/filters');
+        const res = await apiFetch('/api/filters', {}, userId);
         if (res.ok) {
           const filters = await res.json();
-          // Merge avec les saves locaux (banwords, saves restent localStorage)
           setUrlFilters(Array.isArray(filters) ? filters : []);
         }
       } catch {}
       setFiltersLoaded(true);
     }
     init();
-  }, []);
+  }, [session]);
 
-  // Charge les offres une fois les filtres prêts
   useEffect(() => {
-    if (filtersLoaded) fetchJobs();
+    if (filtersLoaded && session) fetchJobs();
   }, [filtersLoaded]);
 
   // ── Filtres visuels ────────────────────────────────────────────────────────
-
   const visibleJobs = jobs
     .filter(j => !jobMatchesBanwords(j, banwords))
     .filter(j => typeFilter === 'all' || j.type === typeFilter);
@@ -646,24 +829,36 @@ export default function JobBoard() {
     saves:    saves.length      || null,
   };
 
-  const toggleSave = (job) => {
-    setSaves(prev => {
-      const exists = prev.find(s => s.id === job.id);
-      return exists ? prev.filter(s => s.id !== job.id) : [job, ...prev];
-    });
-  };
-  const removeSave = (id) => setSaves(prev => prev.filter(s => s.id !== id));
-
+  const toggleSave  = (job) => setSaves(prev => {
+    const exists = prev.find(s => s.id === job.id);
+    return exists ? prev.filter(s => s.id !== job.id) : [job, ...prev];
+  });
+  const removeSave  = (id) => setSaves(prev => prev.filter(s => s.id !== id));
   const enabledCount = urlFilters.filter(f => f.enabled).length;
+  const isScraping   = scrapeStatus === 'pending' || scrapeStatus === 'running';
 
+  // ── Écran de login si pas de session ──────────────────────────────────────
+  if (!session) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
+  // ── UI principale ─────────────────────────────────────────────────────────
   return (
     <div className="jb-root">
 
       {/* ── Header ── */}
       <div className="jb-header">
-        <button className="jb-back-btn" onClick={() => navigate(-1)}>
-          <IconBack /> Retour
-        </button>
+        <div className="jb-header-top">
+          <button className="jb-back-btn" onClick={() => navigate(-1)}>
+            <IconBack /> Retour
+          </button>
+          <div className="jb-session-info">
+            <span className="jb-session-email"><IconUser /> {session.email}</span>
+            <button className="jb-logout-btn" onClick={handleLogout} title="Se déconnecter">
+              <IconLogout /> Déconnexion
+            </button>
+          </div>
+        </div>
 
         <motion.div className="jb-hero" initial={{ opacity: 0, y: -18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
           <div className="jb-hero-badge">🎯 Job Tracker · URL Scraper</div>
@@ -696,27 +891,28 @@ export default function JobBoard() {
           <button
             className="jb-tab jb-tab-refresh"
             onClick={() => triggerScrape()}
-            disabled={loading || enabledCount === 0}
+            disabled={loading || isScraping || enabledCount === 0}
             title={enabledCount === 0 ? 'Ajoute des liens dans "Mes liens"' : 'Scraper maintenant'}
           >
-            <IconRefresh spinning={loading} />
-            {loading ? 'Scraping…' : 'Actualiser'}
+            <IconRefresh spinning={loading || isScraping} />
+            {isScraping ? 'Scraping…' : 'Actualiser'}
           </button>
         </div>
-
-        {/* Barre de refresh auto */}
-        {(fetched || loading) && (
-          <RefreshBar
-            nextRefreshIn={nextRefreshIn}
-            lastRefresh={lastRefresh}
-            loading={loading}
-          />
-        )}
-
-        {warnings.length > 0 && (
-          <p className="jb-warn">⚠️ {warnings.join(' · ')}</p>
-        )}
       </div>
+
+      {/* Barre de statut */}
+      {(fetched || loading || isScraping) && (
+        <RefreshBar
+          nextRefreshIn={nextRefreshIn}
+          lastRefresh={lastRefresh}
+          loading={loading}
+          scrapeStatus={scrapeStatus}
+        />
+      )}
+
+      {warnings.length > 0 && (
+        <p className="jb-warn">⚠️ {warnings.join(' · ')}</p>
+      )}
 
       {/* ── Contenu ── */}
       <main className="jb-main">
@@ -742,6 +938,14 @@ export default function JobBoard() {
                     </span>
                   )}
                 </div>
+              )}
+
+              {/* Bandeau scraping en cours */}
+              {isScraping && (
+                <motion.div className="jb-scrape-banner" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <span className="jb-scrape-spinner">⟳</span>
+                  Scraping en arrière-plan… Les offres apparaîtront dès que c'est terminé.
+                </motion.div>
               )}
 
               {error && !loading && (
@@ -782,18 +986,14 @@ export default function JobBoard() {
               {!loading && !fetched && !error && (
                 <div className="jb-empty">
                   <div className="jb-empty-icon">🔗</div>
-                  <h3>
-                    {enabledCount === 0
-                      ? 'Ajoute un lien de recherche'
-                      : 'Lance le scraping'}
-                  </h3>
+                  <h3>{enabledCount === 0 ? 'Ajoute un lien de recherche' : 'Lance le scraping'}</h3>
                   <p>
                     {enabledCount === 0
                       ? <>Va dans l'onglet <strong>Mes liens</strong> et colle une URL de recherche.</>
                       : <>Clique sur <strong>Actualiser</strong> ou attends le refresh automatique.</>}
                   </p>
                   {enabledCount > 0 && (
-                    <button className="jb-search-btn" style={{ marginTop: '1rem' }} onClick={() => fetchJobs()}>
+                    <button className="jb-search-btn" style={{ marginTop: '1rem' }} onClick={() => triggerScrape()}>
                       <IconRefresh spinning={false} /> Scraper maintenant
                     </button>
                   )}
@@ -809,6 +1009,7 @@ export default function JobBoard() {
                 filters={urlFilters}
                 onChange={setUrlFilters}
                 onScrapeNow={() => triggerScrape()}
+                scrapeStatus={scrapeStatus}
               />
             </motion.div>
           )}
