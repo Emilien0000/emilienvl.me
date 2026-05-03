@@ -4,6 +4,9 @@ import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate, usePa
 import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
 import { supabase } from './supabase';
+import JobBoard from './pages/JobBoard';
+
+
 
 // ─── Variants animations ───────────────────────────────────────────────────────
 
@@ -1069,6 +1072,7 @@ function MainLayout({ dark, onToggleDark }) {
     { id: 'experiences', label: 'Expériences' },
     { id: 'skills', label: 'Compétences' },
     { id: 'contact', label: 'Contact' },
+    { id: 'alternances', label: '🔍 Alternances' },
   ];
 
   return (
@@ -1561,7 +1565,7 @@ function App() {
           <Route path="/experiences/:expSlug" element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
           <Route path="/skills"   element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
           <Route path="/contact"  element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
-
+          <Route path="/alternances" element={<JobBoard />} />
           {/* Redirect racine → /home */}
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="*" element={<Navigate to="/home" replace />} />
