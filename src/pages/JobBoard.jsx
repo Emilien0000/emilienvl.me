@@ -1,6 +1,6 @@
 // src/pages/JobBoard.jsx
 // Route : /alternances
-// Scraper d'annonces Indeed / HelloWork / Stage.fr via /api/jobs
+// Sources : La Bonne Alternance + Adzuna + France Travail
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -48,9 +48,9 @@ const IconCalendar = () => (
 // ── Config sources ───────────────────────────────────────────────────────────
 
 const SOURCES = [
-  { id: 'indeed',    label: 'Indeed',    color: '#003A9B', emoji: '🔵' },
-  { id: 'hellowork', label: 'HelloWork', color: '#FF6B35', emoji: '🟠' },
-  { id: 'stage',     label: 'Stage.fr',  color: '#00B894', emoji: '🟢' },
+  { id: 'lba',    label: 'La Bonne Alternance', color: '#1a73e8', emoji: '🎓' },
+  { id: 'adzuna', label: 'Adzuna',              color: '#e64c1f', emoji: '🔍' },
+  { id: 'ft',     label: 'France Travail',      color: '#005f86', emoji: '🏛️' },
 ];
 
 const TYPE_LABELS = {
@@ -61,12 +61,6 @@ const TYPE_LABELS = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatDate(iso) {
-  try {
-    return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
-  } catch { return ''; }
-}
-
 function timeAgo(iso) {
   const diff = Date.now() - new Date(iso).getTime();
   const days = Math.floor(diff / 86400000);
@@ -74,11 +68,12 @@ function timeAgo(iso) {
   if (days === 1) return 'Hier';
   if (days < 7)  return `Il y a ${days} j`;
   if (days < 30) return `Il y a ${Math.floor(days / 7)} sem`;
-  return formatDate(iso);
+  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
 function sourceColor(source) {
-  return SOURCES.find(s => s.label === source || s.id === source?.toLowerCase())?.color || '#13c9ed';
+  return SOURCES.find(s => s.label === source || s.id === source?.toLowerCase())?.color
+    ?? '#13c9ed';
 }
 
 // ── JobCard ───────────────────────────────────────────────────────────────────
@@ -99,9 +94,7 @@ function JobCard({ job, index }) {
       transition={{ duration: 0.35, delay: index * 0.04 }}
       whileHover={{ y: -3, transition: { duration: 0.2 } }}
     >
-      {/* Barre colorée source */}
       <div className="jb-card-accent" />
-
       <div className="jb-card-inner">
         <div className="jb-card-top">
           <div className="jb-card-badges">
@@ -121,19 +114,11 @@ function JobCard({ job, index }) {
         <h3 className="jb-title">{job.title}</h3>
 
         {job.company && (
-          <p className="jb-company">
-            <IconBriefcase />
-            {job.company}
-          </p>
+          <p className="jb-company"><IconBriefcase />{job.company}</p>
         )}
-
         {job.location && (
-          <p className="jb-location">
-            <IconMap />
-            {job.location}
-          </p>
+          <p className="jb-location"><IconMap />{job.location}</p>
         )}
-
         {job.description && (
           <p className="jb-desc">{job.description}</p>
         )}
@@ -148,7 +133,7 @@ function JobCard({ job, index }) {
   );
 }
 
-// ── Skeleton loader ───────────────────────────────────────────────────────────
+// ── Skeleton ─────────────────────────────────────────────────────────────────
 
 function Skeleton() {
   return (
@@ -166,20 +151,20 @@ function Skeleton() {
   );
 }
 
-// ── Composant principal ───────────────────────────────────────────────────────
+// ── Page principale ───────────────────────────────────────────────────────────
 
 export default function JobBoard() {
   const navigate = useNavigate();
 
-  const [query,     setQuery]     = useState('alternance développeur');
-  const [location,  setLocation]  = useState('France');
-  const [sources,   setSources]   = useState(['indeed', 'hellowork', 'stage']);
+  const [query,      setQuery]      = useState('alternance développeur');
+  const [location,   setLocation]   = useState('France');
+  const [sources,    setSources]    = useState(['lba', 'adzuna', 'ft']);
   const [typeFilter, setTypeFilter] = useState('all');
-  const [jobs,      setJobs]      = useState([]);
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState(null);
-  const [fetched,   setFetched]   = useState(false);
-  const [warnings,  setWarnings]  = useState([]);
+  const [jobs,       setJobs]       = useState([]);
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState(null);
+  const [fetched,    setFetched]    = useState(false);
+  const [warnings,   setWarnings]   = useState([]);
 
   const abortRef = useRef(null);
 
@@ -196,75 +181,51 @@ export default function JobBoard() {
     try {
       const params = new URLSearchParams({
         q:       query,
-        location: location,
+        location,
         sources: sources.join(','),
         limit:   '12',
       });
-
-      const res = await fetch(`/api/jobs?${params}`, {
-        signal: abortRef.current.signal,
-      });
-
+      const res = await fetch(`/api/jobs?${params}`, { signal: abortRef.current.signal });
       if (!res.ok) throw new Error(`Erreur serveur : ${res.status}`);
       const data = await res.json();
-
       setJobs(data.jobs || []);
       setWarnings(data.errors || []);
       setFetched(true);
     } catch (err) {
-      if (err.name !== 'AbortError') {
-        setError(err.message || 'Erreur inconnue');
-      }
+      if (err.name !== 'AbortError') setError(err.message || 'Erreur inconnue');
     } finally {
       setLoading(false);
     }
   }, [query, location, sources]);
 
-  // Auto-fetch au premier mount
   useEffect(() => { fetchJobs(); }, []);
 
-  const filteredJobs = typeFilter === 'all'
-    ? jobs
-    : jobs.filter(j => j.type === typeFilter);
-
-  const toggleSource = (id) => {
-    setSources(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    );
-  };
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    fetchJobs();
-  };
+  const filteredJobs = typeFilter === 'all' ? jobs : jobs.filter(j => j.type === typeFilter);
+  const toggleSource = id => setSources(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
 
   return (
     <div className="jb-root">
-      {/* ── Header ─────────────────────────────────────────────────── */}
+
+      {/* ── Header ── */}
       <div className="jb-header">
         <button className="jb-back-btn" onClick={() => navigate(-1)}>
           <IconBack /> Retour
         </button>
 
-        <motion.div
-          className="jb-hero"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
+        <motion.div className="jb-hero" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
           <div className="jb-hero-badge">🎯 Job Tracker</div>
           <h1 className="jb-hero-title">
             Trouve ton <span className="highlight">alternance</span>
           </h1>
           <p className="jb-hero-sub">
-            Annonces agrégées depuis Indeed, HelloWork &amp; Stage.fr — en temps réel
+            Annonces officielles — La Bonne Alternance · Adzuna · France Travail
           </p>
         </motion.div>
 
-        {/* ── Barre de recherche ──────────────────────────────────── */}
+        {/* Formulaire de recherche */}
         <motion.form
           className="jb-search-form"
-          onSubmit={handleSearch}
+          onSubmit={e => { e.preventDefault(); fetchJobs(); }}
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.1 }}
@@ -272,38 +233,23 @@ export default function JobBoard() {
           <div className="jb-search-row">
             <div className="jb-search-field">
               <IconSearch />
-              <input
-                type="text"
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="Poste, compétence…"
-                className="jb-input"
-              />
+              <input type="text" value={query} onChange={e => setQuery(e.target.value)}
+                placeholder="Poste, compétence…" className="jb-input" />
             </div>
             <div className="jb-search-field">
               <IconMap />
-              <input
-                type="text"
-                value={location}
-                onChange={e => setLocation(e.target.value)}
-                placeholder="Ville, région…"
-                className="jb-input"
-              />
+              <input type="text" value={location} onChange={e => setLocation(e.target.value)}
+                placeholder="Ville, région…" className="jb-input" />
             </div>
             <button type="submit" className="jb-search-btn" disabled={loading}>
-              {loading
-                ? <><IconRefresh spinning={true} /> Recherche…</>
-                : <><IconSearch /> Rechercher</>
-              }
+              {loading ? <><IconRefresh spinning={true} /> Recherche…</> : <><IconSearch /> Rechercher</>}
             </button>
           </div>
 
-          {/* Sources */}
+          {/* Toggles sources */}
           <div className="jb-source-toggles">
             {SOURCES.map(src => (
-              <button
-                key={src.id}
-                type="button"
+              <button key={src.id} type="button"
                 className={`jb-source-toggle ${sources.includes(src.id) ? 'active' : ''}`}
                 style={{ '--src-color': src.color }}
                 onClick={() => toggleSource(src.id)}
@@ -315,41 +261,30 @@ export default function JobBoard() {
         </motion.form>
       </div>
 
-      {/* ── Filtres type ───────────────────────────────────────────── */}
+      {/* ── Filtres type ── */}
       {fetched && !loading && (
         <div className="jb-filters">
           <div className="jb-filters-inner">
             {['all', 'alternance', 'stage', 'emploi'].map(t => (
-              <button
-                key={t}
-                className={`jb-filter-btn ${typeFilter === t ? 'active' : ''}`}
-                onClick={() => setTypeFilter(t)}
-              >
-                {t === 'all' ? `Tout (${jobs.length})` : `${TYPE_LABELS[t]?.label} (${jobs.filter(j => j.type === t).length})`}
+              <button key={t} className={`jb-filter-btn ${typeFilter === t ? 'active' : ''}`}
+                onClick={() => setTypeFilter(t)}>
+                {t === 'all'
+                  ? `Tout (${jobs.length})`
+                  : `${TYPE_LABELS[t]?.label} (${jobs.filter(j => j.type === t).length})`}
               </button>
             ))}
-
-            <button
-              className="jb-filter-btn jb-refresh-btn"
-              onClick={fetchJobs}
-              disabled={loading}
-              title="Actualiser"
-            >
+            <button className="jb-filter-btn jb-refresh-btn" onClick={fetchJobs} disabled={loading}>
               <IconRefresh spinning={loading} /> Actualiser
             </button>
           </div>
-
           {warnings.length > 0 && (
-            <p className="jb-warn">
-              ⚠️ {warnings.length} source(s) indisponible(s) : {warnings.join(' · ')}
-            </p>
+            <p className="jb-warn">⚠️ {warnings.join(' · ')}</p>
           )}
         </div>
       )}
 
-      {/* ── Contenu principal ─────────────────────────────────────── */}
+      {/* ── Contenu ── */}
       <main className="jb-main">
-        {/* Erreur */}
         {error && !loading && (
           <motion.div className="jb-error-box" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <p>😕 {error}</p>
@@ -357,25 +292,20 @@ export default function JobBoard() {
           </motion.div>
         )}
 
-        {/* Skeletons */}
         {loading && (
           <div className="jb-grid">
             {Array.from({ length: 9 }).map((_, i) => <Skeleton key={i} />)}
           </div>
         )}
 
-        {/* Résultats */}
         {!loading && fetched && filteredJobs.length > 0 && (
           <AnimatePresence mode="popLayout">
             <div className="jb-grid">
-              {filteredJobs.map((job, i) => (
-                <JobCard key={job.id} job={job} index={i} />
-              ))}
+              {filteredJobs.map((job, i) => <JobCard key={job.id} job={job} index={i} />)}
             </div>
           </AnimatePresence>
         )}
 
-        {/* Vide */}
         {!loading && fetched && filteredJobs.length === 0 && !error && (
           <motion.div className="jb-empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <div className="jb-empty-icon">🔍</div>
@@ -384,7 +314,6 @@ export default function JobBoard() {
           </motion.div>
         )}
 
-        {/* État initial */}
         {!loading && !fetched && !error && (
           <motion.div className="jb-empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <div className="jb-empty-icon">✨</div>
@@ -394,9 +323,8 @@ export default function JobBoard() {
         )}
       </main>
 
-      {/* ── Footer ─────────────────────────────────────────────────── */}
       <footer className="jb-footer">
-        <p>Données agrégées depuis Indeed, HelloWork &amp; Stage.fr · Résultats en temps réel</p>
+        <p>Données officielles — La Bonne Alternance · Adzuna · France Travail</p>
         <p style={{ marginTop: '0.25rem', opacity: 0.6, fontSize: '0.75rem' }}>
           © 2026 Émilien Vitry-Lhotte
         </p>
