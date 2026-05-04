@@ -728,6 +728,7 @@ export default function JobBoard() {
       if (!hasActiveFilters) return true; // pas de filtre d'URL actif → tout afficher
       return enabledFilterUrls.some(url => j.sourceUrl === url);
     })
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 200);
   const savedIds  = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
