@@ -510,7 +510,7 @@ export default function JobBoard() {
             newOnes.forEach(j => knownJobIdsRef.current.add(j.id));
             setNewJobsCount(c => c + toAdd.length);
             setNewJobIds(prev => new Set([...prev, ...toAdd.map(j => j.id)]));
-            return [...toAdd, ...prev].slice(0, 30); 
+            return [...toAdd, ...prev].slice(0, 200); 
           });
         }
       } else {
@@ -518,7 +518,7 @@ export default function JobBoard() {
         // <-- 3. Supprime la constante "capped" et passe tout le tableau "normalized"
         knownJobIdsRef.current = new Set(normalized.map(j => j.id));
         setNewJobIds(new Set());
-        setJobs(normalized.slice(0, 30)); 
+        setJobs(normalized.slice(0, 200)); 
         setFetched(true);
       }
     } catch (err) {
