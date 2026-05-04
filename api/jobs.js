@@ -1,5 +1,8 @@
 // api/jobs.js
-export const config = { maxDuration: 10 };
+export const config = { runtime: 'edge' };
+
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
 function corsHeaders() {
   return {
@@ -10,11 +13,11 @@ function corsHeaders() {
   };
 }
 
-function sbUrl(path) { return `${process.env.SUPABASE_URL}/rest/v1/${path}`; }
+function sbUrl(path) { return `${SUPABASE_URL}/rest/v1/${path}`; }
 function sbHeaders() {
   return {
-    'apikey': process.env.SUPABASE_ANON_KEY,
-    'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+    'apikey': SUPABASE_KEY,
+    'Authorization': `Bearer ${SUPABASE_KEY}`,
     'Content-Type': 'application/json',
   };
 }
@@ -22,7 +25,7 @@ function sbHeaders() {
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders() });
 
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
     return new Response(JSON.stringify({ jobs: [], errors: ['Config Supabase manquante'], sourceMeta: {} }), { status: 200, headers: corsHeaders() });
   }
 

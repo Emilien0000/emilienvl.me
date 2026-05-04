@@ -1,7 +1,5 @@
 // api/scrape.js
-export const config = {
-  runtime: 'edge', // 🚀 LA MAGIE EST ICI : On passe sur l'Edge Network (30s de limite gratuite au lieu de 10s !)
-};
+export const config = { runtime: 'edge' };
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
@@ -33,22 +31,18 @@ async function sbFetch(path, options = {}) {
 }
 
 export default async function handler(req) {
-  // Gestion du CORS
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders() });
   if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'POST required' }), { status: 405, headers: corsHeaders() });
 
   const pythonApiUrl = process.env.PYTHON_SCRAPER_URL; 
   const scraperSecret = process.env.SCRAPER_SECRET || '';
-  
-  // En Edge, 'req' est une Web API standard, on utilise .get()
   const userId = req.headers.get('x-user-id');
 
-  if (!userId) return new Response(JSON.stringify({ error: "Utilisateur non connecté" }), { status: 401, headers: corsHeaders() });
+  if (!userId) return new Response(JSON.stringify({ error: "Non connecté" }), { status: 401, headers: corsHeaders() });
   if (!pythonApiUrl) return new Response(JSON.stringify({ error: "URL Python manquante sur Vercel" }), { status: 500, headers: corsHeaders() });
   if (!SUPABASE_URL || !SUPABASE_KEY) return new Response(JSON.stringify({ error: "Variables SUPABASE manquantes" }), { status: 500, headers: corsHeaders() });
 
   try {
-    // 1. Lire tes filtres depuis Supabase
     const profiles = await sbFetch(`user_filters?id=eq.${encodeURIComponent(userId)}&select=filters`);
     if (!profiles.length || !profiles[0].filters) {
       return new Response(JSON.stringify({ ok: true, message: 'Aucun filtre' }), { status: 200, headers: corsHeaders() });
@@ -62,7 +56,6 @@ export default async function handler(req) {
 
     const urls = activeFilters.map(f => f.url);
 
-    // 2. Demander à Python de scraper (On a 30s de marge de manoeuvre devant nous !)
     const scrapeRes = await fetch(`${pythonApiUrl}/scrape`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-scraper-secret': scraperSecret },
@@ -75,7 +68,6 @@ export default async function handler(req) {
     const allJobs = [];
     const seen = new Set();
 
-    // 3. Traiter les résultats
     for (const result of scrapeData.results) {
       const filterIndex = filterArray.findIndex(f => f.url === result.url);
       if (filterIndex !== -1) {
@@ -91,7 +83,6 @@ export default async function handler(req) {
       }
     }
 
-    // 4. Sauvegarder dans ta table jb_jobs Supabase
     if (allJobs.length > 0) {
       await sbFetch('jb_jobs?on_conflict=url', {
         method: 'POST',
@@ -100,7 +91,6 @@ export default async function handler(req) {
       });
     }
 
-    // 5. Mettre à jour la date de dernier scrape dans tes filtres
     await sbFetch(`user_filters?id=eq.${encodeURIComponent(userId)}`, {
       method: 'PATCH',
       headers: { 'Prefer': 'return=minimal' },
