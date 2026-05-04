@@ -346,8 +346,10 @@ export default function JobBoard() {
   const [debugInfo, setDebugInfo]       = useState(null);
   const [urlFilters, setUrlFilters]     = useState([]);
   const [filtersLoaded, setFiltersLoaded] = useState(false);
-  const [banwords, setBanwords]         = useState(() => LS.get('jb_banwords', []));
-  const [saves, setSaves]               = useState(() => LS.get('jb_saves', []));
+  const [banwords, setBanwords]         = useState([]);
+  const [banwordsLoaded, setBanwordsLoaded] = useState(false);
+  const [saves, setSaves]               = useState([]);
+  const [savesLoaded, setSavesLoaded]   = useState(false);
   const [applied, setApplied]           = useState([]);
   const [appliedLoaded, setAppliedLoaded] = useState(false);
   const [deletedIds, setDeletedIds]     = useState(() => new Set(LS.get('jb_deleted', [])));
@@ -396,9 +398,40 @@ export default function JobBoard() {
     });
   }, [urlFilters, filtersLoaded, userId]);
 
-  useEffect(() => { LS.set('jb_banwords', banwords); }, [banwords]);
-  useEffect(() => { LS.set('jb_saves', saves); }, [saves]);
   useEffect(() => { LS.set('jb_deleted', [...deletedIds]); }, [deletedIds]);
+
+  // ── Chargement banwords (Supabase) ───────────────────────────────
+  useEffect(() => {
+    if (!userId) return;
+    let isMounted = true;
+    supabase.from('user_prefs').select('banwords,saves').eq('id', userId).single()
+      .then(({ data, error }) => {
+        if (error && error.code !== 'PGRST116') console.error('Erreur chargement prefs:', error);
+        if (isMounted) {
+          setBanwords(data?.banwords && Array.isArray(data.banwords) ? data.banwords : []);
+          setSaves(data?.saves && Array.isArray(data.saves) ? data.saves : []);
+          setBanwordsLoaded(true);
+          setSavesLoaded(true);
+        }
+      });
+    return () => { isMounted = false; };
+  }, [userId]);
+
+  // ── Sauvegarde banwords (Supabase) ───────────────────────────────
+  useEffect(() => {
+    if (!banwordsLoaded || !userId) return;
+    supabase.from('user_prefs').upsert({ id: userId, banwords }).then(({ error }) => {
+      if (error) console.error('❌ Erreur sauvegarde banwords:', error.message);
+    });
+  }, [banwords, banwordsLoaded, userId]);
+
+  // ── Sauvegarde saves (Supabase) ──────────────────────────────────
+  useEffect(() => {
+    if (!savesLoaded || !userId) return;
+    supabase.from('user_prefs').upsert({ id: userId, saves }).then(({ error }) => {
+      if (error) console.error('❌ Erreur sauvegarde saves:', error.message);
+    });
+  }, [saves, savesLoaded, userId]);
 
   // ── Chargement candidatures (Supabase) ──────────────────────────
   useEffect(() => {
