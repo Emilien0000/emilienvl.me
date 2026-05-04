@@ -686,7 +686,7 @@ useEffect(() => {
       const pythonUrl = "https://scraper-jobs.onrender.com";
       
       // 👇 INSÈRE ICI TON VRAI SECRET RENDER
-      const scraperSecret = "TON_SECRET_SCRAPER_RENDER"; 
+      const scraperSecret = import.meta.env.VITE_SCRAPER_SECRET;
 
       const scrapeRes = await fetch(`${pythonUrl}/scrape`, {
         method: 'POST',
