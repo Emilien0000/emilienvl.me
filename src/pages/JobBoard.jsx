@@ -359,7 +359,7 @@ export default function JobBoard() {
   // silent=true → merge sans spinner ni reset du scroll
   const fetchJobs = useCallback(async ({ silent = false } = {}) => {
     if (!silent) { setLoading(true); setError(null); }
-    if (!silent && activeTab !== 'results') setActiveTab('results');
+    //if (!silent && activeTab !== 'results') setActiveTab('results');
 
     // NOUVEAU : On récupère la liste des URLs actives de l'utilisateur courant
     const activeUrls = urlFilters.filter(f => f.enabled).map(f => f.url);
@@ -419,7 +419,7 @@ export default function JobBoard() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [activeTab, urlFilters]);
+  }, [urlFilters]);
 
   useEffect(() => { 
     if (filtersLoaded && userId) fetchJobs(); 
