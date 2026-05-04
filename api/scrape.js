@@ -1,9 +1,19 @@
 // api/scrape.js
-export const config = { maxDuration: 60 };
+export const config = {
+  runtime: 'edge', // 🚀 LA MAGIE EST ICI : On passe sur l'Edge Network (30s de limite gratuite au lieu de 10s !)
+};
 
-// 👇 ON CHERCHE LES VARIABLES SOUS LEURS DEUX NOMS POSSIBLES
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, X-User-Id',
+    'Content-Type': 'application/json',
+  };
+}
 
 function sbUrl(path) { return `${SUPABASE_URL}/rest/v1/${path}`; }
 
@@ -22,42 +32,37 @@ async function sbFetch(path, options = {}) {
   return res.json();
 }
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-User-Id');
-
-  if (req.method === 'OPTIONS') return res.status(204).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
+export default async function handler(req) {
+  // Gestion du CORS
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders() });
+  if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'POST required' }), { status: 405, headers: corsHeaders() });
 
   const pythonApiUrl = process.env.PYTHON_SCRAPER_URL; 
   const scraperSecret = process.env.SCRAPER_SECRET || '';
-  const userId = req.headers['x-user-id'];
-
-  if (!userId) return res.status(401).json({ error: "Utilisateur non connecté" });
-  if (!pythonApiUrl) return res.status(500).json({ error: "URL Python manquante sur Vercel" });
   
-  // Sécurité anti-crash
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    return res.status(500).json({ error: "Variables SUPABASE manquantes sur Vercel. Ajoute VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY dans les settings." });
-  }
+  // En Edge, 'req' est une Web API standard, on utilise .get()
+  const userId = req.headers.get('x-user-id');
+
+  if (!userId) return new Response(JSON.stringify({ error: "Utilisateur non connecté" }), { status: 401, headers: corsHeaders() });
+  if (!pythonApiUrl) return new Response(JSON.stringify({ error: "URL Python manquante sur Vercel" }), { status: 500, headers: corsHeaders() });
+  if (!SUPABASE_URL || !SUPABASE_KEY) return new Response(JSON.stringify({ error: "Variables SUPABASE manquantes" }), { status: 500, headers: corsHeaders() });
 
   try {
     // 1. Lire tes filtres depuis Supabase
     const profiles = await sbFetch(`user_filters?id=eq.${encodeURIComponent(userId)}&select=filters`);
     if (!profiles.length || !profiles[0].filters) {
-      return res.status(200).json({ ok: true, message: 'Aucun filtre' });
+      return new Response(JSON.stringify({ ok: true, message: 'Aucun filtre' }), { status: 200, headers: corsHeaders() });
     }
 
     let filterArray = profiles[0].filters;
     const activeFilters = filterArray.filter(f => f.enabled);
     if (activeFilters.length === 0) {
-      return res.status(200).json({ ok: true, message: 'Aucun filtre actif' });
+      return new Response(JSON.stringify({ ok: true, message: 'Aucun filtre actif' }), { status: 200, headers: corsHeaders() });
     }
 
     const urls = activeFilters.map(f => f.url);
 
-    // 2. Demander à Python de scraper
+    // 2. Demander à Python de scraper (On a 30s de marge de manoeuvre devant nous !)
     const scrapeRes = await fetch(`${pythonApiUrl}/scrape`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-scraper-secret': scraperSecret },
@@ -102,10 +107,10 @@ export default async function handler(req, res) {
       body: JSON.stringify({ filters: filterArray })
     });
 
-    return res.status(200).json({ ok: true, count: allJobs.length });
+    return new Response(JSON.stringify({ ok: true, count: allJobs.length }), { status: 200, headers: corsHeaders() });
 
   } catch (err) {
     console.error("Erreur globale scrape:", err);
-    return res.status(500).json({ error: err.message });
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders() });
   }
 }
