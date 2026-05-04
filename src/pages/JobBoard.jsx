@@ -572,14 +572,34 @@ export default function JobBoard() {
   const filtersOwnerRef = useRef(null);
   const initialLoadRef = useRef(true);
 
-  useEffect(() => {
-    // Ne sauvegarde que si les filtres appartiennent bien à l'utilisateur courant
-    if (!filtersLoaded || !session || filtersOwnerRef.current !== userId) return;
+
+useEffect(() => {
+    if (!filtersLoaded || !session?.userId || filtersOwnerRef.current !== session.userId) return;
+
+    if (initialLoadRef.current) {
+      initialLoadRef.current = false;
+      return;
+    }
+
+    // On remplace le catch silencieux par de vrais logs
     apiFetch('/api/filters', {
       method: 'PUT',
       body: JSON.stringify({ filters: urlFilters }),
-    }, userId).catch(() => {});
-  }, [urlFilters, filtersLoaded, session]);
+    }, session.userId)
+    .then(async (res) => {
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("❌ ERREUR API SAUVEGARDE:", res.status, errorText);
+        alert(`Échec de la sauvegarde (Erreur ${res.status}). Regarde la console (F12) !`);
+      } else {
+        console.log("✅ Filtres enregistrés sur Supabase !");
+      }
+    })
+    .catch(err => {
+      console.error("❌ ERREUR RÉSEAU CRITIQUE:", err);
+    });
+    
+  }, [urlFilters, filtersLoaded, session?.userId]);
 
   useEffect(() => { LS.set('jb_banwords', banwords); }, [banwords]);
   useEffect(() => { LS.set('jb_saves',    saves);    }, [saves]);
