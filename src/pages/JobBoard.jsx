@@ -469,12 +469,15 @@ export default function JobBoard() {
     if (!silent) { setLoading(true); setError(null); }
     if (!silent && activeTab !== 'results') setActiveTab('results');
     try {
+      console.log('🔍 fetchJobs — userId utilisé:', userId);
       const { data, error: dbErr } = await supabase
         .from('jb_jobs')
         .select('*')
         .eq('user_id', userId)
         .order('date', { ascending: false })
         .limit(200);
+
+      console.log('🔍 fetchJobs — résultats:', data?.length, 'erreur:', dbErr?.message);
 
       if (dbErr) throw new Error(`Supabase: ${dbErr.message}`);
 
