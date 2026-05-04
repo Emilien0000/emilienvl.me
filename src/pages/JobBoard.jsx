@@ -1,5 +1,5 @@
 // src/pages/JobBoard.jsx
-// v5 — Debug + Fixes (scrapeData.results, date fallback, ignoreDuplicates)
+// v6 — Fix parsing résultats scraper (résultats à plat vs imbriqués)
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -75,7 +75,6 @@ function jobMatchesBanwords(job, banwords) {
   return banwords.some(w => w && text.includes(w.toLowerCase()));
 }
 
-// ── FIX #2 : normalise la date — évite que Supabase rejette un champ null/undefined
 function normalizeDate(d) {
   if (!d) return new Date().toISOString();
   const parsed = new Date(d);
@@ -268,7 +267,7 @@ export default function JobBoard() {
   const [error, setError]               = useState(null);
   const [fetched, setFetched]           = useState(false);
   const [scrapeStatus, setScrapeStatus] = useState(null);
-  const [debugInfo, setDebugInfo]       = useState(null); // ← debug panel
+  const [debugInfo, setDebugInfo]       = useState(null);
   const [urlFilters, setUrlFilters]     = useState([]);
   const [filtersLoaded, setFiltersLoaded] = useState(false);
   const [banwords, setBanwords]         = useState(() => LS.get('jb_banwords', []));
@@ -320,7 +319,7 @@ export default function JobBoard() {
         .from('jb_jobs')
         .select('*')
         .order('date', { ascending: false })
-        .limit(100); // ← augmenté à 100 pour ne pas rater d'offres
+        .limit(100);
 
       if (dbErr) throw new Error(`Supabase: ${dbErr.message}`);
       console.log('📦 fetchJobs — rows Supabase:', data?.length, data?.[0]);
@@ -369,33 +368,64 @@ export default function JobBoard() {
       if (!scrapeRes.ok) throw new Error(`Erreur Render: ${scrapeRes.status} (As-tu bien mis la clé secrète ?)`);
 
       const scrapeData = await scrapeRes.json();
+      console.log('🔎 scrapeData complet:', scrapeData);
 
-      // ── FIX #1 : gère les deux formats possibles de réponse ──────────────
-      // Format attendu : { results: [{ url, jobs: [], scrapedAt, count }] }
-      // Format alternatif : { jobs: [] }  ← certains scrapers retournent ça directement
+      // ── FIX v6 : détection intelligente du format de réponse ────────────
+      // Le scraper peut renvoyer 3 formats différents :
+      //   A) { results: [{ url, jobs: [...], scrapedAt, count }] }  ← format groupé attendu
+      //   B) { results: [{ title, company, url, ... }] }             ← jobs à plat dans results
+      //   C) { jobs: [...] }                                          ← jobs à la racine
       let results = [];
+
       if (Array.isArray(scrapeData.results)) {
-        results = scrapeData.results;
+        const firstItem = scrapeData.results[0];
+        if (firstItem && Array.isArray(firstItem.jobs)) {
+          // Format A : groupé par URL avec sous-tableau jobs → on utilise tel quel
+          results = scrapeData.results;
+        } else {
+          // Format B : results EST la liste de jobs à plat → on les enveloppe
+          console.log('⚠️ Format B détecté : results[] contient des jobs à plat, on les regroupe');
+          results = [{
+            url:       activeFilters[0]?.url,
+            jobs:      scrapeData.results,
+            scrapedAt: new Date().toISOString(),
+            count:     scrapeData.results.length,
+          }];
+        }
       } else if (Array.isArray(scrapeData.jobs)) {
-        // Le scraper a renvoyé les jobs à plat → on les regroupe
-        results = [{ url: activeFilters[0]?.url, jobs: scrapeData.jobs, scrapedAt: new Date().toISOString(), count: scrapeData.jobs.length }];
+        // Format C : jobs directement à la racine
+        console.log('⚠️ Format C détecté : jobs[] à la racine, on les regroupe');
+        results = [{
+          url:       activeFilters[0]?.url,
+          jobs:      scrapeData.jobs,
+          scrapedAt: new Date().toISOString(),
+          count:     scrapeData.jobs.length,
+        }];
       } else {
-        // Format totalement inattendu → on logge pour debug
-        console.warn('⚠️ Format de réponse scraper inconnu:', scrapeData);
+        console.warn('⚠️ Format de réponse scraper inconnu — clés reçues :', Object.keys(scrapeData));
       }
 
-      // Debug : affiché dans un panneau UI discret
+      // ── Debug snapshot enrichi ────────────────────────────────────────────
       const debugSnapshot = {
-        rawKeys:      Object.keys(scrapeData),
-        nbResults:    results.length,
-        firstResult:  results[0] ? { url: results[0].url, nbJobs: results[0].jobs?.length, firstJob: results[0].jobs?.[0] } : null,
+        rawKeys:     Object.keys(scrapeData),
+        nbResults:   results.length,
+        firstResult: results[0]
+          ? {
+              url:       results[0].url,
+              nbJobs:    results[0].jobs?.length ?? 0,
+              firstJob:  results[0].jobs?.[0],
+              // Affiche le 1er élément brut si on a dû faire la détection Format B
+              rawSample: !Array.isArray(scrapeData.results?.[0]?.jobs)
+                ? scrapeData.results?.[0]
+                : undefined,
+            }
+          : null,
       };
-      console.log('🔎 scrapeData complet:', scrapeData);
       console.log('🔎 debug snapshot:', debugSnapshot);
       setDebugInfo(debugSnapshot);
 
-      const allJobs       = [];
-      const seen          = new Set();
+      const allJobs        = [];
+      const seen           = new Set();
       const updatedFilters = [...urlFilters];
 
       for (const result of results) {
@@ -412,22 +442,20 @@ export default function JobBoard() {
       console.log(`✅ ${allJobs.length} offre(s) unique(s) collectée(s)`);
 
       if (allJobs.length > 0) {
-        // ── FIX #2 : date normalisée + source_url robuste ─────────────────
         const jobsToInsert = allJobs.map(j => ({
-          id:          j.id   || crypto.randomUUID(),
-          source_url:  j.source_url || j.sourceUrl || '',
-          title:       j.title      || '(sans titre)',
-          company:     j.company    || '',
-          location:    j.location   || '',
+          id:          j.id          || crypto.randomUUID(),
+          source_url:  j.source_url  || j.sourceUrl || activeFilters[0]?.url || '',
+          title:       j.title       || '(sans titre)',
+          company:     j.company     || '',
+          location:    j.location    || '',
           url:         j.url,
           description: j.description || '',
           date:        normalizeDate(j.date),
-          type:        j.type || 'emploi',
+          type:        j.type        || 'emploi',
         }));
 
         console.log('💾 Insertion Supabase — exemple:', jobsToInsert[0]);
 
-        // ── FIX #3 : ignoreDuplicates:false = merge, pas skip ─────────────
         const { error: dbError } = await supabase
           .from('jb_jobs')
           .upsert(jobsToInsert, { onConflict: 'url', ignoreDuplicates: false });
@@ -516,8 +544,8 @@ export default function JobBoard() {
                   Clés reçues : <span style={{ color: '#fff' }}>{debugInfo.rawKeys.join(', ')}</span><br />
                   Nb de results : <span style={{ color: '#fff' }}>{debugInfo.nbResults}</span><br />
                   {debugInfo.firstResult && <>
-                    Premier result — URL : <span style={{ color: '#fff' }}>{debugInfo.firstResult.url}</span> · {debugInfo.firstResult.nbJobs} job(s)<br />
-                    Premier job : <span style={{ color: '#fff' }}>{JSON.stringify(debugInfo.firstResult.firstJob)}</span>
+                    Premier result — URL : <span style={{ color: '#fff' }}>{debugInfo.firstResult.url}</span> · <span style={{ color: debugInfo.firstResult.nbJobs > 0 ? '#4ade80' : '#ef4444' }}>{debugInfo.firstResult.nbJobs} job(s)</span><br />
+                    Premier job : <span style={{ color: '#fff' }}>{JSON.stringify(debugInfo.firstResult.firstJob ?? debugInfo.firstResult.rawSample)}</span>
                   </>}
                   {!debugInfo.firstResult && <span style={{ color: '#ef4444' }}>⚠️ Aucun result reçu — vérifie la console</span>}
                   <button onClick={() => setDebugInfo(null)} style={{ marginTop: 8, display: 'block', background: 'none', border: '1px solid #334', color: '#aaa', borderRadius: 6, padding: '2px 10px', cursor: 'pointer' }}>Fermer</button>
