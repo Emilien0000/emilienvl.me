@@ -275,6 +275,8 @@ export default function JobBoard() {
 
   const filtersOwnerRef  = useRef(null);
   const initialLoadRef   = useRef(true);
+  const knownJobIdsRef   = useRef(new Set());  // IDs déjà affichés → pour détecter les nouveautés
+  const [newJobsCount, setNewJobsCount] = useState(0);  // toast "N nouvelles offres"
 
   // ── Chargement filtres (Supabase direct) ─────────────────────────
   useEffect(() => {
@@ -311,9 +313,10 @@ export default function JobBoard() {
   useEffect(() => { LS.set('jb_saves', saves); }, [saves]);
 
   // ── Chargement offres (Supabase direct) ─────────────────────────
-  const fetchJobs = useCallback(async () => {
-    setLoading(true); setError(null);
-    if (activeTab !== 'results') setActiveTab('results');
+  // silent=true → merge sans spinner ni reset du scroll
+  const fetchJobs = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) { setLoading(true); setError(null); }
+    if (!silent && activeTab !== 'results') setActiveTab('results');
     try {
       const { data, error: dbErr } = await supabase
         .from('jb_jobs')
@@ -322,9 +325,8 @@ export default function JobBoard() {
         .limit(100);
 
       if (dbErr) throw new Error(`Supabase: ${dbErr.message}`);
-      console.log('📦 fetchJobs — rows Supabase:', data?.length, data?.[0]);
 
-      setJobs((data || []).map(r => ({
+      const normalized = (data || []).map(r => ({
         id:          r.id,
         sourceUrl:   r.source_url,
         title:       r.title,
@@ -334,13 +336,45 @@ export default function JobBoard() {
         description: r.description || '',
         date:        r.date,
         type:        r.type || 'emploi',
-      })));
-      setFetched(true);
-    } catch (err) { setError(err.message); }
-    finally { setLoading(false); }
+      }));
+
+      if (silent) {
+        // Comparer avec les IDs connus → détecter les nouvelles offres
+        const newOnes = normalized.filter(j => !knownJobIdsRef.current.has(j.id));
+        if (newOnes.length > 0) {
+          // Merge en tête de liste sans re-render brutal
+          setJobs(prev => {
+            const prevIds = new Set(prev.map(j => j.id));
+            const toAdd   = newOnes.filter(j => !prevIds.has(j.id));
+            if (toAdd.length === 0) return prev;
+            newOnes.forEach(j => knownJobIdsRef.current.add(j.id));
+            setNewJobsCount(c => c + toAdd.length);
+            return [...toAdd, ...prev];
+          });
+        }
+      } else {
+        // Chargement initial → on prend tout
+        knownJobIdsRef.current = new Set(normalized.map(j => j.id));
+        setJobs(normalized);
+        setFetched(true);
+      }
+    } catch (err) {
+      if (!silent) setError(err.message);
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, [activeTab]);
 
   useEffect(() => { if (filtersLoaded && userId) fetchJobs(); }, [filtersLoaded]);
+
+  // ── Polling silencieux toutes les 30s ────────────────────────────
+  useEffect(() => {
+    if (!filtersLoaded || !userId) return;
+    const interval = setInterval(() => {
+      fetchJobs({ silent: true });
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [filtersLoaded, userId, fetchJobs]);
 
   // ── SCRAPING DIRECT (Navigateur → Render → Supabase) ─────────────
   const triggerScrape = useCallback(async () => {
@@ -490,6 +524,21 @@ export default function JobBoard() {
 
   return (
     <div className="jb-root">
+      {/* ── Toast nouvelles offres ───────────────────────────────── */}
+      <AnimatePresence>
+        {newJobsCount > 0 && (
+          <motion.div
+            className="jb-new-toast"
+            initial={{ opacity: 0, y: 40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+            onClick={() => { setNewJobsCount(0); if (activeTab !== 'results') setActiveTab('results'); }}
+          >
+            ✨ {newJobsCount} nouvelle{newJobsCount > 1 ? 's' : ''} offre{newJobsCount > 1 ? 's' : ''} — cliquer pour voir
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="jb-header">
         <div className="jb-header-top">
           <button className="jb-back-btn" onClick={() => navigate(-1)}><IconBack /> Retour</button>
