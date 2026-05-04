@@ -360,10 +360,22 @@ export default function JobBoard() {
   const fetchJobs = useCallback(async ({ silent = false } = {}) => {
     if (!silent) { setLoading(true); setError(null); }
     if (!silent && activeTab !== 'results') setActiveTab('results');
+
+    // NOUVEAU : On récupère la liste des URLs actives de l'utilisateur courant
+    const activeUrls = urlFilters.filter(f => f.enabled).map(f => f.url);
+
+    // S'il n'y a aucun lien actif, on affiche un feed vide (ne charge pas les offres des autres)
+    if (activeUrls.length === 0) {
+      setJobs([]);
+      if (!silent) { setLoading(false); setFetched(true); }
+      return;
+    }
+
     try {
       const { data, error: dbErr } = await supabase
         .from('jb_jobs')
         .select('*')
+        .in('source_url', activeUrls) // <-- NOUVEAU : On filtre uniquement sur SES recherches
         .order('date', { ascending: false })
         .limit(200);
 
@@ -402,14 +414,16 @@ export default function JobBoard() {
         setJobs(normalized); 
         setFetched(true);
       }
-    } catch (err) {
+   } catch (err) {
       if (!silent) setError(err.message);
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [activeTab]);
+  }, [activeTab, urlFilters]);
 
-  useEffect(() => { if (filtersLoaded && userId) fetchJobs(); }, [filtersLoaded]);
+  useEffect(() => { 
+    if (filtersLoaded && userId) fetchJobs(); 
+  }, [filtersLoaded, userId, fetchJobs]);
 
   // ── Polling silencieux + décompte visuel ────────────────────────
   useEffect(() => {
