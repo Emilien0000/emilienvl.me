@@ -559,11 +559,10 @@ export default function JobBoard() {
       if (activeFilters.length === 0) return setScrapeStatus(null);
       setScrapeStatus('running');
 
-      // ── Purge les anciens jobs avant d'insérer les nouveaux ──────────
-      // Évite d'afficher des offres d'anciens filtres désactivés/supprimés
+      // ── Purge silencieuse en DB (l'UI garde les jobs affichés le temps du scrape)
       const { error: purgeErr } = await supabase.from('jb_jobs').delete().eq('user_id', userId);
       if (purgeErr) console.warn('⚠️ Purge jobs avant scrape échouée:', purgeErr.message);
-      else { setJobs([]); knownJobIdsRef.current = new Set(); }
+      // On ne vide PAS setJobs([]) ici → le feed reste visible pendant le scraping
 
       const pythonUrl     = 'https://scraper-jobs.onrender.com';
       const scraperSecret = import.meta.env.VITE_SCRAPER_SECRET || 'MA_CLE_SECRETE';
@@ -715,10 +714,20 @@ export default function JobBoard() {
 
   // ── Filtres visuels ───────────────────────────────────────────────
   const appliedIds = new Set(applied.map(e => e.job.id));
+
+  // Filtre par liens actifs : si tous sont désactivés → on montre tout,
+  // sinon on ne garde que les jobs dont sourceUrl correspond à un filtre actif.
+  const enabledFilterUrls = urlFilters.filter(f => f.enabled).map(f => f.url);
+  const hasActiveFilters  = enabledFilterUrls.length > 0 && enabledFilterUrls.length < urlFilters.length;
+
   const visibleJobs = jobs
     .filter(j => !jobMatchesBanwords(j, banwords))
     .filter(j => typeFilter === 'all' || j.type === typeFilter)
     .filter(j => !deletedIds.has(j.id))
+    .filter(j => {
+      if (!hasActiveFilters) return true; // pas de filtre d'URL actif → tout afficher
+      return enabledFilterUrls.some(url => j.sourceUrl === url);
+    })
     .slice(0, 200);
   const savedIds  = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
