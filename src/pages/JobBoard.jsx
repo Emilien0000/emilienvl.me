@@ -381,25 +381,25 @@ export default function JobBoard() {
         type:        r.type || 'emploi',
       }));
 
-      iif (silent) {
+      if (silent) {
         // Comparer avec les IDs connus → détecter les nouvelles offres
         const newOnes = normalized.filter(j => !knownJobIdsRef.current.has(j.id));
         if (newOnes.length > 0) {
+          // Merge en tête, cap à 30 (les nouvelles poussent les anciennes)
           setJobs(prev => {
             const prevIds = new Set(prev.map(j => j.id));
             const toAdd   = newOnes.filter(j => !prevIds.has(j.id));
             if (toAdd.length === 0) return prev;
             newOnes.forEach(j => knownJobIdsRef.current.add(j.id));
             setNewJobsCount(c => c + toAdd.length);
-            // <-- 2. Change la limite ici de 30 à 200
-            return [...toAdd, ...prev].slice(0, 200); 
+            return [...toAdd, ...prev].slice(0, 30);
           });
         }
       } else {
-        // Chargement initial → on stocke tout ce qu'on a récupéré
-        // <-- 3. Supprime la constante "capped" et passe tout le tableau "normalized"
-        knownJobIdsRef.current = new Set(normalized.map(j => j.id));
-        setJobs(normalized); 
+        // Chargement initial → cap à 30
+        const capped = normalized.slice(0, 30);
+        knownJobIdsRef.current = new Set(capped.map(j => j.id));
+        setJobs(capped);
         setFetched(true);
       }
     } catch (err) {
