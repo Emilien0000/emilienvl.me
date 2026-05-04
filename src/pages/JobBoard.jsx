@@ -359,23 +359,11 @@ export default function JobBoard() {
   // silent=true → merge sans spinner ni reset du scroll
   const fetchJobs = useCallback(async ({ silent = false } = {}) => {
     if (!silent) { setLoading(true); setError(null); }
-    //if (!silent && activeTab !== 'results') setActiveTab('results');
-
-    // NOUVEAU : On récupère la liste des URLs actives de l'utilisateur courant
-    const activeUrls = urlFilters.filter(f => f.enabled).map(f => f.url);
-
-    // S'il n'y a aucun lien actif, on affiche un feed vide (ne charge pas les offres des autres)
-    if (activeUrls.length === 0) {
-      setJobs([]);
-      if (!silent) { setLoading(false); setFetched(true); }
-      return;
-    }
-
+    if (!silent && activeTab !== 'results') setActiveTab('results');
     try {
       const { data, error: dbErr } = await supabase
         .from('jb_jobs')
         .select('*')
-        .in('source_url', activeUrls) // <-- NOUVEAU : On filtre uniquement sur SES recherches
         .order('date', { ascending: false })
         .limit(200);
 
@@ -393,7 +381,7 @@ export default function JobBoard() {
         type:        r.type || 'emploi',
       }));
 
-      if (silent) {
+      iif (silent) {
         // Comparer avec les IDs connus → détecter les nouvelles offres
         const newOnes = normalized.filter(j => !knownJobIdsRef.current.has(j.id));
         if (newOnes.length > 0) {
@@ -414,16 +402,14 @@ export default function JobBoard() {
         setJobs(normalized); 
         setFetched(true);
       }
-   } catch (err) {
+    } catch (err) {
       if (!silent) setError(err.message);
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [urlFilters]);
+  }, [activeTab]);
 
-  useEffect(() => { 
-    if (filtersLoaded && userId) fetchJobs(); 
-  }, [filtersLoaded, userId, fetchJobs]);
+  useEffect(() => { if (filtersLoaded && userId) fetchJobs(); }, [filtersLoaded]);
 
   // ── Polling silencieux + décompte visuel ────────────────────────
   useEffect(() => {
@@ -584,8 +570,7 @@ export default function JobBoard() {
   // ── Filtres visuels ───────────────────────────────────────────────
   const visibleJobs = jobs
     .filter(j => !jobMatchesBanwords(j, banwords))
-    .filter(j => typeFilter === 'all' || j.type === typeFilter)
-    .slice(0, 30);
+    .filter(j => typeFilter === 'all' || j.type === typeFilter);
   const savedIds  = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
 
