@@ -1,37 +1,9 @@
-// ── Écran de connexion ─────────────────────────────────────────────────────────
-
 // src/components/LoginScreen.jsx
-// Remplace le composant LoginScreen dans JobBoard.jsx
-// Design : terminal minimaliste avec accent cyan, typographie Syne
+// Design : élégant, mode clair, typographie Syne + DM Sans
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-// ── Animations ────────────────────────────────────────────────────────────────
 import { supabase } from '../supabase';
-
-const overlayVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.4 } },
-};
-
-const boxVariants = {
-  hidden: { opacity: 0, y: 24, scale: 0.97 },
-  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.38, ease: [0.22, 1, 0.36, 1] } },
-};
-
-const fieldVariants = {
-  hidden: { opacity: 0, x: -8 },
-  visible: (i) => ({ opacity: 1, x: 0, transition: { delay: i * 0.07 + 0.18, duration: 0.3 } }),
-};
-
-// ── Curseur clignotant ────────────────────────────────────────────────────────
-
-function BlinkCursor() {
-  return <span className="ls-blink">_</span>;
-}
-
-// ── Composant principal ───────────────────────────────────────────────────────
 
 export default function LoginScreen({ onLogin }) {
   const [email,    setEmail]    = useState('');
@@ -44,15 +16,8 @@ export default function LoginScreen({ onLogin }) {
 
   useEffect(() => { emailRef.current?.focus(); }, []);
 
-  // Pseudo-log de boot
-  const [bootDone, setBootDone] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setBootDone(true), 600);
-    return () => clearTimeout(t);
-  }, []);
-
   const validate = () => {
-    if (!email.trim())    return 'Email requis';
+    if (!email.trim()) return 'Email requis';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Email invalide';
     if (!password.trim()) return 'Mot de passe requis';
     if (password.length < 6) return 'Min. 6 caractères';
@@ -66,14 +31,13 @@ export default function LoginScreen({ onLogin }) {
     setLoading(true);
     setError('');
     setHint('');
-
     try {
       let result;
       if (isNew) {
         result = await supabase.auth.signUp({ email: email.trim(), password });
         if (result.error) throw result.error;
         if (!result.data.session) {
-          setHint('✉ Vérifie ta boîte mail pour confirmer ton compte.');
+          setHint('Vérifie ta boîte mail pour confirmer ton compte.');
           setLoading(false);
           return;
         }
@@ -97,338 +61,299 @@ export default function LoginScreen({ onLogin }) {
   return (
     <>
       <style>{`
-        /* ── LoginScreen styles ─────────────────────────────────── */
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
 
-        .ls-overlay {
-          position: fixed; inset: 0; z-index: 1000;
-          background: var(--bg-color, #0d0f11);
-          display: flex; align-items: center; justify-content: center;
-          padding: 1.5rem;
+        .ls-page {
+          min-height: 100vh;
+          background: #f5f6f8;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 2rem 1rem;
+          font-family: 'DM Sans', sans-serif;
+          position: relative;
+          overflow: hidden;
         }
 
-        .ls-noise {
-          position: fixed; inset: 0; z-index: 0;
-          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-          pointer-events: none; opacity: 0.4;
-        }
-
-        .ls-glow {
-          position: fixed; z-index: 0;
-          width: 600px; height: 600px;
-          background: radial-gradient(circle, rgba(19,201,237,0.06) 0%, transparent 70%);
-          top: 50%; left: 50%;
-          transform: translate(-50%, -50%);
+        .ls-bg-circle {
+          position: absolute;
+          border-radius: 50%;
           pointer-events: none;
         }
+        .ls-bg-circle-1 {
+          width: 500px; height: 500px;
+          top: -180px; right: -120px;
+          background: radial-gradient(circle, rgba(19,201,237,0.09) 0%, transparent 70%);
+        }
+        .ls-bg-circle-2 {
+          width: 350px; height: 350px;
+          bottom: -100px; left: -80px;
+          background: radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%);
+        }
 
-        .ls-box {
+        .ls-card {
           position: relative; z-index: 1;
-          width: 100%; max-width: 420px;
-          background: var(--card-bg, #141618);
-          border: 1px solid rgba(19,201,237,0.18);
-          border-radius: 16px;
-          padding: 0;
-          overflow: hidden;
-          box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 32px 64px rgba(0,0,0,0.45), 0 0 80px rgba(19,201,237,0.04);
+          width: 100%; max-width: 400px;
+          background: #ffffff;
+          border-radius: 20px;
+          padding: 2.5rem 2.25rem 2rem;
+          box-shadow:
+            0 1px 2px rgba(0,0,0,0.04),
+            0 4px 12px rgba(0,0,0,0.06),
+            0 16px 40px rgba(0,0,0,0.07);
         }
 
-        /* Barre de titre style fenêtre terminal */
-        .ls-titlebar {
-          display: flex; align-items: center; gap: 8px;
-          padding: 12px 18px;
-          border-bottom: 1px solid rgba(255,255,255,0.06);
-          background: rgba(255,255,255,0.02);
-        }
-        .ls-dot {
-          width: 10px; height: 10px; border-radius: 50%;
-        }
-        .ls-dot:nth-child(1) { background: #ff5f57; }
-        .ls-dot:nth-child(2) { background: #febc2e; }
-        .ls-dot:nth-child(3) { background: #28c840; }
-        .ls-titlebar-label {
-          margin-left: auto; margin-right: auto;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 0.72rem; color: rgba(255,255,255,0.3);
-          letter-spacing: 0.05em;
-        }
-
-        /* Corps */
-        .ls-body { padding: 2rem 2rem 1.75rem; }
-
-        /* Branding */
-        .ls-brand {
-          display: flex; align-items: center; gap: 12px;
+        .ls-header {
+          text-align: center;
           margin-bottom: 1.75rem;
         }
-        .ls-brand-icon {
-          width: 42px; height: 42px; border-radius: 10px;
-          background: linear-gradient(135deg, rgba(19,201,237,0.15), rgba(19,201,237,0.05));
-          border: 1px solid rgba(19,201,237,0.25);
+        .ls-logo {
+          width: 54px; height: 54px;
+          margin: 0 auto 1rem;
+          background: linear-gradient(135deg, #e8fbfe, #c8f4fb);
+          border-radius: 14px;
           display: flex; align-items: center; justify-content: center;
-          font-size: 1.25rem;
+          font-size: 1.6rem;
+          box-shadow: 0 2px 10px rgba(19,201,237,0.15);
         }
-        .ls-brand-text { }
-        .ls-brand-name {
+        .ls-title {
           font-family: 'Syne', sans-serif;
-          font-size: 1.1rem; font-weight: 800;
-          color: var(--text-main, #f0f2f5);
-          letter-spacing: -0.01em; line-height: 1;
+          font-size: 1.5rem;
+          font-weight: 800;
+          color: #111827;
+          letter-spacing: -0.02em;
+          margin: 0 0 0.4rem;
         }
-        .ls-brand-sub {
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 0.7rem; color: rgba(19,201,237,0.7);
-          margin-top: 3px;
+        .ls-subtitle {
+          font-size: 0.85rem;
+          color: #6b7280;
+          font-weight: 300;
+          margin: 0;
+          line-height: 1.5;
         }
 
-        /* Prompt de terminal */
-        .ls-prompt {
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 0.78rem; color: rgba(255,255,255,0.25);
-          margin-bottom: 1.25rem;
-          display: flex; align-items: center; gap: 6px;
+        .ls-tabs {
+          display: flex;
+          background: #f3f4f6;
+          border-radius: 10px;
+          padding: 3px;
+          margin-bottom: 1.75rem;
         }
-        .ls-prompt-arrow { color: rgba(19,201,237,0.5); }
+        .ls-tab {
+          flex: 1;
+          padding: 0.55rem;
+          border: none;
+          border-radius: 8px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.84rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          background: transparent;
+          color: #6b7280;
+        }
+        .ls-tab.active {
+          background: #ffffff;
+          color: #111827;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+        }
 
-        /* Champs */
         .ls-field { margin-bottom: 1rem; }
         .ls-label {
           display: block;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 0.68rem; font-weight: 500;
-          color: rgba(19,201,237,0.6);
-          letter-spacing: 0.08em; text-transform: uppercase;
-          margin-bottom: 6px;
+          font-size: 0.8rem;
+          font-weight: 500;
+          color: #374151;
+          margin-bottom: 0.4rem;
         }
         .ls-input {
-          width: 100%; box-sizing: border-box;
-          padding: 0.7rem 1rem;
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.09);
-          border-radius: 8px;
+          width: 100%;
+          box-sizing: border-box;
+          padding: 0.72rem 1rem;
+          background: #f9fafb;
+          border: 1.5px solid #e5e7eb;
+          border-radius: 10px;
           font-family: 'DM Sans', sans-serif;
           font-size: 0.92rem;
-          color: var(--text-main, #f0f2f5);
+          color: #111827;
           outline: none;
-          transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+          transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
         }
-        .ls-input::placeholder { color: rgba(255,255,255,0.2); }
+        .ls-input::placeholder { color: #9ca3af; }
         .ls-input:focus {
-          border-color: rgba(19,201,237,0.45);
-          background: rgba(19,201,237,0.03);
-          box-shadow: 0 0 0 3px rgba(19,201,237,0.08);
+          border-color: #13c9ed;
+          background: #ffffff;
+          box-shadow: 0 0 0 3px rgba(19,201,237,0.1);
         }
 
-        /* Erreur / Hint */
         .ls-error {
-          margin-top: 0.6rem;
-          padding: 0.6rem 0.85rem;
-          background: rgba(255,80,80,0.07);
-          border: 1px solid rgba(255,80,80,0.2);
-          border-radius: 7px;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 0.73rem; color: #ff8080;
+          display: flex; align-items: flex-start; gap: 7px;
+          margin-top: 0.75rem;
+          padding: 0.65rem 0.9rem;
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          border-radius: 9px;
+          font-size: 0.82rem;
+          color: #dc2626;
+          line-height: 1.4;
         }
         .ls-hint {
-          margin-top: 0.6rem;
-          padding: 0.6rem 0.85rem;
-          background: rgba(19,201,237,0.06);
-          border: 1px solid rgba(19,201,237,0.2);
-          border-radius: 7px;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 0.73rem; color: rgba(19,201,237,0.85);
+          display: flex; align-items: flex-start; gap: 7px;
+          margin-top: 0.75rem;
+          padding: 0.65rem 0.9rem;
+          background: #f0fdfe;
+          border: 1px solid #a5f3fc;
+          border-radius: 9px;
+          font-size: 0.82rem;
+          color: #0891b2;
+          line-height: 1.4;
         }
 
-        /* Bouton principal */
-        .ls-submit {
-          width: 100%; margin-top: 1.25rem;
-          padding: 0.8rem 1rem;
-          background: rgba(19,201,237,0.12);
-          border: 1px solid rgba(19,201,237,0.35);
-          border-radius: 8px;
+        .ls-btn {
+          width: 100%;
+          margin-top: 1.25rem;
+          padding: 0.82rem;
+          background: #111827;
+          border: none;
+          border-radius: 10px;
           font-family: 'Syne', sans-serif;
-          font-size: 0.9rem; font-weight: 700;
-          color: #13c9ed;
-          cursor: pointer; letter-spacing: 0.02em;
+          font-size: 0.92rem;
+          font-weight: 700;
+          color: #ffffff;
+          cursor: pointer;
+          letter-spacing: 0.01em;
           transition: all 0.2s;
-          display: flex; align-items: center; justify-content: center; gap: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
         }
-        .ls-submit:hover:not(:disabled) {
-          background: rgba(19,201,237,0.2);
-          border-color: rgba(19,201,237,0.6);
-          box-shadow: 0 0 20px rgba(19,201,237,0.12);
+        .ls-btn:hover:not(:disabled) {
+          background: #1f2937;
           transform: translateY(-1px);
+          box-shadow: 0 6px 18px rgba(0,0,0,0.18);
         }
-        .ls-submit:disabled {
-          opacity: 0.5; cursor: not-allowed;
-        }
+        .ls-btn:active:not(:disabled) { transform: translateY(0); }
+        .ls-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
-        /* Spinner dans le bouton */
-        .ls-spinner {
-          width: 14px; height: 14px;
-          border: 2px solid rgba(19,201,237,0.2);
-          border-top-color: #13c9ed;
+        .ls-spin {
+          width: 15px; height: 15px;
+          border: 2px solid rgba(255,255,255,0.25);
+          border-top-color: #ffffff;
           border-radius: 50%;
-          animation: ls-spin 0.7s linear infinite;
+          animation: ls-rotate 0.65s linear infinite;
+          flex-shrink: 0;
         }
-        @keyframes ls-spin { to { transform: rotate(360deg); } }
+        @keyframes ls-rotate { to { transform: rotate(360deg); } }
 
-        /* Switch mode */
-        .ls-switch {
-          margin-top: 1.25rem; text-align: center;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 0.83rem; color: rgba(255,255,255,0.3);
+        .ls-sources {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 5px;
+          margin-top: 1.75rem;
+          padding-top: 1.5rem;
+          border-top: 1px solid #f3f4f6;
         }
-        .ls-switch button {
-          background: none; border: none; cursor: pointer;
-          color: rgba(19,201,237,0.7);
-          font-family: 'DM Sans', sans-serif; font-size: 0.83rem;
-          padding: 0; margin-left: 4px;
-          text-decoration: underline; text-underline-offset: 3px;
-          transition: color 0.2s;
+        .ls-badge {
+          padding: 3px 10px;
+          background: #f3f4f6;
+          border-radius: 999px;
+          font-size: 0.71rem;
+          color: #6b7280;
         }
-        .ls-switch button:hover { color: #13c9ed; }
-
-        /* Divider footer */
-        .ls-divider {
-          margin: 1.5rem -2rem 0;
-          padding: 0.75rem 2rem;
-          border-top: 1px solid rgba(255,255,255,0.05);
-          background: rgba(255,255,255,0.01);
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 0.68rem; color: rgba(255,255,255,0.12);
-          text-align: center;
-          letter-spacing: 0.04em;
-        }
-
-        /* Curseur clignotant */
-        .ls-blink {
-          display: inline-block;
-          animation: ls-blink 1s step-end infinite;
-          color: rgba(19,201,237,0.6);
-          font-weight: 400;
-        }
-        @keyframes ls-blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
-
-        /* Boot animation */
-        .ls-boot {
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 0.72rem; color: rgba(19,201,237,0.4);
-          margin-bottom: 1.5rem; line-height: 1.7;
-        }
-        .ls-boot-line { display: flex; gap: 8px; }
-        .ls-boot-ok { color: #28c840; }
       `}</style>
 
-      <motion.div className="ls-overlay" variants={overlayVariants} initial="hidden" animate="visible">
-        <div className="ls-noise" aria-hidden />
-        <div className="ls-glow" aria-hidden />
+      <div className="ls-page">
+        <div className="ls-bg-circle ls-bg-circle-1" />
+        <div className="ls-bg-circle ls-bg-circle-2" />
 
-        <motion.div className="ls-box" variants={boxVariants} initial="hidden" animate="visible">
-          {/* Barre de fenêtre */}
-          <div className="ls-titlebar">
-            <div className="ls-dot" /><div className="ls-dot" /><div className="ls-dot" />
-            <span className="ls-titlebar-label">job-tracker — session</span>
+        <motion.div
+          className="ls-card"
+          initial={{ opacity: 0, y: 18, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <div className="ls-header">
+            <div className="ls-logo">🎯</div>
+            <h1 className="ls-title">Job Tracker</h1>
+            <p className="ls-subtitle">
+              {isNew
+                ? 'Crée ton compte pour sauvegarder tes recherches.'
+                : 'Retrouve tes filtres depuis n\'importe où.'}
+            </p>
           </div>
 
-          <div className="ls-body">
-            {/* Brand */}
-            <div className="ls-brand">
-              <div className="ls-brand-icon">🎯</div>
-              <div className="ls-brand-text">
-                <div className="ls-brand-name">Job Tracker</div>
-                <div className="ls-brand-sub">v3.0 · multi-source</div>
-              </div>
-            </div>
+          <div className="ls-tabs">
+            <button
+              className={`ls-tab${!isNew ? ' active' : ''}`}
+              onClick={() => { setIsNew(false); setError(''); setHint(''); }}
+            >
+              Se connecter
+            </button>
+            <button
+              className={`ls-tab${isNew ? ' active' : ''}`}
+              onClick={() => { setIsNew(true); setError(''); setHint(''); }}
+            >
+              Créer un compte
+            </button>
+          </div>
 
-            {/* Boot log (animation de chargement) */}
-            <AnimatePresence>
-              {!bootDone && (
-                <motion.div className="ls-boot" exit={{ opacity: 0, height: 0, marginBottom: 0 }} transition={{ duration: 0.25 }}>
-                  <div className="ls-boot-line"><span className="ls-boot-ok">✓</span> supabase.init</div>
-                  <div className="ls-boot-line"><span className="ls-boot-ok">✓</span> scrapers.ready</div>
-                  <div className="ls-boot-line"><span>→</span> awaiting auth<BlinkCursor /></div>
+          <form onSubmit={handle} noValidate>
+            <motion.div className="ls-field" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
+              <label className="ls-label">Adresse email</label>
+              <input
+                ref={emailRef}
+                type="email"
+                className="ls-input"
+                value={email}
+                onChange={e => { setEmail(e.target.value); setError(''); }}
+                placeholder="toi@exemple.com"
+                autoComplete="email"
+                disabled={loading}
+              />
+            </motion.div>
+
+            <motion.div className="ls-field" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}>
+              <label className="ls-label">Mot de passe</label>
+              <input
+                type="password"
+                className="ls-input"
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError(''); }}
+                placeholder={isNew ? 'Minimum 6 caractères' : '••••••••'}
+                autoComplete={isNew ? 'new-password' : 'current-password'}
+                disabled={loading}
+              />
+            </motion.div>
+
+            <AnimatePresence mode="wait">
+              {error && (
+                <motion.div key="err" className="ls-error" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                  <span>⚠</span> {error}
+                </motion.div>
+              )}
+              {hint && (
+                <motion.div key="hint" className="ls-hint" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                  <span>✉</span> {hint}
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Prompt */}
-            {bootDone && (
-              <div className="ls-prompt">
-                <span className="ls-prompt-arrow">›</span>
-                {isNew ? 'create_account' : 'sign_in'}
-                <BlinkCursor />
-              </div>
-            )}
+            <button type="submit" className="ls-btn" disabled={loading}>
+              {loading
+                ? <><div className="ls-spin" />Connexion…</>
+                : isNew ? 'Créer mon compte →' : 'Se connecter →'}
+            </button>
+          </form>
 
-            {/* Formulaire */}
-            <form onSubmit={handle} noValidate>
-              <motion.div className="ls-field" custom={0} variants={fieldVariants} initial="hidden" animate="visible">
-                <label className="ls-label">email</label>
-                <input
-                  ref={emailRef}
-                  type="email"
-                  className="ls-input"
-                  value={email}
-                  onChange={e => { setEmail(e.target.value); setError(''); }}
-                  placeholder="toi@exemple.com"
-                  autoComplete="email"
-                  disabled={loading}
-                />
-              </motion.div>
-
-              <motion.div className="ls-field" custom={1} variants={fieldVariants} initial="hidden" animate="visible">
-                <label className="ls-label">password</label>
-                <input
-                  type="password"
-                  className="ls-input"
-                  value={password}
-                  onChange={e => { setPassword(e.target.value); setError(''); }}
-                  placeholder={isNew ? 'min. 6 caractères' : '••••••••'}
-                  autoComplete={isNew ? 'new-password' : 'current-password'}
-                  disabled={loading}
-                />
-              </motion.div>
-
-              <AnimatePresence>
-                {error && (
-                  <motion.div className="ls-error" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                    ⚠ {error}
-                  </motion.div>
-                )}
-                {hint && (
-                  <motion.div className="ls-hint" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                    {hint}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <button type="submit" className="ls-submit" disabled={loading}>
-                {loading ? (
-                  <><div className="ls-spinner" /> Connexion…</>
-                ) : (
-                  isNew ? '→ Créer le compte' : '→ Se connecter'
-                )}
-              </button>
-            </form>
-
-            <div className="ls-switch">
-              {isNew ? 'Déjà un compte ?' : 'Pas encore de compte ?'}
-              <button
-                type="button"
-                onClick={() => { setIsNew(v => !v); setError(''); setHint(''); }}
-                disabled={loading}
-              >
-                {isNew ? 'Se connecter' : 'Créer un compte'}
-              </button>
-            </div>
-
-            <div className="ls-divider">
-              données isolées par compte · aucun tracking · 100% local
-            </div>
+          <div className="ls-sources">
+            {['Indeed', 'LinkedIn', 'HelloWork', 'Adzuna', 'France Travail', 'Stage.fr'].map(s => (
+              <span key={s} className="ls-badge">{s}</span>
+            ))}
           </div>
         </motion.div>
-      </motion.div>
+      </div>
     </>
   );
 }
