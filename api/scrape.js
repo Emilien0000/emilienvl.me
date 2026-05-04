@@ -1,14 +1,5 @@
 // api/scrape.js
-export const config = { maxDuration: 60 }; // Demande à Vercel d'être patient (jusqu'à 60s)
-
-function corsHeaders() {
-  return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-User-Id',
-    'Content-Type': 'application/json',
-  };
-}
+export const config = { maxDuration: 60 };
 
 function sbUrl(path) { return `${process.env.SUPABASE_URL}/rest/v1/${path}`; }
 
@@ -27,30 +18,47 @@ async function sbFetch(path, options = {}) {
   return res.json();
 }
 
-export default async function handler(req) {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders() });
-  if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'POST required' }), { status: 405, headers: corsHeaders() });
+export default async function handler(req, res) {
+  // Configuration CORS adaptée pour Node.js
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-User-Id');
 
-  // 👇 ASSURE-TOI QUE CES VARIABLES SONT BIEN DANS LES REGLAGES DE TON PROJET VERCEL
+  // Bloque les requêtes préliminaires (CORS)
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
+  // Vérifie la méthode
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'POST required' });
+  }
+
   const pythonApiUrl = process.env.PYTHON_SCRAPER_URL; 
   const scraperSecret = process.env.SCRAPER_SECRET || '';
-  const userId = req.headers.get('x-user-id');
+  
+  // CORRECTION CRITIQUE ICI : Syntaxe Node.js pour lire les headers
+  const userId = req.headers['x-user-id'];
 
-  if (!userId) return new Response(JSON.stringify({ error: "Non connecté" }), { status: 401, headers: corsHeaders() });
-  if (!pythonApiUrl) return new Response(JSON.stringify({ error: "URL Python manquante sur Vercel" }), { status: 500, headers: corsHeaders() });
+  if (!userId) return res.status(401).json({ error: "Utilisateur non connecté" });
+  if (!pythonApiUrl) return res.status(500).json({ error: "URL Python manquante sur Vercel" });
 
   try {
     // 1. Lire tes filtres depuis Supabase
     const profiles = await sbFetch(`user_filters?id=eq.${encodeURIComponent(userId)}&select=filters`);
-    if (!profiles.length || !profiles[0].filters) return new Response(JSON.stringify({ ok: true }), { status: 200, headers: corsHeaders() });
+    if (!profiles.length || !profiles[0].filters) {
+      return res.status(200).json({ ok: true, message: 'Aucun filtre' });
+    }
 
     let filterArray = profiles[0].filters;
     const activeFilters = filterArray.filter(f => f.enabled);
-    if (activeFilters.length === 0) return new Response(JSON.stringify({ ok: true }), { status: 200, headers: corsHeaders() });
+    if (activeFilters.length === 0) {
+      return res.status(200).json({ ok: true, message: 'Aucun filtre actif' });
+    }
 
     const urls = activeFilters.map(f => f.url);
 
-    // 2. Demander à Python de scraper (instantané si Render est éveillé)
+    // 2. Demander à Python de scraper (instantané si Render est éveillé via ton Cron Job)
     const scrapeRes = await fetch(`${pythonApiUrl}/scrape`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-scraper-secret': scraperSecret },
@@ -95,10 +103,10 @@ export default async function handler(req) {
       body: JSON.stringify({ filters: filterArray })
     });
 
-    return new Response(JSON.stringify({ ok: true, count: allJobs.length }), { status: 200, headers: corsHeaders() });
+    return res.status(200).json({ ok: true, count: allJobs.length });
 
   } catch (err) {
     console.error("Erreur globale scrape:", err);
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders() });
+    return res.status(500).json({ error: err.message });
   }
 }
