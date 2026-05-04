@@ -439,6 +439,7 @@ export default function JobBoard() {
       const { data, error: dbErr } = await supabase
         .from('jb_jobs')
         .select('*')
+        .eq('user_id', userId)
         .order('date', { ascending: false })
         .limit(200);
 
@@ -608,7 +609,8 @@ export default function JobBoard() {
 
       if (allJobs.length > 0) {
         const jobsToInsert = allJobs.map(j => ({
-          id:          j.id          || crypto.randomUUID(),
+          id:          `${userId}-${j.url}`.slice(0, 255),
+          user_id:     userId,
           source_url:  j.source_url  || j.sourceUrl || activeFilters[0]?.url || '',
           title:       j.title       || '(sans titre)',
           company:     j.company     || '',
