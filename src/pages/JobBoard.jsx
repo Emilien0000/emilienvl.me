@@ -369,6 +369,7 @@ export default function JobBoard() {
 
       const scrapeData = await scrapeRes.json();
       console.log('🔎 scrapeData complet:', scrapeData);
+      console.log('🔎 results[0] RAW:', JSON.stringify(scrapeData.results?.[0], null, 2));
 
       // ── FIX v6 : détection intelligente du format de réponse ────────────
       // Le scraper peut renvoyer 3 formats différents :
