@@ -698,16 +698,20 @@ export default function JobBoard() {
   useEffect(() => {
     if (!session) return;
     async function init() {
-      filtersOwnerRef.current = null; // bloque la sauvegarde pendant le chargement
+      filtersOwnerRef.current = null;
       setFiltersLoaded(false);
       try {
         const res = await apiFetch('/api/filters', {}, userId);
         if (res.ok) {
-          const filters = await res.json();
-          setUrlFilters(Array.isArray(filters) ? filters : []);
+          const data = await res.json();
+          // CORRECTION ICI : Si c'est un objet, on va chercher .filters
+          const fetchedFilters = Array.isArray(data) ? data : (data?.filters || []);
+          setUrlFilters(fetchedFilters);
         }
-      } catch {}
-      filtersOwnerRef.current = userId; // autorise la sauvegarde pour cet utilisateur
+      } catch (err) {
+        console.error("Erreur chargement filtres:", err);
+      }
+      filtersOwnerRef.current = userId;
       setFiltersLoaded(true);
     }
     init();
