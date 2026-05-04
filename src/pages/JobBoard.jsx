@@ -589,7 +589,7 @@ useEffect(() => {
           id: session.userId, 
           filters: urlFilters 
         });
-        
+
       if (error) {
         console.error("❌ ERREUR SAUVEGARDE SUPABASE:", error.message);
       } else {
