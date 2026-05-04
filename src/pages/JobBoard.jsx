@@ -470,13 +470,25 @@ export default function JobBoard() {
     if (!silent && activeTab !== 'results') setActiveTab('results');
     try {
       console.log('🔍 fetchJobs — userId utilisé:', userId);
-      const { data, error: dbErr } = await supabase
+
+      // On ne récupère que les jobs dont la source_url correspond à un filtre ACTIF
+      const activeUrls = urlFilters.filter(f => f.enabled).map(f => f.url);
+      console.log('🔍 fetchJobs — filtres actifs:', activeUrls);
+
+      let query = supabase
         .from('jb_jobs')
         .select('*')
         .eq('user_id', userId)
         .order('scraped_at', { ascending: false })
         .order('date', { ascending: false })
         .limit(200);
+
+      // Si on a des filtres actifs, on restreint aux URLs correspondantes
+      if (activeUrls.length > 0) {
+        query = query.in('source_url', activeUrls);
+      }
+
+      const { data, error: dbErr } = await query;
 
       console.log('🔍 fetchJobs — résultats:', data?.length, 'erreur:', dbErr?.message);
 
@@ -520,7 +532,7 @@ export default function JobBoard() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [activeTab, userId]);
+  }, [activeTab, userId, urlFilters]);
 
   useEffect(() => { if (filtersLoaded && userId) fetchJobs(); }, [filtersLoaded, userId]);
 
