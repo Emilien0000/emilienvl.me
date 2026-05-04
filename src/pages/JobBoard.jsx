@@ -581,28 +581,25 @@ useEffect(() => {
       return;
     }
 
-    // On remplace le catch silencieux par de vrais logs
-    apiFetch('/api/filters', {
-      method: 'PUT',
-      body: JSON.stringify({ filters: urlFilters }),
-    }, session.userId)
-    .then(async (res) => {
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error("❌ ERREUR API SAUVEGARDE:", res.status, errorText);
-        alert(`Échec de la sauvegarde (Erreur ${res.status}). Regarde la console (F12) !`);
+    async function saveToSupabase() {
+      // Upsert: met à jour si l'ID existe, sinon le crée
+      const { error } = await supabase
+        .from('profiles') // Même nom de table qu'au dessus
+        .upsert({ 
+          id: session.userId, 
+          filters: urlFilters 
+        });
+
+      if (error) {
+        console.error("❌ ERREUR SAUVEGARDE SUPABASE:", error.message);
       } else {
-        console.log("✅ Filtres enregistrés sur Supabase !");
+        console.log("✅ Filtres sauvegardés en direct sur Supabase !");
       }
-    })
-    .catch(err => {
-      console.error("❌ ERREUR RÉSEAU CRITIQUE:", err);
-    });
+    }
+
+    saveToSupabase();
     
   }, [urlFilters, filtersLoaded, session?.userId]);
-
-  useEffect(() => { LS.set('jb_banwords', banwords); }, [banwords]);
-  useEffect(() => { LS.set('jb_saves',    saves);    }, [saves]);
 
   // ── Fetch offres depuis Supabase ───────────────────────────────────────────
   const fetchJobs = useCallback(async () => {
@@ -723,28 +720,26 @@ useEffect(() => {
     async function init() {
       filtersOwnerRef.current = null;
       setFiltersLoaded(false);
-      initialLoadRef.current = true; // On signale qu'on démarre un chargement
+      initialLoadRef.current = true;
 
       try {
-        const res = await apiFetch('/api/filters', {}, session.userId);
-        
-        if (!res.ok) {
-          // Si l'API ne trouve rien (ex: 404), on autorise un tableau vide
-          if (res.status === 404 && isMounted) {
-            setUrlFilters([]);
-            filtersOwnerRef.current = session.userId;
-            setFiltersLoaded(true);
-          }
-          return; // Si c'est une autre erreur, on stop tout pour ne rien écraser !
+        // Remplace 'profiles' par le vrai nom de ta table si c'est différent
+        // On cherche la colonne 'filters' pour l'utilisateur connecté
+        const { data, error } = await supabase
+          .from('profiles') 
+          .select('filters')
+          .eq('id', session.userId)
+          .single();
+
+        // Le code PGRST116 signifie "Aucune ligne trouvée", c'est normal pour un nouvel utilisateur
+        if (error && error.code !== 'PGRST116') {
+          console.error("❌ Erreur chargement filtres Supabase:", error);
         }
 
-        const data = await res.json();
-        
-        // Extraction ultra-blindée (peu importe comment le backend renvoie la donnée)
         let fetchedFilters = [];
-        if (Array.isArray(data)) fetchedFilters = data;
-        else if (data && Array.isArray(data.filters)) fetchedFilters = data.filters;
-        else if (data?.data && Array.isArray(data.data.filters)) fetchedFilters = data.data.filters;
+        if (data && data.filters) {
+          fetchedFilters = Array.isArray(data.filters) ? data.filters : [];
+        }
 
         if (isMounted) {
           setUrlFilters(fetchedFilters);
@@ -752,9 +747,7 @@ useEffect(() => {
           setFiltersLoaded(true);
         }
       } catch (err) {
-        console.error("Erreur réseau API filtres:", err);
-        // CRUCIAL : On ne passe PAS filtersLoaded à true ici !
-        // Sinon le useEffect suivant écrasera la BDD avec un tableau vide.
+        console.error("❌ Erreur inattendue:", err);
       }
     }
     init();
