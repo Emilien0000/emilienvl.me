@@ -92,7 +92,7 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
   const typeInfo = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
   const source   = detectSource(job.sourceUrl, job.url);
   return (
-    <motion.div className={`jb-card${isNew ? ' jb-card-new' : ''}`} style={{ '--source-color': source.color }} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -10 }} transition={{ duration: 0.3, delay: Math.min(index * 0.035, 0.6) }} whileHover={{ y: -3, transition: { duration: 0.18 } }} layout>
+    <motion.div className={`jb-card${isNew ? ' jb-card-new' : ''}`} style={{ '--source-color': source.color }} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -10 }} transition={{ duration: 0.3, delay: Math.min(index * 0.035, 0.6) }} whileHover={{ y: -3, transition: { duration: 0.18 } }}>
       <div className="jb-card-accent" />
       <div className="jb-card-inner">
         <div className="jb-card-top">
@@ -422,21 +422,14 @@ export default function JobBoard() {
     return () => { isMounted = false; };
   }, [userId]);
 
-  // ── Sauvegarde banwords (Supabase) ───────────────────────────────
+  // ── Sauvegarde banwords + saves ensemble (1 seul upsert) ───────
+  // IMPORTANT : évite que banwords écrase saves et vice-versa
   useEffect(() => {
-    if (!banwordsLoaded || !userId) return;
-    supabase.from('user_prefs').upsert({ id: userId, banwords }).then(({ error }) => {
-      if (error) console.error('❌ Erreur sauvegarde banwords:', error.message);
+    if (!banwordsLoaded || !savesLoaded || !userId) return;
+    supabase.from('user_prefs').upsert({ id: userId, banwords, saves }).then(({ error }) => {
+      if (error) console.error('❌ Erreur sauvegarde prefs:', error.message);
     });
-  }, [banwords, banwordsLoaded, userId]);
-
-  // ── Sauvegarde saves (Supabase) ──────────────────────────────────
-  useEffect(() => {
-    if (!savesLoaded || !userId) return;
-    supabase.from('user_prefs').upsert({ id: userId, saves }).then(({ error }) => {
-      if (error) console.error('❌ Erreur sauvegarde saves:', error.message);
-    });
-  }, [saves, savesLoaded, userId]);
+  }, [banwords, saves, banwordsLoaded, savesLoaded, userId]);
 
   // ── Chargement candidatures (Supabase) ──────────────────────────
   useEffect(() => {
@@ -496,6 +489,7 @@ export default function JobBoard() {
         url:         r.url,
         description: r.description || '',
         date:        r.date,
+        scrapedAt:   r.scraped_at,
         type:        r.type || 'emploi',
       }));
 
@@ -510,7 +504,7 @@ export default function JobBoard() {
             newOnes.forEach(j => knownJobIdsRef.current.add(j.id));
             setNewJobsCount(c => c + toAdd.length);
             setNewJobIds(prev => new Set([...prev, ...toAdd.map(j => j.id)]));
-            return [...toAdd, ...prev].slice(0, 200); 
+            return [...toAdd, ...prev]; // pas de limite en mémoire, slice dans visibleJobs
           });
         }
       } else {
@@ -518,7 +512,7 @@ export default function JobBoard() {
         // <-- 3. Supprime la constante "capped" et passe tout le tableau "normalized"
         knownJobIdsRef.current = new Set(normalized.map(j => j.id));
         setNewJobIds(new Set());
-        setJobs(normalized.slice(0, 200)); 
+        setJobs(normalized); // on garde tout en mémoire, le slice est dans visibleJobs
         setFetched(true);
       }
     } catch (err) {
@@ -732,7 +726,7 @@ export default function JobBoard() {
       if (!hasActiveFilters) return true; // pas de filtre d'URL actif → tout afficher
       return enabledFilterUrls.some(url => j.sourceUrl === url);
     })
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .sort((a, b) => new Date(b.scrapedAt || b.date) - new Date(a.scrapedAt || a.date))
     .slice(0, 30);
   const savedIds  = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
