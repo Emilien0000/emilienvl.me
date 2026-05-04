@@ -86,7 +86,9 @@ function normalizeDate(d) {
   return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
 }
 
-function JobCard({ job, index, saved, onSave, onApply, onDelete, showActions = true, appliedAt }) {
+const IconCancel = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
+
+function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showActions = true, appliedAt }) {
   const typeInfo = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
   const source   = detectSource(job.sourceUrl, job.url);
   return (
@@ -114,6 +116,11 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, showActions = t
             <div className="jb-card-action-btns">
               {onApply && <button className="jb-action-btn jb-apply-action" onClick={() => onApply(job)} title="Marquer comme postulé"><IconSend /> Postulé</button>}
               {onDelete && <button className="jb-action-btn jb-delete-action" onClick={() => onDelete(job)} title="Supprimer cette offre"><IconTrash /> Supprimer</button>}
+            </div>
+          )}
+          {onCancel && (
+            <div className="jb-card-action-btns">
+              <button className="jb-action-btn jb-delete-action" onClick={() => onCancel(job)} title="Annuler ma candidature"><IconCancel /> Annuler la candidature</button>
             </div>
           )}
         </div>
@@ -231,8 +238,6 @@ function BanwordsPanel({ banwords, onChange }) {
   );
 }
 
-const IconCancel = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
-
 function AppliedPanel({ applied, onRemove }) {
   if (!applied.length) return (
     <div className="jb-empty">
@@ -246,19 +251,8 @@ function AppliedPanel({ applied, onRemove }) {
       <div className="jb-grid">
         <AnimatePresence>
           {applied.map((entry) => (
-            <motion.div key={entry.job.id} layout initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.3 }}>
-              <JobCard job={entry.job} saved={false} showActions={false} appliedAt={entry.appliedAt} />
-              <div style={{ marginTop: '-8px', marginBottom: '16px', display: 'flex', justifyContent: 'flex-end', paddingRight: '4px' }}>
-                <button
-                  className="jb-action-btn jb-delete-action"
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', fontSize: '0.8rem', cursor: 'pointer' }}
-                  onClick={() => onRemove(entry.job.id)}
-                  title="Annuler ma candidature"
-                >
-                  <IconCancel /> Annuler ma candidature
-                </button>
-              </div>
-            </motion.div>
+            <JobCard key={entry.job.id} job={entry.job} saved={false} showActions={false} appliedAt={entry.appliedAt}
+              onCancel={(job) => onRemove(job.id)} />
           ))}
         </AnimatePresence>
       </div>
@@ -824,7 +818,10 @@ export default function JobBoard() {
           {activeTab === 'filters'  && <motion.div key="filters"><FiltersPanel filters={urlFilters} onChange={setUrlFilters} onScrapeNow={triggerScrape} scrapeStatus={scrapeStatus} /></motion.div>}
           {activeTab === 'banwords' && <motion.div key="banwords"><BanwordsPanel banwords={banwords} onChange={setBanwords} /></motion.div>}
           {activeTab === 'saves'    && <motion.div key="saves"><SavesPanel saves={saves} onRemove={(id) => setSaves(p => p.filter(s => s.id !== id))} /></motion.div>}
-          {activeTab === 'applied'  && <motion.div key="applied"><AppliedPanel applied={applied} onRemove={(id) => setApplied(p => p.filter(e => e.job.id !== id))} /></motion.div>}
+          {activeTab === 'applied'  && <motion.div key="applied"><AppliedPanel applied={applied} onRemove={(id) => {
+            setApplied(p => p.filter(e => e.job.id !== id));
+            setDeletedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+          }} /></motion.div>}
         </AnimatePresence>
       </main>
     </div>
