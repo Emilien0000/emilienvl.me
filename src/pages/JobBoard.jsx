@@ -474,7 +474,7 @@ export default function JobBoard() {
         .eq('user_id', userId)
         .order('scraped_at', { ascending: false })
         .order('date', { ascending: false })
-        .limit(200);
+        .limit(500);
 
       console.log('🔍 fetchJobs — résultats:', data?.length, 'erreur:', dbErr?.message);
 
@@ -718,16 +718,23 @@ export default function JobBoard() {
   const enabledFilterUrls = urlFilters.filter(f => f.enabled).map(f => f.url);
   const hasActiveFilters  = enabledFilterUrls.length > 0 && enabledFilterUrls.length < urlFilters.length;
 
+  // Déduplication titre+company (Indeed génère des URLs différentes pour la même offre)
+  const seenTitleCompany = new Set();
   const visibleJobs = jobs
     .filter(j => !jobMatchesBanwords(j, banwords))
     .filter(j => typeFilter === 'all' || j.type === typeFilter)
     .filter(j => !deletedIds.has(j.id))
     .filter(j => {
-      if (!hasActiveFilters) return true; // pas de filtre d'URL actif → tout afficher
+      if (!hasActiveFilters) return true;
       return enabledFilterUrls.some(url => j.sourceUrl === url);
     })
-    .sort((a, b) => new Date(b.scrapedAt || b.date) - new Date(a.scrapedAt || a.date))
-    .slice(0, 30);
+    .filter(j => {
+      const key = `${j.title.toLowerCase().trim()}|${j.company.toLowerCase().trim()}`;
+      if (seenTitleCompany.has(key)) return false;
+      seenTitleCompany.add(key);
+      return true;
+    })
+    .slice(0, 30); // ordre conservé depuis Supabase : scraped_at DESC, date DESC
   const savedIds  = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
 
