@@ -609,7 +609,6 @@ export default function JobBoard() {
 
       if (allJobs.length > 0) {
         const jobsToInsert = allJobs.map(j => ({
-          id:          `${userId}-${j.url}`.slice(0, 255),
           user_id:     userId,
           source_url:  j.source_url  || j.sourceUrl || activeFilters[0]?.url || '',
           title:       j.title       || '(sans titre)',
@@ -625,7 +624,7 @@ export default function JobBoard() {
 
         const { error: dbError } = await supabase
           .from('jb_jobs')
-          .upsert(jobsToInsert, { onConflict: 'url', ignoreDuplicates: false });
+          .upsert(jobsToInsert, { onConflict: 'user_id,url', ignoreDuplicates: true });
 
         if (dbError) throw new Error("Erreur d'insertion BDD: " + dbError.message);
         console.log('✅ Insertion Supabase OK');
