@@ -483,9 +483,9 @@ export default function JobBoard() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [activeTab]);
+  }, [activeTab, userId]);
 
-  useEffect(() => { if (filtersLoaded && userId) fetchJobs(); }, [filtersLoaded]);
+  useEffect(() => { if (filtersLoaded && userId) fetchJobs(); }, [filtersLoaded, userId]);
 
   // ── Polling silencieux + décompte visuel ────────────────────────
   useEffect(() => {
@@ -527,7 +527,7 @@ export default function JobBoard() {
       const scrapeRes = await fetch(`${pythonUrl}/scrape`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'x-scraper-secret': scraperSecret },
-        body:    JSON.stringify({ urls: activeFilters.map(f => f.url), results_wanted: 30 }),
+        body:    JSON.stringify({ urls: activeFilters.map(f => f.url), results_wanted: 30, user_id: userId }),
       });
 
       if (!scrapeRes.ok) throw new Error(`Erreur Render: ${scrapeRes.status} (As-tu bien mis la clé secrète ?)`);
@@ -605,30 +605,7 @@ export default function JobBoard() {
         }
       }
 
-      console.log(`✅ ${allJobs.length} offre(s) unique(s) collectée(s)`);
-
-      if (allJobs.length > 0) {
-        const jobsToInsert = allJobs.map(j => ({
-          user_id:     userId,
-          source_url:  j.source_url  || j.sourceUrl || activeFilters[0]?.url || '',
-          title:       j.title       || '(sans titre)',
-          company:     j.company     || '',
-          location:    j.location    || '',
-          url:         j.url,
-          description: j.description || '',
-          date:        normalizeDate(j.date),
-          type:        j.type        || 'emploi',
-        }));
-
-        console.log('💾 Insertion Supabase — exemple:', jobsToInsert[0]);
-
-        const { error: dbError } = await supabase
-          .from('jb_jobs')
-          .upsert(jobsToInsert, { onConflict: 'user_id,url', ignoreDuplicates: true });
-
-        if (dbError) throw new Error("Erreur d'insertion BDD: " + dbError.message);
-        console.log('✅ Insertion Supabase OK');
-      }
+      console.log(`✅ ${allJobs.length} offre(s) unique(s) collectée(s) — insérées côté serveur`);
 
       await supabase.from('user_filters').update({ filters: updatedFilters }).eq('id', userId);
       setUrlFilters(updatedFilters);
