@@ -1,5 +1,5 @@
 // src/pages/JobBoard.jsx
-// v4 — 100% Frontend Direct (Supabase + Render) = Zéro Timeout Vercel
+// v5 — Debug + Fixes (scrapeData.results, date fallback, ignoreDuplicates)
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,15 +27,15 @@ const IconUser      = () => <svg width="15" height="15" viewBox="0 0 24 24" fill
 const IconLogout    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 
 const SOURCE_PATTERNS = [
-  { id: 'indeed',    label: 'Indeed',               color: '#2557a7', emoji: '💼', pattern: /indeed\.com/i },
-  { id: 'hellowork', label: 'HelloWork',            color: '#7c3aed', emoji: '👋', pattern: /hellowork\.com/i },
-  { id: 'stagefr',   label: 'Stage.fr',             color: '#f59e0b', emoji: '📋', pattern: /stage\.fr/i },
-  { id: 'lba',       label: 'La Bonne Alternance',  color: '#1a73e8', emoji: '🎓', pattern: /labonnealternance\.apprentissage/i },
-  { id: 'adzuna',    label: 'Adzuna',               color: '#e64c1f', emoji: '🔍', pattern: /adzuna\.fr/i },
-  { id: 'ft',        label: 'France Travail',       color: '#00a651', emoji: '🏛️', pattern: /francetravail\.fr|pole-emploi\.fr/i },
-  { id: 'linkedin',  label: 'LinkedIn',             color: '#0a66c2', emoji: '🔗', pattern: /linkedin\.com/i },
-  { id: 'welcomejb', label: 'Welcome to the Jungle',color: '#ff4655', emoji: '🌴', pattern: /welcometothejungle\.com/i },
-  { id: 'monster',   label: 'Monster',              color: '#6600cc', emoji: '👾', pattern: /monster\.fr/i },
+  { id: 'indeed',    label: 'Indeed',                color: '#2557a7', emoji: '💼', pattern: /indeed\.com/i },
+  { id: 'hellowork', label: 'HelloWork',             color: '#7c3aed', emoji: '👋', pattern: /hellowork\.com/i },
+  { id: 'stagefr',   label: 'Stage.fr',              color: '#f59e0b', emoji: '📋', pattern: /stage\.fr/i },
+  { id: 'lba',       label: 'La Bonne Alternance',   color: '#1a73e8', emoji: '🎓', pattern: /labonnealternance\.apprentissage/i },
+  { id: 'adzuna',    label: 'Adzuna',                color: '#e64c1f', emoji: '🔍', pattern: /adzuna\.fr/i },
+  { id: 'ft',        label: 'France Travail',        color: '#00a651', emoji: '🏛️', pattern: /francetravail\.fr|pole-emploi\.fr/i },
+  { id: 'linkedin',  label: 'LinkedIn',              color: '#0a66c2', emoji: '🔗', pattern: /linkedin\.com/i },
+  { id: 'welcomejb', label: 'Welcome to the Jungle', color: '#ff4655', emoji: '🌴', pattern: /welcometothejungle\.com/i },
+  { id: 'monster',   label: 'Monster',               color: '#6600cc', emoji: '👾', pattern: /monster\.fr/i },
 ];
 
 function detectSource(url) {
@@ -75,10 +75,11 @@ function jobMatchesBanwords(job, banwords) {
   return banwords.some(w => w && text.includes(w.toLowerCase()));
 }
 
-function formatNextRefresh(ms) {
-  const mins = Math.floor(ms / 60000);
-  const secs = Math.floor((ms % 60000) / 1000);
-  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+// ── FIX #2 : normalise la date — évite que Supabase rejette un champ null/undefined
+function normalizeDate(d) {
+  if (!d) return new Date().toISOString();
+  const parsed = new Date(d);
+  return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
 }
 
 function JobCard({ job, index, saved, onSave }) {
@@ -147,7 +148,7 @@ function FiltersPanel({ filters, onChange, onScrapeNow, scrapeStatus }) {
   const [labelInput, setLabelInput] = useState('');
   const [urlError, setUrlError] = useState('');
   const [newId, setNewId] = useState(null);
-  
+
   const addFilter = () => {
     const url = urlInput.trim();
     if (!url) return;
@@ -239,8 +240,6 @@ const TABS = [
   { id: 'saves',    label: 'Sauvegardes', icon: '🔖' },
 ];
 
-const REFRESH_INTERVAL = 30 * 60 * 1000;
-
 export default function JobBoard() {
   const navigate = useNavigate();
 
@@ -262,24 +261,23 @@ export default function JobBoard() {
   const userId = session?.userId ?? null;
 
   // ── State ───────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('results');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [fetched, setFetched] = useState(false);
-  
+  const [activeTab, setActiveTab]       = useState('results');
+  const [typeFilter, setTypeFilter]     = useState('all');
+  const [jobs, setJobs]                 = useState([]);
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState(null);
+  const [fetched, setFetched]           = useState(false);
   const [scrapeStatus, setScrapeStatus] = useState(null);
-  const [urlFilters, setUrlFilters] = useState([]);
+  const [debugInfo, setDebugInfo]       = useState(null); // ← debug panel
+  const [urlFilters, setUrlFilters]     = useState([]);
   const [filtersLoaded, setFiltersLoaded] = useState(false);
-  
-  const [banwords, setBanwords] = useState(() => LS.get('jb_banwords', []));
-  const [saves, setSaves] = useState(() => LS.get('jb_saves', []));
+  const [banwords, setBanwords]         = useState(() => LS.get('jb_banwords', []));
+  const [saves, setSaves]               = useState(() => LS.get('jb_saves', []));
 
-  const filtersOwnerRef = useRef(null);
-  const initialLoadRef = useRef(true);
+  const filtersOwnerRef  = useRef(null);
+  const initialLoadRef   = useRef(true);
 
-  // ── Chargement BDD Direct (Filtres) ─────────────────────────
+  // ── Chargement filtres (Supabase direct) ─────────────────────────
   useEffect(() => {
     if (!userId) return;
     let isMounted = true;
@@ -289,7 +287,7 @@ export default function JobBoard() {
       initialLoadRef.current = true;
       try {
         const { data, error } = await supabase.from('user_filters').select('filters').eq('id', userId).single();
-        if (error && error.code !== 'PGRST116') console.error("Erreur chargement filtres Supabase:", error);
+        if (error && error.code !== 'PGRST116') console.error('Erreur chargement filtres Supabase:', error);
         if (isMounted) {
           setUrlFilters(data?.filters && Array.isArray(data.filters) ? data.filters : []);
           filtersOwnerRef.current = userId;
@@ -301,40 +299,55 @@ export default function JobBoard() {
     return () => { isMounted = false; };
   }, [userId]);
 
-  // ── Sauvegarde BDD Direct (Filtres) ─────────────────────────
+  // ── Sauvegarde filtres (Supabase direct) ─────────────────────────
   useEffect(() => {
     if (!filtersLoaded || !userId || filtersOwnerRef.current !== userId) return;
     if (initialLoadRef.current) { initialLoadRef.current = false; return; }
-    
-    supabase.from('user_filters').upsert({ id: userId, filters: urlFilters }).then(({error}) => {
-      if (error) console.error("❌ ERREUR SAUVEGARDE SUPABASE:", error.message);
+    supabase.from('user_filters').upsert({ id: userId, filters: urlFilters }).then(({ error }) => {
+      if (error) console.error('❌ ERREUR SAUVEGARDE SUPABASE:', error.message);
     });
   }, [urlFilters, filtersLoaded, userId]);
 
   useEffect(() => { LS.set('jb_banwords', banwords); }, [banwords]);
   useEffect(() => { LS.set('jb_saves', saves); }, [saves]);
 
-  // ── Chargement BDD Direct (Offres) ─────────────────────────
+  // ── Chargement offres (Supabase direct) ─────────────────────────
   const fetchJobs = useCallback(async () => {
     setLoading(true); setError(null);
     if (activeTab !== 'results') setActiveTab('results');
     try {
-      const { data, error: dbErr } = await supabase.from('jb_jobs').select('*').order('date', { ascending: false }).limit(30);
+      const { data, error: dbErr } = await supabase
+        .from('jb_jobs')
+        .select('*')
+        .order('date', { ascending: false })
+        .limit(100); // ← augmenté à 100 pour ne pas rater d'offres
+
       if (dbErr) throw new Error(`Supabase: ${dbErr.message}`);
-      
+      console.log('📦 fetchJobs — rows Supabase:', data?.length, data?.[0]);
+
       setJobs((data || []).map(r => ({
-        id: r.id, sourceUrl: r.source_url, title: r.title, company: r.company || '', location: r.location || '',
-        url: r.url, description: r.description || '', date: r.date, type: r.type || 'emploi'
+        id:          r.id,
+        sourceUrl:   r.source_url,
+        title:       r.title,
+        company:     r.company || '',
+        location:    r.location || '',
+        url:         r.url,
+        description: r.description || '',
+        date:        r.date,
+        type:        r.type || 'emploi',
       })));
       setFetched(true);
-    } catch (err) { setError(err.message); } finally { setLoading(false); }
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
   }, [activeTab]);
 
   useEffect(() => { if (filtersLoaded && userId) fetchJobs(); }, [filtersLoaded]);
 
-  // ── SCRAPING DIRECT (Navigateur -> Render -> Supabase) ───────────
+  // ── SCRAPING DIRECT (Navigateur → Render → Supabase) ─────────────
   const triggerScrape = useCallback(async () => {
-    setScrapeStatus('pending'); setError(null);
+    setScrapeStatus('pending');
+    setError(null);
+    setDebugInfo(null);
     if (activeTab !== 'results') setActiveTab('results');
 
     try {
@@ -342,41 +355,85 @@ export default function JobBoard() {
       if (activeFilters.length === 0) return setScrapeStatus(null);
       setScrapeStatus('running');
 
-      const pythonUrl = "https://scraper-jobs.onrender.com";
-      // 🔴 ATTENTION: Mets ta vraie clé Render ici à la place de "MA_CLE_SECRETE"
-      const scraperSecret = import.meta.env.VITE_SCRAPER_SECRET || "MA_CLE_SECRETE";
+      const pythonUrl     = 'https://scraper-jobs.onrender.com';
+      const scraperSecret = import.meta.env.VITE_SCRAPER_SECRET || 'MA_CLE_SECRETE';
+
+      console.log('🚀 Scrape — envoi vers Render:', activeFilters.map(f => f.url));
 
       const scrapeRes = await fetch(`${pythonUrl}/scrape`, {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json', 'x-scraper-secret': scraperSecret },
-        body: JSON.stringify({ urls: activeFilters.map(f => f.url), results_wanted: 30 })
+        body:    JSON.stringify({ urls: activeFilters.map(f => f.url), results_wanted: 30 }),
       });
 
       if (!scrapeRes.ok) throw new Error(`Erreur Render: ${scrapeRes.status} (As-tu bien mis la clé secrète ?)`);
+
       const scrapeData = await scrapeRes.json();
 
-      const allJobs = [];
-      const seen = new Set();
+      // ── FIX #1 : gère les deux formats possibles de réponse ──────────────
+      // Format attendu : { results: [{ url, jobs: [], scrapedAt, count }] }
+      // Format alternatif : { jobs: [] }  ← certains scrapers retournent ça directement
+      let results = [];
+      if (Array.isArray(scrapeData.results)) {
+        results = scrapeData.results;
+      } else if (Array.isArray(scrapeData.jobs)) {
+        // Le scraper a renvoyé les jobs à plat → on les regroupe
+        results = [{ url: activeFilters[0]?.url, jobs: scrapeData.jobs, scrapedAt: new Date().toISOString(), count: scrapeData.jobs.length }];
+      } else {
+        // Format totalement inattendu → on logge pour debug
+        console.warn('⚠️ Format de réponse scraper inconnu:', scrapeData);
+      }
+
+      // Debug : affiché dans un panneau UI discret
+      const debugSnapshot = {
+        rawKeys:      Object.keys(scrapeData),
+        nbResults:    results.length,
+        firstResult:  results[0] ? { url: results[0].url, nbJobs: results[0].jobs?.length, firstJob: results[0].jobs?.[0] } : null,
+      };
+      console.log('🔎 scrapeData complet:', scrapeData);
+      console.log('🔎 debug snapshot:', debugSnapshot);
+      setDebugInfo(debugSnapshot);
+
+      const allJobs       = [];
+      const seen          = new Set();
       const updatedFilters = [...urlFilters];
 
-      for (const result of scrapeData.results) {
+      for (const result of results) {
         const filterIndex = updatedFilters.findIndex(f => f.url === result.url);
         if (filterIndex !== -1) {
           updatedFilters[filterIndex].lastScraped = result.scrapedAt;
-          updatedFilters[filterIndex].jobCount = result.count;
+          updatedFilters[filterIndex].jobCount    = result.count ?? result.jobs?.length ?? 0;
         }
-        for (const job of result.jobs) {
-           if (job.url && !seen.has(job.url)) { seen.add(job.url); allJobs.push(job); }
+        for (const job of (result.jobs || [])) {
+          if (job.url && !seen.has(job.url)) { seen.add(job.url); allJobs.push(job); }
         }
       }
 
+      console.log(`✅ ${allJobs.length} offre(s) unique(s) collectée(s)`);
+
       if (allJobs.length > 0) {
-         const jobsToInsert = allJobs.map(j => ({
-            id: j.id, source_url: j.source_url || j.sourceUrl, title: j.title, company: j.company,
-            location: j.location, url: j.url, description: j.description, date: j.date, type: j.type
-         }));
-         const { error: dbError } = await supabase.from('jb_jobs').upsert(jobsToInsert, { onConflict: 'url' });
-         if (dbError) throw new Error("Erreur d'insertion BDD: " + dbError.message);
+        // ── FIX #2 : date normalisée + source_url robuste ─────────────────
+        const jobsToInsert = allJobs.map(j => ({
+          id:          j.id   || crypto.randomUUID(),
+          source_url:  j.source_url || j.sourceUrl || '',
+          title:       j.title      || '(sans titre)',
+          company:     j.company    || '',
+          location:    j.location   || '',
+          url:         j.url,
+          description: j.description || '',
+          date:        normalizeDate(j.date),
+          type:        j.type || 'emploi',
+        }));
+
+        console.log('💾 Insertion Supabase — exemple:', jobsToInsert[0]);
+
+        // ── FIX #3 : ignoreDuplicates:false = merge, pas skip ─────────────
+        const { error: dbError } = await supabase
+          .from('jb_jobs')
+          .upsert(jobsToInsert, { onConflict: 'url', ignoreDuplicates: false });
+
+        if (dbError) throw new Error("Erreur d'insertion BDD: " + dbError.message);
+        console.log('✅ Insertion Supabase OK');
       }
 
       await supabase.from('user_filters').update({ filters: updatedFilters }).eq('id', userId);
@@ -386,17 +443,21 @@ export default function JobBoard() {
       setTimeout(() => setScrapeStatus(null), 5000);
 
     } catch (err) {
-      console.error(err); setError(err.message); setScrapeStatus(null);
+      console.error('❌ triggerScrape error:', err);
+      setError(err.message);
+      setScrapeStatus(null);
     }
   }, [fetchJobs, activeTab, userId, urlFilters]);
 
-  // ── Filtres visuels ────────────────────────────────────────────────────────
-  const visibleJobs = jobs.filter(j => !jobMatchesBanwords(j, banwords)).filter(j => typeFilter === 'all' || j.type === typeFilter);
-  const savedIds = new Set(saves.map(s => s.id));
+  // ── Filtres visuels ───────────────────────────────────────────────
+  const visibleJobs = jobs
+    .filter(j => !jobMatchesBanwords(j, banwords))
+    .filter(j => typeFilter === 'all' || j.type === typeFilter);
+  const savedIds  = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
 
-  if (authLoading) return <div className="jb-root" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Chargement…</div>;
-  if (!session) return <LoginScreen onLogin={(s) => setSession(s)} />;
+  if (authLoading) return <div className="jb-root" style={{ display:'flex', alignItems:'center', justifyContent:'center' }}>Chargement…</div>;
+  if (!session)    return <LoginScreen onLogin={(s) => setSession(s)} />;
 
   return (
     <div className="jb-root">
@@ -431,28 +492,54 @@ export default function JobBoard() {
         <AnimatePresence mode="wait">
           {activeTab === 'results' && (
             <motion.div key="results" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              
+
               {fetched && !loading && (
                 <div className="jb-type-filters">
                   {['all', 'alternance', 'stage', 'emploi'].map(t => (
-                    <button key={t} className={`jb-filter-btn ${typeFilter === t ? 'active' : ''}`} onClick={() => setTypeFilter(t)}>{t === 'all' ? `Tout (${visibleJobs.length})` : `${TYPE_LABELS[t]?.label}`}</button>
+                    <button key={t} className={`jb-filter-btn ${typeFilter === t ? 'active' : ''}`} onClick={() => setTypeFilter(t)}>
+                      {t === 'all' ? `Tout (${visibleJobs.length})` : TYPE_LABELS[t]?.label}
+                    </button>
                   ))}
                 </div>
               )}
 
               {isScraping && (
                 <motion.div className="jb-scrape-banner" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <span className="jb-scrape-spinner">⟳</span> Scraping en direct sans Vercel... Laisse la page ouverte !
+                  <span className="jb-scrape-spinner">⟳</span> Scraping en direct… Laisse la page ouverte !
                 </motion.div>
+              )}
+
+              {/* ── Panneau debug (s'affiche après chaque scrape) ── */}
+              {debugInfo && !isScraping && (
+                <div style={{ margin: '12px 0', padding: '12px 16px', background: '#1a1a2e', border: '1px solid #334', borderRadius: 10, fontSize: '0.78rem', color: '#aaa', fontFamily: 'monospace' }}>
+                  <strong style={{ color: '#13c9ed' }}>🔎 Debug dernier scrape</strong><br />
+                  Clés reçues : <span style={{ color: '#fff' }}>{debugInfo.rawKeys.join(', ')}</span><br />
+                  Nb de results : <span style={{ color: '#fff' }}>{debugInfo.nbResults}</span><br />
+                  {debugInfo.firstResult && <>
+                    Premier result — URL : <span style={{ color: '#fff' }}>{debugInfo.firstResult.url}</span> · {debugInfo.firstResult.nbJobs} job(s)<br />
+                    Premier job : <span style={{ color: '#fff' }}>{JSON.stringify(debugInfo.firstResult.firstJob)}</span>
+                  </>}
+                  {!debugInfo.firstResult && <span style={{ color: '#ef4444' }}>⚠️ Aucun result reçu — vérifie la console</span>}
+                  <button onClick={() => setDebugInfo(null)} style={{ marginTop: 8, display: 'block', background: 'none', border: '1px solid #334', color: '#aaa', borderRadius: 6, padding: '2px 10px', cursor: 'pointer' }}>Fermer</button>
+                </div>
               )}
 
               {error && !loading && <div className="jb-error-box"><p>😕 {error}</p></div>}
               {loading && <div className="jb-grid">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} />)}</div>}
 
+              {!loading && fetched && visibleJobs.length === 0 && (
+                <div className="jb-empty">
+                  <div className="jb-empty-icon">🔍</div>
+                  <h3>Aucune offre trouvée</h3>
+                  <p style={{ color: '#666', fontSize: '0.85rem' }}>Lance un scrape depuis "Mes liens" ou vérifie la console pour le debug.</p>
+                </div>
+              )}
+
               {!loading && fetched && visibleJobs.length > 0 && (
                 <div className="jb-grid">
                   {visibleJobs.map((job, i) => (
-                    <JobCard key={job.id} job={job} index={i} saved={savedIds.has(job.id)} onSave={(j) => setSaves(p => p.find(s => s.id === j.id) ? p.filter(s => s.id !== j.id) : [j, ...p])} />
+                    <JobCard key={job.id} job={job} index={i} saved={savedIds.has(job.id)}
+                      onSave={(j) => setSaves(p => p.find(s => s.id === j.id) ? p.filter(s => s.id !== j.id) : [j, ...p])} />
                   ))}
                 </div>
               )}
