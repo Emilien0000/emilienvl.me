@@ -851,3 +851,22 @@
 .jb-new-toast:hover {
   filter: brightness(1.08);
 }
+/* ── Décompte circulaire polling ─────────────────────────────────────────── */
+.jb-countdown-ring {
+  display:        inline-flex;
+  align-items:    center;
+  justify-content: center;
+  margin-left:    4px;
+  opacity:        0.9;
+  flex-shrink:    0;
+  cursor:         default;
+  --ring-track:   rgba(255,255,255,0.08);
+}
+
+.jb-countdown-ring svg {
+  display: block;
+}
+
+.jb-countdown-ring:hover {
+  opacity: 1;
+}

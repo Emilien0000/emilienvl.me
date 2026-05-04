@@ -239,6 +239,40 @@ const TABS = [
   { id: 'saves',    label: 'Sauvegardes', icon: '🔖' },
 ];
 
+// ── Décompte circulaire ───────────────────────────────────────────
+function CountdownRing({ value, total = 30 }) {
+  const radius = 10;
+  const circ   = 2 * Math.PI * radius;
+  const frac   = value / total;
+  const dash   = circ * frac;
+  const isLow  = value <= 5;
+  return (
+    <span className="jb-countdown-ring" title={`Prochain polling dans ${value}s`}>
+      <svg width="30" height="30" viewBox="0 0 30 30">
+        {/* Piste de fond */}
+        <circle cx="15" cy="15" r={radius} fill="none" stroke="var(--ring-track, #2a2a3a)" strokeWidth="2.5" />
+        {/* Arc de progression */}
+        <circle
+          cx="15" cy="15" r={radius}
+          fill="none"
+          stroke={isLow ? '#ef4444' : '#13c9ed'}
+          strokeWidth="2.5"
+          strokeDasharray={`${dash} ${circ}`}
+          strokeLinecap="round"
+          transform="rotate(-90 15 15)"
+          style={{ transition: 'stroke-dasharray 0.9s linear, stroke 0.3s' }}
+        />
+        {/* Nombre central */}
+        <text x="15" y="15" textAnchor="middle" dominantBaseline="central"
+          fontSize="8" fontWeight="700" fill={isLow ? '#ef4444' : '#13c9ed'}
+          style={{ fontFamily: 'inherit', transition: 'fill 0.3s' }}>
+          {value}
+        </text>
+      </svg>
+    </span>
+  );
+}
+
 export default function JobBoard() {
   const navigate = useNavigate();
 
@@ -277,6 +311,11 @@ export default function JobBoard() {
   const initialLoadRef   = useRef(true);
   const knownJobIdsRef   = useRef(new Set());  // IDs déjà affichés → pour détecter les nouveautés
   const [newJobsCount, setNewJobsCount] = useState(0);  // toast "N nouvelles offres"
+
+  // ── Décompte visuel polling ───────────────────────────────────────
+  const POLL_INTERVAL = 30;
+  const [countdown, setCountdown]       = useState(POLL_INTERVAL);
+  const countdownRef                    = useRef(POLL_INTERVAL);
 
   // ── Chargement filtres (Supabase direct) ─────────────────────────
   useEffect(() => {
@@ -367,13 +406,45 @@ export default function JobBoard() {
 
   useEffect(() => { if (filtersLoaded && userId) fetchJobs(); }, [filtersLoaded]);
 
-  // ── Polling silencieux toutes les 30s ────────────────────────────
+  // ── Polling silencieux + décompte visuel ────────────────────────
   useEffect(() => {
     if (!filtersLoaded || !userId) return;
-    const interval = setInterval(() => {
-      fetchJobs({ silent: true });
-    }, 30_000);
-    return () => clearInterval(interval);
+    countdownRef.current = POLL_INTERVAL;
+    setCountdown(POLL_INTERVAL);
+
+    const tick = setInterval(() => {
+      countdownRef.current -= 1;
+      setCountdown(countdownRef.current);
+
+      if (countdownRef.current <= 0) {
+        countdownRef.current = POLL_INTERVAL;
+        setCountdown(POLL_INTERVAL);
+
+        // Injection fausse annonce de test
+        const fakeJob = {
+          id:          `fake-${Date.now()}`,
+          sourceUrl:   'https://fr.indeed.com/',
+          title:       '🧪 Fake Annonce — Test Polling',
+          company:     'Acme Corp (test)',
+          location:    'Paris, France',
+          url:         'https://fr.indeed.com/',
+          description: 'Cette carte a été injectée automatiquement pour tester le rendu du polling. Elle apparaît toutes les 30 secondes.',
+          date:        new Date().toISOString(),
+          type:        'alternance',
+        };
+
+        setJobs(prev => {
+          if (prev.find(j => j.id === fakeJob.id)) return prev;
+          knownJobIdsRef.current.add(fakeJob.id);
+          setNewJobsCount(c => c + 1);
+          return [fakeJob, ...prev];
+        });
+
+        fetchJobs({ silent: true });
+      }
+    }, 1000);
+
+    return () => clearInterval(tick);
   }, [filtersLoaded, userId, fetchJobs]);
 
   // ── SCRAPING DIRECT (Navigateur → Render → Supabase) ─────────────
@@ -563,6 +634,9 @@ export default function JobBoard() {
           <button className="jb-tab jb-tab-refresh" onClick={triggerScrape} disabled={loading || isScraping} title="Scraper maintenant">
             <IconRefresh spinning={loading || isScraping} /> {isScraping ? 'Scraping…' : 'Actualiser'}
           </button>
+          {!isScraping && filtersLoaded && userId && (
+            <CountdownRing value={countdown} total={POLL_INTERVAL} />
+          )}
         </div>
       </div>
 
