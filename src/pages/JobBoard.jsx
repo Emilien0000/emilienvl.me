@@ -231,6 +231,8 @@ function BanwordsPanel({ banwords, onChange }) {
   );
 }
 
+const IconCancel = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
+
 function AppliedPanel({ applied, onRemove }) {
   if (!applied.length) return (
     <div className="jb-empty">
@@ -244,8 +246,19 @@ function AppliedPanel({ applied, onRemove }) {
       <div className="jb-grid">
         <AnimatePresence>
           {applied.map((entry) => (
-            <JobCard key={entry.job.id} job={entry.job} saved={false} showActions={false} appliedAt={entry.appliedAt}
-              onDelete={() => onRemove(entry.job.id)} />
+            <motion.div key={entry.job.id} layout initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.3 }}>
+              <JobCard job={entry.job} saved={false} showActions={false} appliedAt={entry.appliedAt} />
+              <div style={{ marginTop: '-8px', marginBottom: '16px', display: 'flex', justifyContent: 'flex-end', paddingRight: '4px' }}>
+                <button
+                  className="jb-action-btn jb-delete-action"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', fontSize: '0.8rem', cursor: 'pointer' }}
+                  onClick={() => onRemove(entry.job.id)}
+                  title="Annuler ma candidature"
+                >
+                  <IconCancel /> Annuler ma candidature
+                </button>
+              </div>
+            </motion.div>
           ))}
         </AnimatePresence>
       </div>
@@ -341,7 +354,8 @@ export default function JobBoard() {
   const [filtersLoaded, setFiltersLoaded] = useState(false);
   const [banwords, setBanwords]         = useState(() => LS.get('jb_banwords', []));
   const [saves, setSaves]               = useState(() => LS.get('jb_saves', []));
-  const [applied, setApplied]           = useState(() => LS.get('jb_applied', []));
+  const [applied, setApplied]           = useState([]);
+  const [appliedLoaded, setAppliedLoaded] = useState(false);
   const [deletedIds, setDeletedIds]     = useState(() => new Set(LS.get('jb_deleted', [])));
   const [undoToast, setUndoToast]       = useState(null); // { job, timerId, remaining }
   const undoTimerRef                    = useRef(null);
@@ -390,8 +404,37 @@ export default function JobBoard() {
 
   useEffect(() => { LS.set('jb_banwords', banwords); }, [banwords]);
   useEffect(() => { LS.set('jb_saves', saves); }, [saves]);
-  useEffect(() => { LS.set('jb_applied', applied); }, [applied]);
   useEffect(() => { LS.set('jb_deleted', [...deletedIds]); }, [deletedIds]);
+
+  // ── Chargement candidatures (Supabase) ──────────────────────────
+  useEffect(() => {
+    if (!userId) return;
+    let isMounted = true;
+    async function loadApplied() {
+      try {
+        const { data, error } = await supabase
+          .from('user_applied')
+          .select('applied')
+          .eq('id', userId)
+          .single();
+        if (error && error.code !== 'PGRST116') console.error('Erreur chargement candidatures:', error);
+        if (isMounted) {
+          setApplied(data?.applied && Array.isArray(data.applied) ? data.applied : []);
+          setAppliedLoaded(true);
+        }
+      } catch (err) { console.error(err); if (isMounted) setAppliedLoaded(true); }
+    }
+    loadApplied();
+    return () => { isMounted = false; };
+  }, [userId]);
+
+  // ── Sauvegarde candidatures (Supabase) ──────────────────────────
+  useEffect(() => {
+    if (!appliedLoaded || !userId) return;
+    supabase.from('user_applied').upsert({ id: userId, applied }).then(({ error }) => {
+      if (error) console.error('❌ Erreur sauvegarde candidatures:', error.message);
+    });
+  }, [applied, appliedLoaded, userId]);
 
   // ── Chargement offres (Supabase direct) ─────────────────────────
   // silent=true → merge sans spinner ni reset du scroll
