@@ -567,13 +567,17 @@ export default function JobBoard() {
   const pollRef      = useRef(null);
 
   // ── Persist filtres en DB ──────────────────────────────────────────────────
-  // On utilise un ref pour stocker le userId sous lequel les filtres ont été chargés,
-  // afin d'éviter d'écraser les filtres d'un autre utilisateur si la session change.
-  const filtersOwnerRef = useRef(null);
+  // filtersOwnerRef : userId sous lequel les filtres ont été chargés (évite d'écraser
+  //   les filtres d'un autre utilisateur si la session change)
+  // filtersDirtyRef : true UNIQUEMENT après une action utilisateur (ajout/suppression/toggle)
+  //   → empêche la sauvegarde automatique au moment du chargement initial
+  const filtersOwnerRef  = useRef(null);
+  const filtersDirtyRef  = useRef(false);
 
   useEffect(() => {
-    // Ne sauvegarde que si les filtres appartiennent bien à l'utilisateur courant
     if (!filtersLoaded || !session || filtersOwnerRef.current !== userId) return;
+    if (!filtersDirtyRef.current) return; // pas encore modifié par l'utilisateur → on ne sauvegarde pas
+    filtersDirtyRef.current = false;
     apiFetch('/api/filters', {
       method: 'PUT',
       body: JSON.stringify({ filters: urlFilters }),
@@ -582,6 +586,13 @@ export default function JobBoard() {
 
   useEffect(() => { LS.set('jb_banwords', banwords); }, [banwords]);
   useEffect(() => { LS.set('jb_saves',    saves);    }, [saves]);
+
+  // Wrapper de setUrlFilters pour les actions utilisateur : marque les filtres comme modifiés
+  // avant de mettre à jour le state, ce qui autorise la sauvegarde en DB.
+  const setUrlFiltersByUser = useCallback((value) => {
+    filtersDirtyRef.current = true;
+    setUrlFilters(value);
+  }, []);
 
   // ── Fetch offres depuis Supabase ───────────────────────────────────────────
   const fetchJobs = useCallback(async () => {
@@ -696,7 +707,8 @@ export default function JobBoard() {
   useEffect(() => {
     if (!session) return;
     async function init() {
-      filtersOwnerRef.current = null; // bloque la sauvegarde pendant le chargement
+      filtersOwnerRef.current = null;  // bloque la sauvegarde pendant le chargement
+      filtersDirtyRef.current = false; // reset : on charge, on ne sauvegarde pas
       setFiltersLoaded(false);
       try {
         const res = await apiFetch('/api/filters', {}, userId);
@@ -707,6 +719,8 @@ export default function JobBoard() {
       } catch {}
       filtersOwnerRef.current = userId; // autorise la sauvegarde pour cet utilisateur
       setFiltersLoaded(true);
+      // Les futures modifications de urlFilters déclencheront la sauvegarde
+      // seulement si filtersDirtyRef.current === true (positionné par les actions utilisateur)
     }
     init();
   }, [session]);
@@ -915,7 +929,7 @@ export default function JobBoard() {
             <motion.div key="filters" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.22 }}>
               <FiltersPanel
                 filters={urlFilters}
-                onChange={setUrlFilters}
+                onChange={setUrlFiltersByUser}
                 onScrapeNow={() => triggerScrape()}
                 scrapeStatus={scrapeStatus}
               />
