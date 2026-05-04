@@ -565,11 +565,14 @@ export default function JobBoard() {
   const timerRef     = useRef(null);
   const countdownRef = useRef(null);
   const pollRef      = useRef(null);
-
+  const filtersDirtyRef = useRef(false);
   // ── Persist filtres en DB ──────────────────────────────────────────────────
   // On utilise un ref pour stocker le userId sous lequel les filtres ont été chargés,
   // afin d'éviter d'écraser les filtres d'un autre utilisateur si la session change.
   const filtersOwnerRef = useRef(null);
+  const initialLoadRef = useRef(true);
+// Et n'oublie pas celle-ci pour éviter le crash dont je te parlais :
+  const filtersDirtyRef = useRef(false);
 
   useEffect(() => {
     // Ne sauvegarde que si les filtres appartiennent bien à l'utilisateur courant
@@ -696,30 +699,67 @@ export default function JobBoard() {
 
   // ── Chargement initial (quand session disponible) ─────────────────────────
   useEffect(() => {
-    if (!session) return;
+    if (!session?.userId) return;
+    let isMounted = true;
+
     async function init() {
       filtersOwnerRef.current = null;
       setFiltersLoaded(false);
+      initialLoadRef.current = true; // On signale qu'on démarre un chargement
+
       try {
-        const res = await apiFetch('/api/filters', {}, userId);
-        if (res.ok) {
-          const data = await res.json();
-          // CORRECTION ICI : Si c'est un objet, on va chercher .filters
-          const fetchedFilters = Array.isArray(data) ? data : (data?.filters || []);
+        const res = await apiFetch('/api/filters', {}, session.userId);
+        
+        if (!res.ok) {
+          // Si l'API ne trouve rien (ex: 404), on autorise un tableau vide
+          if (res.status === 404 && isMounted) {
+            setUrlFilters([]);
+            filtersOwnerRef.current = session.userId;
+            setFiltersLoaded(true);
+          }
+          return; // Si c'est une autre erreur, on stop tout pour ne rien écraser !
+        }
+
+        const data = await res.json();
+        
+        // Extraction ultra-blindée (peu importe comment le backend renvoie la donnée)
+        let fetchedFilters = [];
+        if (Array.isArray(data)) fetchedFilters = data;
+        else if (data && Array.isArray(data.filters)) fetchedFilters = data.filters;
+        else if (data?.data && Array.isArray(data.data.filters)) fetchedFilters = data.data.filters;
+
+        if (isMounted) {
           setUrlFilters(fetchedFilters);
+          filtersOwnerRef.current = session.userId;
+          setFiltersLoaded(true);
         }
       } catch (err) {
-        console.error("Erreur chargement filtres:", err);
+        console.error("Erreur réseau API filtres:", err);
+        // CRUCIAL : On ne passe PAS filtersLoaded à true ici !
+        // Sinon le useEffect suivant écrasera la BDD avec un tableau vide.
       }
-      filtersOwnerRef.current = userId;
-      setFiltersLoaded(true);
     }
     init();
-  }, [session]);
+
+    return () => { isMounted = false; };
+  }, [session?.userId]);
 
   useEffect(() => {
-    if (filtersLoaded && session) fetchJobs();
-  }, [filtersLoaded]);
+    // Si pas chargé, pas de session, ou pas le bon user = on bloque
+    if (!filtersLoaded || !session?.userId || filtersOwnerRef.current !== session.userId) return;
+
+    // On bloque la toute première exécution (le PUT "fantôme" au chargement)
+    if (initialLoadRef.current) {
+      initialLoadRef.current = false;
+      return;
+    }
+
+    apiFetch('/api/filters', {
+      method: 'PUT',
+      body: JSON.stringify({ filters: urlFilters }),
+    }, session.userId).catch(() => {});
+    
+  }, [urlFilters, filtersLoaded, session?.userId]);
 
   // ── Filtres visuels ────────────────────────────────────────────────────────
   const visibleJobs = jobs
