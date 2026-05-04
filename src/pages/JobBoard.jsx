@@ -584,12 +584,12 @@ useEffect(() => {
     async function saveToSupabase() {
       // Upsert: met à jour si l'ID existe, sinon le crée
       const { error } = await supabase
-        .from('profiles') // Même nom de table qu'au dessus
+        .from('user_filters') // 👈 ET ICI
         .upsert({ 
           id: session.userId, 
           filters: urlFilters 
         });
-
+        
       if (error) {
         console.error("❌ ERREUR SAUVEGARDE SUPABASE:", error.message);
       } else {
@@ -726,10 +726,10 @@ useEffect(() => {
         // Remplace 'profiles' par le vrai nom de ta table si c'est différent
         // On cherche la colonne 'filters' pour l'utilisateur connecté
         const { data, error } = await supabase
-          .from('profiles') 
-          .select('filters')
-          .eq('id', session.userId)
-          .single();
+        .from('user_filters') // 👈 ICI
+        .select('filters')
+        .eq('id', session.userId)
+        .single();
 
         // Le code PGRST116 signifie "Aucune ligne trouvée", c'est normal pour un nouvel utilisateur
         if (error && error.code !== 'PGRST116') {
