@@ -161,7 +161,7 @@ function FilterRow({ filter, onToggle, onDelete, isNew }) {
   );
 }
 
-function FiltersPanel({ filters, onChange, onScrapeNow, scrapeStatus }) {
+function FiltersPanel({ filters, onChange, onScrapeNow, scrapeStatus, onClearJobs }) {
   const [urlInput, setUrlInput] = useState('');
   const [labelInput, setLabelInput] = useState('');
   const [urlError, setUrlError] = useState('');
@@ -200,7 +200,10 @@ function FiltersPanel({ filters, onChange, onScrapeNow, scrapeStatus }) {
         <div className="jb-panel-section">
           <div className="jb-panel-label-row">
             <h4 className="jb-panel-label" style={{ margin: 0 }}>📋 Liens actifs ({enabledCount}/{filters.length})</h4>
-            <button className="jb-ghost-btn" style={{ marginTop: 0, fontSize: '0.78rem' }} onClick={onScrapeNow} disabled={isRunning || enabledCount === 0}><IconRefresh spinning={isRunning} /> {isRunning ? 'Scraping…' : 'Scraper maintenant'}</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="jb-ghost-btn" style={{ marginTop: 0, fontSize: '0.78rem' }} onClick={onScrapeNow} disabled={isRunning || enabledCount === 0}><IconRefresh spinning={isRunning} /> {isRunning ? 'Scraping…' : 'Scraper maintenant'}</button>
+              <button className="jb-ghost-btn" style={{ marginTop: 0, fontSize: '0.78rem', color: '#ef4444', borderColor: '#ef4444' }} onClick={onClearJobs} disabled={isRunning} title="Vider tous les résultats en DB"><IconTrash /> Vider les résultats</button>
+            </div>
           </div>
           <div className="jb-filter-list">
             <AnimatePresence>
@@ -470,25 +473,13 @@ export default function JobBoard() {
     if (!silent && activeTab !== 'results') setActiveTab('results');
     try {
       console.log('🔍 fetchJobs — userId utilisé:', userId);
-
-      // On ne récupère que les jobs dont la source_url correspond à un filtre ACTIF
-      const activeUrls = urlFilters.filter(f => f.enabled).map(f => f.url);
-      console.log('🔍 fetchJobs — filtres actifs:', activeUrls);
-
-      let query = supabase
+      const { data, error: dbErr } = await supabase
         .from('jb_jobs')
         .select('*')
         .eq('user_id', userId)
         .order('scraped_at', { ascending: false })
         .order('date', { ascending: false })
         .limit(200);
-
-      // Si on a des filtres actifs, on restreint aux URLs correspondantes
-      if (activeUrls.length > 0) {
-        query = query.in('source_url', activeUrls);
-      }
-
-      const { data, error: dbErr } = await query;
 
       console.log('🔍 fetchJobs — résultats:', data?.length, 'erreur:', dbErr?.message);
 
@@ -532,7 +523,7 @@ export default function JobBoard() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [activeTab, userId, urlFilters]);
+  }, [activeTab, userId]);
 
   useEffect(() => { if (filtersLoaded && userId) fetchJobs(); }, [filtersLoaded, userId]);
 
@@ -567,6 +558,12 @@ export default function JobBoard() {
       const activeFilters = urlFilters.filter(f => f.enabled);
       if (activeFilters.length === 0) return setScrapeStatus(null);
       setScrapeStatus('running');
+
+      // ── Purge les anciens jobs avant d'insérer les nouveaux ──────────
+      // Évite d'afficher des offres d'anciens filtres désactivés/supprimés
+      const { error: purgeErr } = await supabase.from('jb_jobs').delete().eq('user_id', userId);
+      if (purgeErr) console.warn('⚠️ Purge jobs avant scrape échouée:', purgeErr.message);
+      else { setJobs([]); knownJobIdsRef.current = new Set(); }
 
       const pythonUrl     = 'https://scraper-jobs.onrender.com';
       const scraperSecret = import.meta.env.VITE_SCRAPER_SECRET || 'MA_CLE_SECRETE';
@@ -705,6 +702,17 @@ export default function JobBoard() {
     }
   }, [undoToast]);
 
+  // ── Vider tous les jobs en DB ─────────────────────────────────────
+  const handleClearJobs = useCallback(async () => {
+    if (!userId) return;
+    if (!window.confirm('Vider tous les résultats ? Un re-scrape sera nécessaire.')) return;
+    const { error } = await supabase.from('jb_jobs').delete().eq('user_id', userId);
+    if (error) { console.error('❌ Erreur purge jobs:', error.message); return; }
+    setJobs([]);
+    knownJobIdsRef.current = new Set();
+    setFetched(true);
+  }, [userId]);
+
   // ── Filtres visuels ───────────────────────────────────────────────
   const appliedIds = new Set(applied.map(e => e.job.id));
   const visibleJobs = jobs
@@ -842,7 +850,7 @@ export default function JobBoard() {
             </motion.div>
           )}
 
-          {activeTab === 'filters'  && <motion.div key="filters"><FiltersPanel filters={urlFilters} onChange={setUrlFilters} onScrapeNow={triggerScrape} scrapeStatus={scrapeStatus} /></motion.div>}
+          {activeTab === 'filters'  && <motion.div key="filters"><FiltersPanel filters={urlFilters} onChange={setUrlFilters} onScrapeNow={triggerScrape} scrapeStatus={scrapeStatus} onClearJobs={handleClearJobs} /></motion.div>}
           {activeTab === 'banwords' && <motion.div key="banwords"><BanwordsPanel banwords={banwords} onChange={setBanwords} /></motion.div>}
           {activeTab === 'saves'    && <motion.div key="saves"><SavesPanel saves={saves} onRemove={(id) => setSaves(p => p.filter(s => s.id !== id))} /></motion.div>}
           {activeTab === 'applied'  && <motion.div key="applied"><AppliedPanel applied={applied} onRemove={(id) => {
