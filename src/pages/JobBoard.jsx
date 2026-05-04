@@ -23,6 +23,7 @@ const IconX         = () => <svg width="11" height="11" viewBox="0 0 24 24" fill
 const IconTrash     = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>;
 const IconClock     = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
 const IconCheck     = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
+const IconSend      = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
 const IconUser      = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
 const IconLogout    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 
@@ -85,20 +86,21 @@ function normalizeDate(d) {
   return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
 }
 
-function JobCard({ job, index, saved, onSave }) {
+function JobCard({ job, index, saved, onSave, onApply, onDelete, showActions = true, appliedAt }) {
   const typeInfo = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
   const source   = detectSource(job.sourceUrl, job.url);
   return (
-    <motion.div className="jb-card" style={{ '--source-color': source.color }} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.3, delay: Math.min(index * 0.035, 0.6) }} whileHover={{ y: -3, transition: { duration: 0.18 } }}>
+    <motion.div className="jb-card" style={{ '--source-color': source.color }} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -10 }} transition={{ duration: 0.3, delay: Math.min(index * 0.035, 0.6) }} whileHover={{ y: -3, transition: { duration: 0.18 } }} layout>
       <div className="jb-card-accent" />
       <div className="jb-card-inner">
         <div className="jb-card-top">
           <div className="jb-card-badges">
             <span className="jb-source-badge" style={{ background: source.color + '18', color: source.color }}>{source.emoji} {source.label}</span>
             <span className="jb-type-badge" style={{ background: typeInfo.color + '18', color: typeInfo.color }}>{typeInfo.label}</span>
+            {appliedAt && <span className="jb-applied-badge">✅ Postulé {timeAgo(appliedAt)}</span>}
           </div>
           <div className="jb-card-actions">
-            <button className={`jb-save-btn ${saved ? 'saved' : ''}`} onClick={() => onSave(job)} title={saved ? 'Retirer' : 'Sauvegarder'} style={{ color: saved ? '#13c9ed' : undefined }}><IconBookmark filled={saved} /></button>
+            {onSave && <button className={`jb-save-btn ${saved ? 'saved' : ''}`} onClick={() => onSave(job)} title={saved ? 'Retirer' : 'Sauvegarder'} style={{ color: saved ? '#13c9ed' : undefined }}><IconBookmark filled={saved} /></button>}
             <span className="jb-date"><IconCalendar />{timeAgo(job.date)}</span>
           </div>
         </div>
@@ -108,6 +110,12 @@ function JobCard({ job, index, saved, onSave }) {
         {job.description && <p className="jb-desc">{job.description}</p>}
         <div className="jb-card-footer">
           <a href={job.url} target="_blank" rel="noopener noreferrer" className="jb-apply-btn">Voir l'offre <IconExternal /></a>
+          {showActions && (
+            <div className="jb-card-action-btns">
+              {onApply && <button className="jb-action-btn jb-apply-action" onClick={() => onApply(job)} title="Marquer comme postulé"><IconSend /> Postulé</button>}
+              {onDelete && <button className="jb-action-btn jb-delete-action" onClick={() => onDelete(job)} title="Supprimer cette offre"><IconTrash /> Supprimer</button>}
+            </div>
+          )}
         </div>
       </div>
     </motion.div>
@@ -223,13 +231,35 @@ function BanwordsPanel({ banwords, onChange }) {
   );
 }
 
+function AppliedPanel({ applied, onRemove }) {
+  if (!applied.length) return (
+    <div className="jb-empty">
+      <div className="jb-empty-icon">📨</div>
+      <h3>Aucune candidature</h3>
+      <p style={{ color: '#666', fontSize: '0.85rem' }}>Clique sur "Postulé" sur une offre pour la retrouver ici.</p>
+    </div>
+  );
+  return (
+    <div className="jb-panel jb-saves-panel">
+      <div className="jb-grid">
+        <AnimatePresence>
+          {applied.map((entry) => (
+            <JobCard key={entry.job.id} job={entry.job} saved={false} showActions={false} appliedAt={entry.appliedAt}
+              onDelete={() => onRemove(entry.job.id)} />
+          ))}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
 function SavesPanel({ saves, onRemove }) {
   if (!saves.length) return <div className="jb-empty"><div className="jb-empty-icon">🔖</div><h3>Aucune offre sauvegardée</h3></div>;
   return (
     <div className="jb-panel jb-saves-panel">
       <div className="jb-grid">
         {saves.map((job) => (
-          <JobCard key={job.id} job={job} saved={true} onSave={() => onRemove(job.id)} />
+          <JobCard key={job.id} job={job} saved={true} showActions={false} onSave={() => onRemove(job.id)} />
         ))}
       </div>
     </div>
@@ -237,10 +267,11 @@ function SavesPanel({ saves, onRemove }) {
 }
 
 const TABS = [
-  { id: 'results',  label: 'Résultats',   icon: '🔍' },
-  { id: 'filters',  label: 'Mes liens',   icon: '🔗' },
-  { id: 'banwords', label: 'Banwords',    icon: '🚫' },
-  { id: 'saves',    label: 'Sauvegardes', icon: '🔖' },
+  { id: 'results',  label: 'Résultats',    icon: '🔍' },
+  { id: 'filters',  label: 'Mes liens',    icon: '🔗' },
+  { id: 'banwords', label: 'Banwords',     icon: '🚫' },
+  { id: 'saves',    label: 'Sauvegardes',  icon: '🔖' },
+  { id: 'applied',  label: 'Postulé',      icon: '📨' },
 ];
 
 // ── Décompte circulaire ───────────────────────────────────────────
@@ -310,6 +341,11 @@ export default function JobBoard() {
   const [filtersLoaded, setFiltersLoaded] = useState(false);
   const [banwords, setBanwords]         = useState(() => LS.get('jb_banwords', []));
   const [saves, setSaves]               = useState(() => LS.get('jb_saves', []));
+  const [applied, setApplied]           = useState(() => LS.get('jb_applied', []));
+  const [deletedIds, setDeletedIds]     = useState(() => new Set(LS.get('jb_deleted', [])));
+  const [undoToast, setUndoToast]       = useState(null); // { job, timerId, remaining }
+  const undoTimerRef                    = useRef(null);
+  const undoIntervalRef                 = useRef(null);
 
   const filtersOwnerRef  = useRef(null);
   const initialLoadRef   = useRef(true);
@@ -354,6 +390,8 @@ export default function JobBoard() {
 
   useEffect(() => { LS.set('jb_banwords', banwords); }, [banwords]);
   useEffect(() => { LS.set('jb_saves', saves); }, [saves]);
+  useEffect(() => { LS.set('jb_applied', applied); }, [applied]);
+  useEffect(() => { LS.set('jb_deleted', [...deletedIds]); }, [deletedIds]);
 
   // ── Chargement offres (Supabase direct) ─────────────────────────
   // silent=true → merge sans spinner ni reset du scroll
@@ -567,10 +605,48 @@ export default function JobBoard() {
     }
   }, [fetchJobs, activeTab, userId, urlFilters]);
 
+  // ── Actions carte ─────────────────────────────────────────────────
+  const handleApply = useCallback((job) => {
+    setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{ job, appliedAt: new Date().toISOString() }, ...prev]);
+    setDeletedIds(prev => new Set([...prev, job.id]));
+  }, []);
+
+  const handleDelete = useCallback((job) => {
+    // Annuler un éventuel undo précédent
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);
+
+    setDeletedIds(prev => new Set([...prev, job.id]));
+
+    let remaining = 10;
+    setUndoToast({ job, remaining });
+
+    undoIntervalRef.current = setInterval(() => {
+      remaining -= 1;
+      setUndoToast(prev => prev ? { ...prev, remaining } : null);
+    }, 1000);
+
+    undoTimerRef.current = setTimeout(() => {
+      clearInterval(undoIntervalRef.current);
+      setUndoToast(null);
+    }, 10000);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);
+    if (undoToast) {
+      setDeletedIds(prev => { const next = new Set(prev); next.delete(undoToast.job.id); return next; });
+      setUndoToast(null);
+    }
+  }, [undoToast]);
+
   // ── Filtres visuels ───────────────────────────────────────────────
+  const appliedIds = new Set(applied.map(e => e.job.id));
   const visibleJobs = jobs
     .filter(j => !jobMatchesBanwords(j, banwords))
     .filter(j => typeFilter === 'all' || j.type === typeFilter)
+    .filter(j => !deletedIds.has(j.id))
     .slice(0, 30);
   const savedIds  = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
@@ -594,6 +670,20 @@ export default function JobBoard() {
             ✨ {newJobsCount} nouvelle{newJobsCount > 1 ? 's' : ''} offre{newJobsCount > 1 ? 's' : ''} — cliquer pour voir
           </motion.div>
         )}
+        {undoToast && (
+          <motion.div
+            className="jb-undo-toast"
+            initial={{ opacity: 0, y: 40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+          >
+            <span className="jb-undo-label">🗑️ Offre supprimée</span>
+            <button className="jb-undo-btn" onClick={handleUndo}>
+              Annuler <span className="jb-undo-timer">{undoToast.remaining}s</span>
+            </button>
+          </motion.div>
+        )}
       </AnimatePresence>
       <div className="jb-header">
         <div className="jb-header-top">
@@ -614,6 +704,7 @@ export default function JobBoard() {
           {TABS.map(tab => (
             <button key={tab.id} className={`jb-tab ${activeTab === tab.id ? 'active' : ''}`} onClick={() => setActiveTab(tab.id)}>
               <span className="jb-tab-icon">{tab.icon}</span> {tab.label}
+              {tab.id === 'applied' && applied.length > 0 && <span className="jb-tab-badge">{applied.length}</span>}
             </button>
           ))}
           <button className="jb-tab jb-tab-refresh" onClick={triggerScrape} disabled={loading || isScraping} title="Scraper maintenant">
@@ -674,10 +765,14 @@ export default function JobBoard() {
 
               {!loading && fetched && visibleJobs.length > 0 && (
                 <div className="jb-grid">
-                  {visibleJobs.map((job, i) => (
-                    <JobCard key={job.id} job={job} index={i} saved={savedIds.has(job.id)}
-                      onSave={(j) => setSaves(p => p.find(s => s.id === j.id) ? p.filter(s => s.id !== j.id) : [j, ...p])} />
-                  ))}
+                  <AnimatePresence>
+                    {visibleJobs.map((job, i) => (
+                      <JobCard key={job.id} job={job} index={i} saved={savedIds.has(job.id)}
+                        onSave={(j) => setSaves(p => p.find(s => s.id === j.id) ? p.filter(s => s.id !== j.id) : [j, ...p])}
+                        onApply={handleApply}
+                        onDelete={handleDelete} />
+                    ))}
+                  </AnimatePresence>
                 </div>
               )}
             </motion.div>
@@ -686,6 +781,7 @@ export default function JobBoard() {
           {activeTab === 'filters'  && <motion.div key="filters"><FiltersPanel filters={urlFilters} onChange={setUrlFilters} onScrapeNow={triggerScrape} scrapeStatus={scrapeStatus} /></motion.div>}
           {activeTab === 'banwords' && <motion.div key="banwords"><BanwordsPanel banwords={banwords} onChange={setBanwords} /></motion.div>}
           {activeTab === 'saves'    && <motion.div key="saves"><SavesPanel saves={saves} onRemove={(id) => setSaves(p => p.filter(s => s.id !== id))} /></motion.div>}
+          {activeTab === 'applied'  && <motion.div key="applied"><AppliedPanel applied={applied} onRemove={(id) => setApplied(p => p.filter(e => e.job.id !== id))} /></motion.div>}
         </AnimatePresence>
       </main>
     </div>
