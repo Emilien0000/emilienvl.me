@@ -474,6 +474,7 @@ export default function JobBoard() {
         .from('jb_jobs')
         .select('*')
         .eq('user_id', userId)
+        .order('scraped_at', { ascending: false })
         .order('date', { ascending: false })
         .limit(200);
 
@@ -698,7 +699,7 @@ export default function JobBoard() {
     .filter(j => !jobMatchesBanwords(j, banwords))
     .filter(j => typeFilter === 'all' || j.type === typeFilter)
     .filter(j => !deletedIds.has(j.id))
-    .slice(0, 30);
+    .slice(0, 200);
   const savedIds  = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
 
