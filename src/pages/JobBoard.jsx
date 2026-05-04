@@ -734,7 +734,8 @@ export default function JobBoard() {
       seenTitleCompany.add(key);
       return true;
     })
-    .slice(0, 30); // ordre conservé depuis Supabase : scraped_at DESC, date DESC
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 30);
   const savedIds  = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
 
