@@ -1,12 +1,16 @@
 // api/scrape.js
 export const config = { maxDuration: 60 };
 
-function sbUrl(path) { return `${process.env.SUPABASE_URL}/rest/v1/${path}`; }
+// 👇 ON CHERCHE LES VARIABLES SOUS LEURS DEUX NOMS POSSIBLES
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+function sbUrl(path) { return `${SUPABASE_URL}/rest/v1/${path}`; }
 
 function sbHeaders() {
   return {
-    'apikey': process.env.SUPABASE_ANON_KEY,
-    'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+    'apikey': SUPABASE_KEY,
+    'Authorization': `Bearer ${SUPABASE_KEY}`,
     'Content-Type': 'application/json',
   };
 }
@@ -19,29 +23,24 @@ async function sbFetch(path, options = {}) {
 }
 
 export default async function handler(req, res) {
-  // Configuration CORS adaptée pour Node.js
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-User-Id');
 
-  // Bloque les requêtes préliminaires (CORS)
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-
-  // Vérifie la méthode
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'POST required' });
-  }
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
 
   const pythonApiUrl = process.env.PYTHON_SCRAPER_URL; 
   const scraperSecret = process.env.SCRAPER_SECRET || '';
-  
-  // CORRECTION CRITIQUE ICI : Syntaxe Node.js pour lire les headers
   const userId = req.headers['x-user-id'];
 
   if (!userId) return res.status(401).json({ error: "Utilisateur non connecté" });
   if (!pythonApiUrl) return res.status(500).json({ error: "URL Python manquante sur Vercel" });
+  
+  // Sécurité anti-crash
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    return res.status(500).json({ error: "Variables SUPABASE manquantes sur Vercel. Ajoute VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY dans les settings." });
+  }
 
   try {
     // 1. Lire tes filtres depuis Supabase
@@ -58,7 +57,7 @@ export default async function handler(req, res) {
 
     const urls = activeFilters.map(f => f.url);
 
-    // 2. Demander à Python de scraper (instantané si Render est éveillé via ton Cron Job)
+    // 2. Demander à Python de scraper
     const scrapeRes = await fetch(`${pythonApiUrl}/scrape`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-scraper-secret': scraperSecret },
