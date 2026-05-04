@@ -674,9 +674,12 @@ useEffect(() => {
 
     try {
       const res = await apiFetch('/api/scrape', { method: 'POST' }, userId);
-      if (!res.ok) throw new Error(`Erreur scraping : ${res.status}`);
-      const data = await res.json();
-
+        if (!res.ok) {
+          // On lit la vraie erreur envoyée par Vercel !
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Erreur scraping : ${res.status}`);
+        }
+        const data = await res.json();
       if (data.jobId) {
         setScrapeJobId(data.jobId);
         setScrapeStatus('running');
