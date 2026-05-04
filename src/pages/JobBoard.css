@@ -979,6 +979,33 @@
   letter-spacing:  0.03em;
 }
 
+/* ── Badge NEW ──────────────────────────────────────────────────────────── */
+.jb-new-badge {
+  display:         inline-flex;
+  align-items:     center;
+  gap:             0.2em;
+  padding:         0.18rem 0.6rem;
+  border-radius:   999px;
+  font-size:       0.68rem;
+  font-weight:     700;
+  letter-spacing:  0.08em;
+  text-transform:  uppercase;
+  background:      linear-gradient(135deg, #ff6b35 0%, #f59e0b 100%);
+  color:           #fff;
+  box-shadow:      0 0 8px rgba(255,107,53,0.5);
+  animation:       jb-new-pulse 2s ease-in-out infinite;
+}
+
+@keyframes jb-new-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(255,107,53,0.45); }
+  50%       { box-shadow: 0 0 14px rgba(255,107,53,0.8); }
+}
+
+/* Légère bordure sur la carte quand elle est "new" */
+.jb-card-new {
+  border: 1px solid rgba(255,107,53,0.25) !important;
+}
+
 /* ── Tab badge (count) ───────────────────────────────────────────────────── */
 .jb-tab-badge {
   display:         inline-flex;

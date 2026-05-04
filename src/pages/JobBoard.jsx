@@ -88,15 +88,16 @@ function normalizeDate(d) {
 
 const IconCancel = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
 
-function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showActions = true, appliedAt }) {
+function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showActions = true, appliedAt, isNew }) {
   const typeInfo = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
   const source   = detectSource(job.sourceUrl, job.url);
   return (
-    <motion.div className="jb-card" style={{ '--source-color': source.color }} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -10 }} transition={{ duration: 0.3, delay: Math.min(index * 0.035, 0.6) }} whileHover={{ y: -3, transition: { duration: 0.18 } }} layout>
+    <motion.div className={`jb-card${isNew ? ' jb-card-new' : ''}`} style={{ '--source-color': source.color }} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -10 }} transition={{ duration: 0.3, delay: Math.min(index * 0.035, 0.6) }} whileHover={{ y: -3, transition: { duration: 0.18 } }} layout>
       <div className="jb-card-accent" />
       <div className="jb-card-inner">
         <div className="jb-card-top">
           <div className="jb-card-badges">
+            {isNew && <span className="jb-new-badge">✦ NEW</span>}
             <span className="jb-source-badge" style={{ background: source.color + '18', color: source.color }}>{source.emoji} {source.label}</span>
             <span className="jb-type-badge" style={{ background: typeInfo.color + '18', color: typeInfo.color }}>{typeInfo.label}</span>
             {appliedAt && <span className="jb-applied-badge">✅ Postulé {timeAgo(appliedAt)}</span>}
@@ -364,6 +365,7 @@ export default function JobBoard() {
   const initialLoadRef   = useRef(true);
   const knownJobIdsRef   = useRef(new Set());  // IDs déjà affichés → pour détecter les nouveautés
   const [newJobsCount, setNewJobsCount] = useState(0);  // toast "N nouvelles offres"
+  const [newJobIds, setNewJobIds]       = useState(new Set());  // IDs avec badge NEW
 
   // ── Décompte visuel polling ───────────────────────────────────────
   const POLL_INTERVAL = 30;
@@ -507,15 +509,16 @@ export default function JobBoard() {
             if (toAdd.length === 0) return prev;
             newOnes.forEach(j => knownJobIdsRef.current.add(j.id));
             setNewJobsCount(c => c + toAdd.length);
-            // <-- 2. Change la limite ici de 30 à 200
-            return [...toAdd, ...prev].slice(0, 200); 
+            setNewJobIds(prev => new Set([...prev, ...toAdd.map(j => j.id)]));
+            return [...toAdd, ...prev].slice(0, 30); 
           });
         }
       } else {
         // Chargement initial → on stocke tout ce qu'on a récupéré
         // <-- 3. Supprime la constante "capped" et passe tout le tableau "normalized"
         knownJobIdsRef.current = new Set(normalized.map(j => j.id));
-        setJobs(normalized); 
+        setNewJobIds(new Set());
+        setJobs(normalized.slice(0, 30)); 
         setFetched(true);
       }
     } catch (err) {
@@ -709,6 +712,7 @@ export default function JobBoard() {
     if (error) { console.error('❌ Erreur purge jobs:', error.message); return; }
     setJobs([]);
     knownJobIdsRef.current = new Set();
+    setNewJobIds(new Set());
     setFetched(true);
   }, [userId]);
 
@@ -729,7 +733,7 @@ export default function JobBoard() {
       return enabledFilterUrls.some(url => j.sourceUrl === url);
     })
     .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, 200);
+    .slice(0, 30);
   const savedIds  = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
 
@@ -747,7 +751,7 @@ export default function JobBoard() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-            onClick={() => { setNewJobsCount(0); if (activeTab !== 'results') setActiveTab('results'); }}
+            onClick={() => { setNewJobsCount(0); setNewJobIds(new Set()); if (activeTab !== 'results') setActiveTab('results'); }}
           >
             ✨ {newJobsCount} nouvelle{newJobsCount > 1 ? 's' : ''} offre{newJobsCount > 1 ? 's' : ''} — cliquer pour voir
           </motion.div>
@@ -850,6 +854,7 @@ export default function JobBoard() {
                   <AnimatePresence>
                     {visibleJobs.map((job, i) => (
                       <JobCard key={job.id} job={job} index={i} saved={savedIds.has(job.id)}
+                        isNew={newJobIds.has(job.id)}
                         onSave={(j) => setSaves(p => p.find(s => s.id === j.id) ? p.filter(s => s.id !== j.id) : [j, ...p])}
                         onApply={handleApply}
                         onDelete={handleDelete} />
