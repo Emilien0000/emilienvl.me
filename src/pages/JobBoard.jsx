@@ -673,27 +673,77 @@ useEffect(() => {
     if (activeTab !== 'results') setActiveTab('results');
 
     try {
-      const res = await apiFetch('/api/scrape', { method: 'POST' }, userId);
-        if (!res.ok) {
-          // On lit la vraie erreur envoyée par Vercel !
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || `Erreur scraping : ${res.status}`);
-        }
-        const data = await res.json();
-      if (data.jobId) {
-        setScrapeJobId(data.jobId);
-        setScrapeStatus('running');
-        startPolling(data.jobId);
-      } else {
-        // Fallback si pas de jobId (ancienne version du backend)
-        await fetchJobs();
+      const activeFilters = urlFilters.filter(f => f.enabled);
+      if (activeFilters.length === 0) {
         setScrapeStatus(null);
+        return;
       }
+      const urls = activeFilters.map(f => f.url);
+
+      setScrapeStatus('running');
+
+      // 1. APPEL DIRECT À PYTHON DEPUIS LE NAVIGATEUR (Zéro timeout Vercel !)
+      const pythonUrl = "https://scraper-jobs.onrender.com";
+      
+      // 👇 INSÈRE ICI TON VRAI SECRET RENDER
+      const scraperSecret = "TON_SECRET_SCRAPER_RENDER"; 
+
+      const scrapeRes = await fetch(`${pythonUrl}/scrape`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-scraper-secret': scraperSecret
+        },
+        body: JSON.stringify({ urls, results_wanted: 30 })
+      });
+
+      if (!scrapeRes.ok) throw new Error(`Erreur du scraper Python: ${scrapeRes.status}`);
+      const scrapeData = await scrapeRes.json();
+
+      const allJobs = [];
+      const seen = new Set();
+      const updatedFilters = [...urlFilters];
+
+      // 2. Traitement des résultats
+      for (const result of scrapeData.results) {
+        const filterIndex = updatedFilters.findIndex(f => f.url === result.url);
+        if (filterIndex !== -1) {
+          updatedFilters[filterIndex].lastScraped = result.scrapedAt;
+          updatedFilters[filterIndex].jobCount = result.count;
+        }
+        for (const job of result.jobs) {
+           if (job.url && !seen.has(job.url)) {
+              seen.add(job.url);
+              allJobs.push(job);
+           }
+        }
+      }
+
+      // 3. Sauvegarde directe dans Supabase (Frontend -> BDD)
+      if (allJobs.length > 0) {
+         const { error: dbError } = await supabase
+           .from('jb_jobs')
+           .upsert(allJobs, { onConflict: 'url' });
+         if (dbError) throw new Error("Erreur d'insertion BDD: " + dbError.message);
+      }
+
+      // 4. Mise à jour de la date des filtres
+      await supabase
+        .from('user_filters')
+        .update({ filters: updatedFilters })
+        .eq('id', userId);
+
+      setUrlFilters(updatedFilters);
+      await fetchJobs(); // Recharge l'affichage
+      setScrapeStatus('done');
+      setTimeout(() => setScrapeStatus(null), 5000);
+
     } catch (err) {
+      console.error("Scrape Error:", err);
       setError(err.message || 'Erreur inconnue');
       setScrapeStatus(null);
     }
-  }, [fetchJobs, activeTab, userId, startPolling]);
+  }, [fetchJobs, activeTab, userId, urlFilters]);
 
   // ── Countdown + auto-refresh ───────────────────────────────────────────────
   useEffect(() => {
