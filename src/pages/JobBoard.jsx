@@ -571,8 +571,6 @@ export default function JobBoard() {
   // afin d'éviter d'écraser les filtres d'un autre utilisateur si la session change.
   const filtersOwnerRef = useRef(null);
   const initialLoadRef = useRef(true);
-// Et n'oublie pas celle-ci pour éviter le crash dont je te parlais :
-  const filtersDirtyRef = useRef(false);
 
   useEffect(() => {
     // Ne sauvegarde que si les filtres appartiennent bien à l'utilisateur courant
