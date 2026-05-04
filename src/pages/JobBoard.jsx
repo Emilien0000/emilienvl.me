@@ -1,9 +1,10 @@
 // src/pages/JobBoard.jsx
-// v2 — Sessions utilisateur (email/mdp) + scraping non-bloquant (polling)
+// v3 — Auth Supabase réelle (email/mdp) + scraping non-bloquant (polling)
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../supabase';
 import './JobBoard.css';
 
 // ── Icônes SVG ────────────────────────────────────────────────────────────────
@@ -56,78 +57,58 @@ const TYPE_LABELS = {
   emploi:     { label: 'Emploi',     color: '#1a73e8' },
 };
 
-// ── Session utilisateur ────────────────────────────────────────────────────────
-// On identifie l'utilisateur par son email (hashé côté serveur comme user_id).
-// Le "mot de passe" est juste une protection locale — pas de vraie auth serveur ici.
-// Le userId envoyé au serveur = btoa(email) pour être simple et déterministe.
-
-const SESSION_KEY = 'jb_session';
-
-function encodeUserId(email) {
-  // Hash simple déterministe à partir de l'email (pas de crypto nécessaire ici)
-  return btoa(email.toLowerCase().trim()).replace(/[+/=]/g, c => ({ '+': '-', '/': '_', '=': '' }[c]));
-}
-
-function loadSession() {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const s = JSON.parse(raw);
-    if (!s?.userId || !s?.email) return null;
-    return s;
-  } catch { return null; }
-}
-
-function saveSession(email, password) {
-  const userId = encodeUserId(email);
-  const session = { email, userId, passwordHash: btoa(password) };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  return session;
-}
-
-function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
-}
+// ── Auth Supabase ──────────────────────────────────────────────────────────────
+// On utilise Supabase Auth (email + mot de passe) pour une vraie vérification
+// côté serveur. Le userId = supabase user.id (UUID stable, jamais modifié).
 
 // ── Écran de connexion ─────────────────────────────────────────────────────────
 
 function LoginScreen({ onLogin }) {
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [isNew,    setIsNew]    = useState(false);
-  const [error,    setError]    = useState('');
+  const [email,       setEmail]       = useState('');
+  const [password,    setPassword]    = useState('');
+  const [isNew,       setIsNew]       = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState('');
 
-  const handle = (e) => {
+  const handle = async (e) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      setError('Email et mot de passe requis');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError('Email invalide');
-      return;
-    }
-    if (password.length < 4) {
-      setError('Mot de passe trop court (min. 4 caractères)');
-      return;
-    }
+    if (!email.trim() || !password.trim()) { setError('Email et mot de passe requis'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Email invalide'); return; }
+    if (password.length < 6) { setError('Mot de passe trop court (min. 6 caractères)'); return; }
 
-    // Pour les utilisateurs existants : vérifier le mdp stocké localement
-    if (!isNew) {
-      const existing = loadSession();
-      if (existing && existing.email === email.toLowerCase().trim()) {
-        if (existing.passwordHash !== btoa(password)) {
-          setError('Mot de passe incorrect');
+    setLoading(true);
+    setError('');
+
+    try {
+      let result;
+      if (isNew) {
+        // Inscription
+        result = await supabase.auth.signUp({ email: email.trim(), password });
+        if (result.error) throw result.error;
+        // Supabase peut demander une confirmation email selon config
+        if (!result.data.session) {
+          setError('Compte créé ! Vérifie ta boîte mail pour confirmer ton email.');
+          setLoading(false);
           return;
         }
-        onLogin(existing);
-        return;
+      } else {
+        // Connexion
+        result = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (result.error) throw result.error;
       }
-    }
 
-    // Nouvelle session ou premier login
-    const session = saveSession(email, password);
-    onLogin(session);
+      const user = result.data.user;
+      onLogin({ email: user.email, userId: user.id });
+    } catch (err) {
+      // Traduction des erreurs Supabase les plus courantes
+      const msg = err.message || '';
+      if (msg.includes('Invalid login credentials')) setError('Email ou mot de passe incorrect.');
+      else if (msg.includes('Email not confirmed'))   setError('Confirme ton email avant de te connecter.');
+      else if (msg.includes('User already registered')) setError('Ce compte existe déjà. Clique sur "Se connecter".');
+      else setError(msg || 'Erreur inconnue');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -141,7 +122,7 @@ function LoginScreen({ onLogin }) {
         <div className="jb-login-icon">🎯</div>
         <h2 className="jb-login-title">Job Tracker</h2>
         <p className="jb-login-sub">
-          Connecte-toi pour retrouver tes filtres depuis n'importe quel appareil.
+          {isNew ? 'Crée ton compte pour sauvegarder tes filtres.' : 'Connecte-toi pour retrouver tes filtres depuis n\'importe quel appareil.'}
         </p>
 
         <form onSubmit={handle} className="jb-login-form">
@@ -154,6 +135,7 @@ function LoginScreen({ onLogin }) {
               onChange={e => { setEmail(e.target.value); setError(''); }}
               placeholder="toi@exemple.com"
               autoComplete="email"
+              autoFocus
             />
           </div>
           <div className="jb-login-field">
@@ -164,14 +146,14 @@ function LoginScreen({ onLogin }) {
               value={password}
               onChange={e => { setPassword(e.target.value); setError(''); }}
               placeholder="••••••••"
-              autoComplete="current-password"
+              autoComplete={isNew ? 'new-password' : 'current-password'}
             />
           </div>
 
           {error && <p className="jb-login-error">{error}</p>}
 
-          <button type="submit" className="jb-search-btn" style={{ width: '100%', marginTop: '0.5rem' }}>
-            {isNew ? 'Créer ma session' : 'Se connecter'}
+          <button type="submit" className="jb-search-btn" style={{ width: '100%', marginTop: '0.5rem' }} disabled={loading}>
+            {loading ? '…' : isNew ? 'Créer mon compte' : 'Se connecter'}
           </button>
         </form>
 
@@ -179,11 +161,11 @@ function LoginScreen({ onLogin }) {
           className="jb-login-toggle"
           onClick={() => { setIsNew(v => !v); setError(''); }}
         >
-          {isNew ? '← Déjà un compte ? Se connecter' : 'Nouveau ? Créer une session →'}
+          {isNew ? '← Déjà un compte ? Se connecter' : 'Nouveau ? Créer un compte →'}
         </button>
 
         <p className="jb-login-note">
-          💡 Ton email sert d'identifiant pour retrouver tes filtres. Aucune donnée personnelle n'est transmise à des tiers.
+          🔒 Authentification sécurisée via Supabase. Ton mot de passe n'est jamais stocké en clair.
         </p>
       </motion.div>
     </div>
@@ -630,12 +612,35 @@ function apiFetch(url, options = {}, userId = null) {
 export default function JobBoard() {
   const navigate = useNavigate();
 
-  // ── Session ──────────────────────────────────────────────────────────────
-  const [session, setSession] = useState(() => loadSession());
+  // ── Session (Supabase Auth) ───────────────────────────────────────────────
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true); // évite le flash de l'écran login
+
+  useEffect(() => {
+    // Récupère la session active au montage (token stocké par Supabase dans localStorage)
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user) {
+        setSession({ email: data.session.user.email, userId: data.session.user.id });
+      }
+      setAuthLoading(false);
+    });
+
+    // Écoute les changements d'état auth (login/logout depuis un autre onglet, expiration)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      if (s?.user) {
+        setSession({ email: s.user.email, userId: s.user.id });
+      } else {
+        setSession(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleLogin = (s) => setSession(s);
-  const handleLogout = () => {
-    clearSession();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setSession(null);
     setUrlFilters([]);
     setJobs([]);
@@ -669,12 +674,15 @@ export default function JobBoard() {
   const timerRef     = useRef(null);
   const countdownRef = useRef(null);
   const pollRef      = useRef(null);
-  const filtersLoadedRef = useRef(false);
 
   // ── Persist filtres en DB ──────────────────────────────────────────────────
+  // On utilise un ref pour stocker le userId sous lequel les filtres ont été chargés,
+  // afin d'éviter d'écraser les filtres d'un autre utilisateur si la session change.
+  const filtersOwnerRef = useRef(null);
+
   useEffect(() => {
-    if (!filtersLoadedRef.current) { filtersLoadedRef.current = filtersLoaded; return; }
-    if (!filtersLoaded || !session) return;
+    // Ne sauvegarde que si les filtres appartiennent bien à l'utilisateur courant
+    if (!filtersLoaded || !session || filtersOwnerRef.current !== userId) return;
     apiFetch('/api/filters', {
       method: 'PUT',
       body: JSON.stringify({ filters: urlFilters }),
@@ -797,7 +805,7 @@ export default function JobBoard() {
   useEffect(() => {
     if (!session) return;
     async function init() {
-      filtersLoadedRef.current = false;
+      filtersOwnerRef.current = null; // bloque la sauvegarde pendant le chargement
       setFiltersLoaded(false);
       try {
         const res = await apiFetch('/api/filters', {}, userId);
@@ -806,6 +814,7 @@ export default function JobBoard() {
           setUrlFilters(Array.isArray(filters) ? filters : []);
         }
       } catch {}
+      filtersOwnerRef.current = userId; // autorise la sauvegarde pour cet utilisateur
       setFiltersLoaded(true);
     }
     init();
@@ -838,6 +847,14 @@ export default function JobBoard() {
   const isScraping   = scrapeStatus === 'pending' || scrapeStatus === 'running';
 
   // ── Écran de login si pas de session ──────────────────────────────────────
+  if (authLoading) {
+    return (
+      <div className="jb-root" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <span style={{ opacity: 0.5, fontSize: '1.1rem' }}>Chargement…</span>
+      </div>
+    );
+  }
+
   if (!session) {
     return <LoginScreen onLogin={handleLogin} />;
   }
