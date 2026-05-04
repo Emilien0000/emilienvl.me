@@ -27,20 +27,24 @@ const IconUser      = () => <svg width="15" height="15" viewBox="0 0 24 24" fill
 const IconLogout    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 
 const SOURCE_PATTERNS = [
-  { id: 'indeed',    label: 'Indeed',                color: '#2557a7', emoji: '💼', pattern: /indeed\.com/i },
+  { id: 'indeed',    label: 'Indeed',                color: '#2557a7', emoji: '💼', pattern: /indeed\./i },
   { id: 'hellowork', label: 'HelloWork',             color: '#7c3aed', emoji: '👋', pattern: /hellowork\.com/i },
   { id: 'stagefr',   label: 'Stage.fr',              color: '#f59e0b', emoji: '📋', pattern: /stage\.fr/i },
   { id: 'lba',       label: 'La Bonne Alternance',   color: '#1a73e8', emoji: '🎓', pattern: /labonnealternance\.apprentissage/i },
-  { id: 'adzuna',    label: 'Adzuna',                color: '#e64c1f', emoji: '🔍', pattern: /adzuna\.fr/i },
+  { id: 'adzuna',    label: 'Adzuna',                color: '#e64c1f', emoji: '🔍', pattern: /adzuna\./i },
   { id: 'ft',        label: 'France Travail',        color: '#00a651', emoji: '🏛️', pattern: /francetravail\.fr|pole-emploi\.fr/i },
   { id: 'linkedin',  label: 'LinkedIn',              color: '#0a66c2', emoji: '🔗', pattern: /linkedin\.com/i },
   { id: 'welcomejb', label: 'Welcome to the Jungle', color: '#ff4655', emoji: '🌴', pattern: /welcometothejungle\.com/i },
-  { id: 'monster',   label: 'Monster',               color: '#6600cc', emoji: '👾', pattern: /monster\.fr/i },
+  { id: 'monster',   label: 'Monster',               color: '#6600cc', emoji: '👾', pattern: /monster\./i },
 ];
 
-function detectSource(url) {
-  for (const src of SOURCE_PATTERNS) {
-    if (src.pattern.test(url)) return src;
+// Teste plusieurs URLs (sourceUrl d'abord, puis url de l'offre) pour trouver la source
+function detectSource(...urls) {
+  for (const url of urls) {
+    if (!url) continue;
+    for (const src of SOURCE_PATTERNS) {
+      if (src.pattern.test(url)) return src;
+    }
   }
   return { id: 'other', label: 'Source', color: '#555', emoji: '🌐' };
 }
@@ -83,7 +87,7 @@ function normalizeDate(d) {
 
 function JobCard({ job, index, saved, onSave }) {
   const typeInfo = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
-  const source   = detectSource(job.sourceUrl || job.url || '');
+  const source   = detectSource(job.sourceUrl, job.url);
   return (
     <motion.div className="jb-card" style={{ '--source-color': source.color }} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.3, delay: Math.min(index * 0.035, 0.6) }} whileHover={{ y: -3, transition: { duration: 0.18 } }}>
       <div className="jb-card-accent" />
@@ -381,20 +385,21 @@ export default function JobBoard() {
         // Comparer avec les IDs connus → détecter les nouvelles offres
         const newOnes = normalized.filter(j => !knownJobIdsRef.current.has(j.id));
         if (newOnes.length > 0) {
-          // Merge en tête de liste sans re-render brutal
+          // Merge en tête, cap à 30 (les nouvelles poussent les anciennes)
           setJobs(prev => {
             const prevIds = new Set(prev.map(j => j.id));
             const toAdd   = newOnes.filter(j => !prevIds.has(j.id));
             if (toAdd.length === 0) return prev;
             newOnes.forEach(j => knownJobIdsRef.current.add(j.id));
             setNewJobsCount(c => c + toAdd.length);
-            return [...toAdd, ...prev];
+            return [...toAdd, ...prev].slice(0, 30);
           });
         }
       } else {
-        // Chargement initial → on prend tout
-        knownJobIdsRef.current = new Set(normalized.map(j => j.id));
-        setJobs(normalized);
+        // Chargement initial → cap à 30
+        const capped = normalized.slice(0, 30);
+        knownJobIdsRef.current = new Set(capped.map(j => j.id));
+        setJobs(capped);
         setFetched(true);
       }
     } catch (err) {
@@ -419,27 +424,6 @@ export default function JobBoard() {
       if (countdownRef.current <= 0) {
         countdownRef.current = POLL_INTERVAL;
         setCountdown(POLL_INTERVAL);
-
-        // Injection fausse annonce de test
-        const fakeJob = {
-          id:          `fake-${Date.now()}`,
-          sourceUrl:   'https://fr.indeed.com/',
-          title:       '🧪 Fake Annonce — Test Polling',
-          company:     'Acme Corp (test)',
-          location:    'Paris, France',
-          url:         'https://fr.indeed.com/',
-          description: 'Cette carte a été injectée automatiquement pour tester le rendu du polling. Elle apparaît toutes les 30 secondes.',
-          date:        new Date().toISOString(),
-          type:        'alternance',
-        };
-
-        setJobs(prev => {
-          if (prev.find(j => j.id === fakeJob.id)) return prev;
-          knownJobIdsRef.current.add(fakeJob.id);
-          setNewJobsCount(c => c + 1);
-          return [fakeJob, ...prev];
-        });
-
         fetchJobs({ silent: true });
       }
     }, 1000);
