@@ -718,9 +718,9 @@ export default function JobBoard() {
   const enabledFilterUrls = urlFilters.filter(f => f.enabled).map(f => f.url);
   const hasActiveFilters  = enabledFilterUrls.length > 0 && enabledFilterUrls.length < urlFilters.length;
 
-  // Déduplication titre+company (Indeed génère des URLs différentes pour la même offre)
+  // ── visibleJobs : filtre → déduplique → interleave par source → slice 30 ──
   const seenTitleCompany = new Set();
-  const visibleJobs = jobs
+  const baseFiltered = jobs
     .filter(j => !jobMatchesBanwords(j, banwords))
     .filter(j => typeFilter === 'all' || j.type === typeFilter)
     .filter(j => !deletedIds.has(j.id))
@@ -729,13 +729,30 @@ export default function JobBoard() {
       return enabledFilterUrls.some(url => j.sourceUrl === url);
     })
     .filter(j => {
+      // Déduplication titre+company (Indeed duplique avec URLs de tracking différentes)
       const key = `${j.title.toLowerCase().trim()}|${j.company.toLowerCase().trim()}`;
       if (seenTitleCompany.has(key)) return false;
       seenTitleCompany.add(key);
       return true;
     })
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, 30);
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  // Interleave : regroupe par source, puis alterne pour garantir la diversité
+  const bySource = {};
+  for (const job of baseFiltered) {
+    const src = job.sourceUrl || 'other';
+    if (!bySource[src]) bySource[src] = [];
+    bySource[src].push(job);
+  }
+  const sources = Object.values(bySource);
+  const interleaved = [];
+  const maxLen = Math.max(...sources.map(s => s.length), 0);
+  for (let i = 0; i < maxLen && interleaved.length < 30; i++) {
+    for (const src of sources) {
+      if (src[i] && interleaved.length < 30) interleaved.push(src[i]);
+    }
+  }
+  const visibleJobs = interleaved;
   const savedIds  = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
 
