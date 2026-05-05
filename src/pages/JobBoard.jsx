@@ -478,7 +478,7 @@ export default function JobBoard() {
         .eq('user_id', userId)
         .order('scraped_at', { ascending: false })
         .order('date', { ascending: false })
-        .limit(500);
+        .limit(1000);
 
       console.log('🔍 fetchJobs — résultats:', data?.length, 'erreur:', dbErr?.message);
 
@@ -762,41 +762,22 @@ export default function JobBoard() {
   const baseFiltered = jobs
     .filter(j => !jobMatchesBanwords(j, banwords))
     .filter(j => typeFilter === 'all' || j.type === typeFilter)
-    .filter(j => !deletedKeys.has(`${j.title.toLowerCase().trim()}|${j.company.toLowerCase().trim()}`))
-    .filter(j => !appliedKeys.has(`${j.title.toLowerCase().trim()}|${j.company.toLowerCase().trim()}`))
+    .filter(j => !deletedKeys.has(jobKey(j)))
+    .filter(j => !appliedKeys.has(jobKey(j)))
     .filter(j => {
       if (!hasActiveFilters) return true;
       return enabledFilterUrls.some(url => j.sourceUrl === url);
     })
     .filter(j => {
-      // Déduplication titre+company (Indeed duplique avec URLs de tracking différentes)
-      const key = `${j.title.toLowerCase().trim()}|${j.company.toLowerCase().trim()}`;
+      // Déduplication sécurisée
+      const key = jobKey(j);
       if (seenTitleCompany.has(key)) return false;
       seenTitleCompany.add(key);
       return true;
     })
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  // Round-robin par source (chacune triée par date DESC) → diversité garantie
-  const _bySource = {};
-  for (const job of baseFiltered) {
-    const src = job.sourceUrl || 'other';
-    if (!_bySource[src]) _bySource[src] = [];
-    _bySource[src].push(job);
-  }
-  const _queues = Object.values(_bySource);
-  const _result = [];
-  let   _i      = 0;
-  while (_result.length < 30) {
-    let _any = false;
-    for (const q of _queues) {
-      if (_result.length >= 30) break;
-      if (q[_i]) { _result.push(q[_i]); _any = true; }
-    }
-    if (!_any) break;
-    _i++;
-  }
-  const visibleJobs = _result;
+  const visibleJobs = baseFiltered.slice(0, 30);
   const savedIds  = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
 
