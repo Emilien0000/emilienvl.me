@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../supabase';
 
-// vue : 'login' | 'register' | 'forgot' | 'forgot_sent'
+// vue : 'login' | 'register' | 'forgot' | 'forgot_sent' | 'reset_password' | 'reset_done'
 export default function LoginScreen({ onLogin }) {
   const [view,      setView]      = useState('login');
   const [email,     setEmail]     = useState('');
@@ -16,12 +16,26 @@ export default function LoginScreen({ onLogin }) {
   const [hint,      setHint]      = useState('');
   const emailRef = useRef(null);
 
+  // Détecte le token de recovery Supabase dans l'URL au montage
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setView('reset_password');
+        setError('');
+        setPassword('');
+        setConfirm('');
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   useEffect(() => { emailRef.current?.focus(); }, [view]);
 
   const resetFields = () => { setError(''); setHint(''); setPassword(''); setConfirm(''); };
 
   /* ── Validation ─────────────────────────────────────── */
   const validate = () => {
+    if (view === 'reset_password') return null; // validation faite dans le handler
     if (!email.trim())                                   return 'Email requis.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))     return 'Email invalide.';
     if (view === 'forgot')                               return null; // pas besoin de mdp
@@ -39,6 +53,25 @@ export default function LoginScreen({ onLogin }) {
     setLoading(true); setError(''); setHint('');
 
     try {
+      /* ── Nouveau mot de passe (après clic sur le lien email) ── */
+      if (view === 'reset_password') {
+        if (!password.trim() || password.length < 6) {
+          setError('Minimum 6 caractères.');
+          setLoading(false);
+          return;
+        }
+        if (password !== confirm) {
+          setError('Les mots de passe ne correspondent pas.');
+          setLoading(false);
+          return;
+        }
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) throw error;
+        setView('reset_done');
+        setLoading(false);
+        return;
+      }
+
       /* ── Mot de passe oublié ── */
       if (view === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
@@ -125,11 +158,14 @@ export default function LoginScreen({ onLogin }) {
   const isLogin    = view === 'login';
   const isForgot   = view === 'forgot';
   const isSent     = view === 'forgot_sent';
+  const isReset    = view === 'reset_password';
+  const isResetDone = view === 'reset_done';
 
   const btnLabel = loading
-    ? <><div className="ls-spin" />{isRegister ? 'Création…' : isForgot ? 'Envoi…' : 'Connexion…'}</>
+    ? <><div className="ls-spin" />{isRegister ? 'Création…' : isForgot ? 'Envoi…' : isReset ? 'Mise à jour…' : 'Connexion…'}</>
     : isRegister ? 'Créer mon compte →'
     : isForgot   ? 'Envoyer le lien →'
+    : isReset    ? 'Mettre à jour le mot de passe →'
     : 'Se connecter →';
 
   return (
@@ -352,6 +388,7 @@ export default function LoginScreen({ onLogin }) {
             <p className="ls-subtitle">
               {isRegister ? 'Crée ton compte pour sauvegarder tes recherches.'
                : isForgot || isSent ? 'Réinitialise ton mot de passe.'
+               : isReset || isResetDone ? 'Choisis ton nouveau mot de passe.'
                : 'Retrouve tes filtres depuis n\'importe où.'}
             </p>
           </div>
@@ -370,6 +407,74 @@ export default function LoginScreen({ onLogin }) {
                 ← Retour à la connexion
               </button>
             </motion.div>
+
+          ) : isResetDone ? (
+            <motion.div key="reset_done"
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              <div className="ls-success">
+                <span>🔐</span>
+                <span>Ton mot de passe a bien été mis à jour ! Tu peux maintenant te connecter.</span>
+              </div>
+              <button className="ls-btn" style={{ marginTop: '1.5rem' }}
+                onClick={() => { setView('login'); resetFields(); }}>
+                Se connecter →
+              </button>
+            </motion.div>
+
+          ) : isReset ? (
+            <motion.div key="reset_password"
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              <form onSubmit={handle} noValidate>
+                <motion.div className="ls-field"
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}>
+                  <label className="ls-label">Nouveau mot de passe</label>
+                  <input
+                    type="password"
+                    className="ls-input"
+                    value={password}
+                    onChange={e => { setPassword(e.target.value); setError(''); }}
+                    placeholder="Minimum 6 caractères"
+                    autoComplete="new-password"
+                    disabled={loading}
+                    autoFocus
+                  />
+                  {password.length > 0 && <PasswordStrength password={password} />}
+                </motion.div>
+
+                <motion.div className="ls-field"
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+                  <label className="ls-label">Confirmer le mot de passe</label>
+                  <input
+                    type="password"
+                    className={`ls-input${confirm && password !== confirm ? ' error' : ''}`}
+                    value={confirm}
+                    onChange={e => { setConfirm(e.target.value); setError(''); }}
+                    placeholder="Répète ton nouveau mot de passe"
+                    autoComplete="new-password"
+                    disabled={loading}
+                  />
+                  {confirm && password !== confirm && (
+                    <p style={{ margin: '0.35rem 0 0', fontSize: '0.78rem', color: '#dc2626' }}>
+                      Les mots de passe ne correspondent pas.
+                    </p>
+                  )}
+                </motion.div>
+
+                <AnimatePresence mode="wait">
+                  {error && (
+                    <motion.div key="err" className="ls-error"
+                      initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                      <span>⚠</span> {error}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <button type="submit" className="ls-btn" disabled={loading}>
+                  {btnLabel}
+                </button>
+              </form>
+            </motion.div>
+
           ) : (
           <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
 
