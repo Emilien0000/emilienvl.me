@@ -761,22 +761,15 @@ export default function JobBoard() {
     })
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  // Interleave : regroupe par source, puis alterne pour garantir la diversité
-  const bySource = {};
-  for (const job of baseFiltered) {
-    const src = job.sourceUrl || 'other';
-    if (!bySource[src]) bySource[src] = [];
-    bySource[src].push(job);
-  }
-  const sources = Object.values(bySource);
-  const interleaved = [];
-  const maxLen = Math.max(...sources.map(s => s.length), 0);
-  for (let i = 0; i < maxLen && interleaved.length < 30; i++) {
-    for (const src of sources) {
-      if (src[i] && interleaved.length < 30) interleaved.push(src[i]);
-    }
-  }
-  const visibleJobs = interleaved;
+  // Tri global par date DESC + cap par source (max 15/source) pour la diversité
+  const sourceCount = {};
+  const visibleJobs = baseFiltered
+    .filter(j => {
+      const src = j.sourceUrl || 'other';
+      sourceCount[src] = (sourceCount[src] || 0) + 1;
+      return sourceCount[src] <= 15;
+    })
+    .slice(0, 30);
   const savedIds  = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
 
