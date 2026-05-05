@@ -520,4 +520,4 @@ function PasswordStrength({ password }) {
       )}
     </div>
   );
-}
+}//8
