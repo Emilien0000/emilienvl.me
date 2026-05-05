@@ -1,4 +1,4 @@
-// src/pages/JobBoard.jsxc
+// src/pages/JobBoard.jsx
 // v6 — Fix parsing résultats scraper (résultats à plat vs imbriqués)
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
