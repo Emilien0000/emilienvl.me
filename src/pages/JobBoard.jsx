@@ -516,7 +516,7 @@ export default function JobBoard() {
         date:        r.date,
         scrapedAt:   r.scraped_at,
         type:        r.type || 'emploi',
-        isDirect:    r.is_direct || false,
+        isDirect:    r.is_direct || /indeed\./i.test(r.url || '') || false,
       }));
 
       if (silent) {
