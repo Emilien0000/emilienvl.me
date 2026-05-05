@@ -61,17 +61,32 @@ const LS = {
   set: (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
 };
 
+// ✅ CORRECTIF : recalcule le label depuis la date ISO en DB à chaque appel.
+// Comparaison calendaire (minuit local) : garantit qu’une offre vue "Aujourd'hui"
+// devient "Hier" à minuit sans recharger la page.
+// Un ticker toutes les 60s dans le composant racine force un re-render.
 function timeAgo(iso) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  const days = Math.floor(diff / 86400000);
-  if (mins < 2)  return 'À l\'instant';
-  if (mins < 60) return `Il y a ${mins} min`;
-  if (days === 0) return "Aujourd'hui";
-  if (days === 1) return 'Hier';
-  if (days < 7)  return `Il y a ${days} j`;
-  if (days < 30) return `Il y a ${Math.floor(days / 7)} sem`;
-  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  if (!iso) return '';
+  const now  = new Date();
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return '';
+
+  const diffMs   = now - date;
+  const diffMins = Math.floor(diffMs / 60_000);
+
+  if (diffMins < 2)  return "À l'instant";
+  if (diffMins < 60) return `Il y a ${diffMins} min`;
+
+  // Comparaison calendaire (minuit local) — indépendante de l'heure exacte
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dateMidnight  = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const calDays       = Math.round((todayMidnight - dateMidnight) / 86_400_000);
+
+  if (calDays === 0) return "Aujourd'hui";
+  if (calDays === 1) return 'Hier';
+  if (calDays < 7)  return `Il y a ${calDays} j`;
+  if (calDays < 30) return `Il y a ${Math.floor(calDays / 7)} sem`;
+  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
 function jobMatchesBanwords(job, banwords) {
@@ -372,6 +387,14 @@ export default function JobBoard() {
   const [countdown, setCountdown]       = useState(POLL_INTERVAL);
   const countdownRef                    = useRef(POLL_INTERVAL);
 
+  // ✅ CORRECTIF dates : ticker 60s → force le recalcul de timeAgo()
+  // Sans ça, "Aujourd'hui" resterait figé toute la nuit sans reload.
+  const [, setDateTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setDateTick(t => t + 1), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
   // ── Chargement filtres (Supabase direct) ─────────────────────────
   useEffect(() => {
     if (!userId) return;
@@ -556,9 +579,8 @@ export default function JobBoard() {
       if (activeFilters.length === 0) return setScrapeStatus(null);
       setScrapeStatus('running');
 
-      // ── Purge silencieuse en DB (l'UI garde les jobs affichés le temps du scrape)
-      const { error: purgeErr } = await supabase.from('jb_jobs').delete().eq('user_id', userId);
-      if (purgeErr) console.warn('⚠️ Purge jobs avant scrape échouée:', purgeErr.message);
+      // ✅ CORRECTIF : Plus de DELETE global avant le scrape.
+      // Le backend fait désormais un upsert cumulatif (les anciennes offres sont conservées).
       // On ne vide PAS setJobs([]) ici → le feed reste visible pendant le scraping
 
       const pythonUrl     = 'https://scraper-jobs.onrender.com';
