@@ -1,5 +1,5 @@
 // src/pages/JobBoard.jsx
-// v6 — Fix parsing résultats scraper (résultats à plat vs imbriqués)
+// v7 — Extension Easy Apply intégrée
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import './JobBoard.css';
 import LoginScreen from '../components/LoginScreen';
+import { extensionBridge } from '../utils/jobboard-bridge';
 
 // ── Icônes SVG ────────────────────────────────────────────────────────────────
 const IconLink      = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
@@ -38,7 +39,6 @@ const SOURCE_PATTERNS = [
   { id: 'welcomejb', label: 'Welcome to the Jungle', color: '#ff4655', emoji: '🌴', pattern: /welcometothejungle\.com/i },
   { id: 'monster',   label: 'Monster',               color: '#6600cc', emoji: '👾', pattern: /monster\./i },
 ];
-
 // Teste plusieurs URLs (sourceUrl d'abord, puis url de l'offre) pour trouver la source
 function detectSource(...urls) {
   for (const url of urls) {
@@ -88,9 +88,11 @@ function normalizeDate(d) {
 
 const IconCancel = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
 
-function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showActions = true, appliedAt, isNew }) {
-  const typeInfo = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
-  const source   = detectSource(job.sourceUrl, job.url);
+function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showActions = true, appliedAt, isNew, extAvailable, applyingIds }) {
+  const typeInfo   = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
+  const source     = detectSource(job.sourceUrl, job.url);
+  const isApplying = applyingIds?.has(job.id);
+  const canAutoApply = job.isDirect && job.url?.includes('indeed') && extAvailable;
   return (
     <motion.div className={`jb-card${isNew ? ' jb-card-new' : ''}`} style={{ '--source-color': source.color }} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -10 }} transition={{ duration: 0.3, delay: Math.min(index * 0.035, 0.6) }} whileHover={{ y: -3, transition: { duration: 0.18 } }}>
       <div className="jb-card-accent" />
@@ -100,7 +102,20 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
             {isNew && <span className="jb-new-badge">✦ NEW</span>}
             <span className="jb-source-badge" style={{ background: source.color + '18', color: source.color }}>{source.emoji} {source.label}</span>
             <span className="jb-type-badge" style={{ background: typeInfo.color + '18', color: typeInfo.color }}>{typeInfo.label}</span>
-            {job.isDirect && <span className="jb-type-badge" style={{ background: 'rgba(250, 204, 21, 0.15)', color: '#facc15' }}>⭐ Easy Apply</span>}
+            {job.isDirect && (
+              <span
+                className="jb-type-badge"
+                style={{
+                  background: isApplying ? 'rgba(250,204,21,0.3)' : 'rgba(250,204,21,0.15)',
+                  color: '#facc15',
+                  cursor: canAutoApply ? 'pointer' : 'default',
+                }}
+                onClick={() => canAutoApply && onApply && onApply(job)}
+                title={canAutoApply ? 'Cliquer pour postuler automatiquement' : 'Installez l\'extension pour l\'auto-apply'}
+              >
+                {isApplying ? '⏳ En cours…' : canAutoApply ? '⚡ Auto Apply' : '⭐ Easy Apply'}
+              </span>
+            )}
             {appliedAt && <span className="jb-applied-badge">✅ Postulé {timeAgo(appliedAt)}</span>}
           </div>
           <div className="jb-card-actions">
@@ -361,9 +376,14 @@ export default function JobBoard() {
   const [undoToast, setUndoToast]       = useState(null); // { job, timerId, remaining }
   const undoTimerRef                    = useRef(null);
   const undoIntervalRef                 = useRef(null);
+  const [extAvailable, setExtAvailable] = useState(false);
+  const [applyingIds, setApplyingIds]   = useState(new Set());
 
   const filtersOwnerRef  = useRef(null);
   const initialLoadRef   = useRef(true);
+
+  // ── Extension Easy Apply ─────────────────────────────────────────
+  useEffect(() => { extensionBridge.ping().then(ok => setExtAvailable(ok)); }, []);
   const knownJobIdsRef   = useRef(new Set());  // IDs déjà affichés → pour détecter les nouveautés
   const [newJobsCount, setNewJobsCount] = useState(0);  // toast "N nouvelles offres"
   const [newJobIds, setNewJobIds]       = useState(new Set());  // IDs avec badge NEW
@@ -703,10 +723,25 @@ export default function JobBoard() {
   // ── Actions carte ─────────────────────────────────────────────────
   const jobKey = (job) => `${(job.title||'').toLowerCase().trim()}|${(job.company||'').toLowerCase().trim()}`;
 
-  const handleApply = useCallback((job) => {
+  const handleApply = useCallback(async (job) => {
+    // Auto-apply si Easy Apply Indeed + extension disponible
+    if (job.isDirect && job.url?.includes('indeed') && extAvailable) {
+      setApplyingIds(prev => new Set([...prev, job.id]));
+      const result = await extensionBridge.applyToJob(job);
+      setApplyingIds(prev => { const n = new Set(prev); n.delete(job.id); return n; });
+      if (result.success) {
+        setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{ job, appliedAt: result.appliedAt, method: 'auto' }, ...prev]);
+        setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
+      } else {
+        console.error('Auto-apply échoué:', result.error);
+        window.open(job.url, '_blank');
+      }
+      return;
+    }
+    // Candidature manuelle
     setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{ job, appliedAt: new Date().toISOString() }, ...prev]);
     setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
-  }, []);
+  }, [extAvailable]);
 
   const handleDelete = useCallback((job) => {
     // Annuler un éventuel undo précédent
@@ -900,6 +935,8 @@ export default function JobBoard() {
                     {visibleJobs.map((job, i) => (
                       <JobCard key={job.id} job={job} index={i} saved={savedIds.has(job.id)}
                         isNew={newJobIds.has(job.id)}
+                        extAvailable={extAvailable}
+                        applyingIds={applyingIds}
                         onSave={(j) => setSaves(p => p.find(s => s.id === j.id) ? p.filter(s => s.id !== j.id) : [j, ...p])}
                         onApply={handleApply}
                         onDelete={handleDelete} />
