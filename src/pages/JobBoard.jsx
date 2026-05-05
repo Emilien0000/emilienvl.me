@@ -61,32 +61,17 @@ const LS = {
   set: (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
 };
 
-// ✅ CORRECTIF : recalcule le label depuis la date ISO en DB à chaque appel.
-// Comparaison calendaire (minuit local) : garantit qu’une offre vue "Aujourd'hui"
-// devient "Hier" à minuit sans recharger la page.
-// Un ticker toutes les 60s dans le composant racine force un re-render.
 function timeAgo(iso) {
-  if (!iso) return '';
-  const now  = new Date();
-  const date = new Date(iso);
-  if (isNaN(date.getTime())) return '';
-
-  const diffMs   = now - date;
-  const diffMins = Math.floor(diffMs / 60_000);
-
-  if (diffMins < 2)  return "À l'instant";
-  if (diffMins < 60) return `Il y a ${diffMins} min`;
-
-  // Comparaison calendaire (minuit local) — indépendante de l'heure exacte
-  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const dateMidnight  = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const calDays       = Math.round((todayMidnight - dateMidnight) / 86_400_000);
-
-  if (calDays === 0) return "Aujourd'hui";
-  if (calDays === 1) return 'Hier';
-  if (calDays < 7)  return `Il y a ${calDays} j`;
-  if (calDays < 30) return `Il y a ${Math.floor(calDays / 7)} sem`;
-  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  const days = Math.floor(diff / 86400000);
+  if (mins < 2)  return 'À l\'instant';
+  if (mins < 60) return `Il y a ${mins} min`;
+  if (days === 0) return "Aujourd'hui";
+  if (days === 1) return 'Hier';
+  if (days < 7)  return `Il y a ${days} j`;
+  if (days < 30) return `Il y a ${Math.floor(days / 7)} sem`;
+  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
 function jobMatchesBanwords(job, banwords) {
@@ -381,19 +366,14 @@ export default function JobBoard() {
   const knownJobIdsRef   = useRef(new Set());  // IDs déjà affichés → pour détecter les nouveautés
   const [newJobsCount, setNewJobsCount] = useState(0);  // toast "N nouvelles offres"
   const [newJobIds, setNewJobIds]       = useState(new Set());  // IDs avec badge NEW
+  const pendingQueueRef  = useRef([]);          // file d'attente des jobs à injecter 1 par 1
+  const drainTimerRef    = useRef(null);         // timer du drain
+  const [queueSize, setQueueSize] = useState(0); // pour afficher le nb en attente
 
   // ── Décompte visuel polling ───────────────────────────────────────
   const POLL_INTERVAL = 30;
   const [countdown, setCountdown]       = useState(POLL_INTERVAL);
   const countdownRef                    = useRef(POLL_INTERVAL);
-
-  // ✅ CORRECTIF dates : ticker 60s → force le recalcul de timeAgo()
-  // Sans ça, "Aujourd'hui" resterait figé toute la nuit sans reload.
-  const [, setDateTick] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => setDateTick(t => t + 1), 60_000);
-    return () => clearInterval(timer);
-  }, []);
 
   // ── Chargement filtres (Supabase direct) ─────────────────────────
   useEffect(() => {
@@ -517,18 +497,14 @@ export default function JobBoard() {
       }));
 
       if (silent) {
-        // Comparer avec les IDs connus → détecter les nouvelles offres
+        // Nouveaux jobs → on les met en queue, ils seront injectés 1 par 1
         const newOnes = normalized.filter(j => !knownJobIdsRef.current.has(j.id));
         if (newOnes.length > 0) {
-          setJobs(prev => {
-            const prevIds = new Set(prev.map(j => j.id));
-            const toAdd   = newOnes.filter(j => !prevIds.has(j.id));
-            if (toAdd.length === 0) return prev;
-            newOnes.forEach(j => knownJobIdsRef.current.add(j.id));
-            setNewJobsCount(c => c + toAdd.length);
-            setNewJobIds(prev => new Set([...prev, ...toAdd.map(j => j.id)]));
-            return [...toAdd, ...prev]; // pas de limite en mémoire, slice dans visibleJobs
-          });
+          newOnes.forEach(j => knownJobIdsRef.current.add(j.id));
+          // Trier du plus ancien au plus récent pour injecter dans l'ordre chronologique
+          const sorted = [...newOnes].sort((a, b) => new Date(a.date) - new Date(b.date));
+          pendingQueueRef.current = [...pendingQueueRef.current, ...sorted];
+          setQueueSize(pendingQueueRef.current.length);
         }
       } else {
         // Chargement initial → on stocke tout ce qu'on a récupéré
@@ -567,6 +543,27 @@ export default function JobBoard() {
     return () => clearInterval(tick);
   }, [filtersLoaded, userId, fetchJobs]);
 
+  // ── Drain de la queue : injecte 1 job toutes les 2s ───────────────
+  useEffect(() => {
+    const drainOne = () => {
+      if (pendingQueueRef.current.length === 0) {
+        drainTimerRef.current = setTimeout(drainOne, 2000);
+        return;
+      }
+      const job = pendingQueueRef.current.shift();
+      setJobs(prev => {
+        if (prev.find(j => j.id === job.id)) return prev;
+        return [job, ...prev];
+      });
+      setNewJobsCount(c => c + 1);
+      setNewJobIds(prev => new Set([...prev, job.id]));
+      setQueueSize(pendingQueueRef.current.length);
+      drainTimerRef.current = setTimeout(drainOne, 2000);
+    };
+    drainTimerRef.current = setTimeout(drainOne, 2000);
+    return () => clearTimeout(drainTimerRef.current);
+  }, []);
+
   // ── SCRAPING DIRECT (Navigateur → Render → Supabase) ─────────────
   const triggerScrape = useCallback(async () => {
     setScrapeStatus('pending');
@@ -579,8 +576,9 @@ export default function JobBoard() {
       if (activeFilters.length === 0) return setScrapeStatus(null);
       setScrapeStatus('running');
 
-      // ✅ CORRECTIF : Plus de DELETE global avant le scrape.
-      // Le backend fait désormais un upsert cumulatif (les anciennes offres sont conservées).
+      // ── Purge silencieuse en DB (l'UI garde les jobs affichés le temps du scrape)
+      const { error: purgeErr } = await supabase.from('jb_jobs').delete().eq('user_id', userId);
+      if (purgeErr) console.warn('⚠️ Purge jobs avant scrape échouée:', purgeErr.message);
       // On ne vide PAS setJobs([]) ici → le feed reste visible pendant le scraping
 
       const pythonUrl     = 'https://scraper-jobs.onrender.com';
@@ -759,10 +757,23 @@ export default function JobBoard() {
     })
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  // Tu supprimes tout le bloc "Interleave..." et tu remplaces par :
-// On prend simplement les 30 offres les plus récentes :
-  const visibleJobs = baseFiltered.slice(0, 30);
-  const savedIds  = new Set(saves.map(s => s.id));
+  // Interleave : regroupe par source, puis alterne pour garantir la diversité
+  const bySource = {};
+  for (const job of baseFiltered) {
+    const src = job.sourceUrl || 'other';
+    if (!bySource[src]) bySource[src] = [];
+    bySource[src].push(job);
+  }
+  const sources = Object.values(bySource);
+  const interleaved = [];
+  const maxLen = Math.max(...sources.map(s => s.length), 0);
+  for (let i = 0; i < maxLen && interleaved.length < 30; i++) {
+    for (const src of sources) {
+      if (src[i] && interleaved.length < 30) interleaved.push(src[i]);
+    }
+  }
+  const visibleJobs = interleaved;
+  const savedIds  = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
 
   if (authLoading) return <div className="jb-root" style={{ display:'flex', alignItems:'center', justifyContent:'center' }}>Chargement…</div>;
@@ -770,18 +781,17 @@ export default function JobBoard() {
 
   return (
     <div className="jb-root">
-      {/* ── Toast nouvelles offres ───────────────────────────────── */}
+      {/* ── Indicateur live feed ─────────────────────────────────── */}
       <AnimatePresence>
-        {newJobsCount > 0 && (
+        {queueSize > 0 && (
           <motion.div
             className="jb-new-toast"
             initial={{ opacity: 0, y: 40, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-            onClick={() => { setNewJobsCount(0); setNewJobIds(new Set()); if (activeTab !== 'results') setActiveTab('results'); }}
           >
-            ✨ {newJobsCount} nouvelle{newJobsCount > 1 ? 's' : ''} offre{newJobsCount > 1 ? 's' : ''} — cliquer pour voir
+            ⏳ {queueSize} offre{queueSize > 1 ? 's' : ''} en attente…
           </motion.div>
         )}
         {undoToast && (
