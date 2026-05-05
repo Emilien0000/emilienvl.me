@@ -75,7 +75,7 @@ export default function LoginScreen({ onLogin }) {
       /* ── Mot de passe oublié ── */
       if (view === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-          redirectTo: window.location.origin,
+          redirectTo: `${window.location.origin}/alternances`,
         });
         if (error) throw error;
         setView('forgot_sent');
@@ -625,4 +625,4 @@ function PasswordStrength({ password }) {
       )}
     </div>
   );
-}//8
+}
