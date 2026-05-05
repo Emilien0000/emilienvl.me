@@ -16,8 +16,24 @@ export default function LoginScreen({ onLogin }) {
   const [hint,      setHint]      = useState('');
   const emailRef = useRef(null);
 
-  // Détecte le token de recovery Supabase dans l'URL au montage
+  // Detecte le token de recovery - soit via event, soit via session deja consommee
   useEffect(() => {
+    // Cas ou Supabase a deja consomme le token avant que React se monte
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return;
+      // Supabase stocke le type de recovery dans localStorage avant de vider le hash
+      const recoveryKey = Object.keys(localStorage).find(k => k.includes('supabase'));
+      const raw = recoveryKey ? localStorage.getItem(recoveryKey) : null;
+      const parsed = raw ? JSON.parse(raw) : null;
+      const isRecovery = parsed?.currentSession?.amr?.some?.(a => a.method === 'otp');
+      if (isRecovery) {
+        setView('reset_password');
+        setError('');
+        setPassword('');
+        setConfirm('');
+      }
+    });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         setView('reset_password');
@@ -75,7 +91,7 @@ export default function LoginScreen({ onLogin }) {
       /* ── Mot de passe oublié ── */
       if (view === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-          redirectTo: `${window.location.origin}/alternances`,
+          redirectTo: window.location.origin,
         });
         if (error) throw error;
         setView('forgot_sent');
