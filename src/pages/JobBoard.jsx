@@ -100,6 +100,7 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
             {isNew && <span className="jb-new-badge">✦ NEW</span>}
             <span className="jb-source-badge" style={{ background: source.color + '18', color: source.color }}>{source.emoji} {source.label}</span>
             <span className="jb-type-badge" style={{ background: typeInfo.color + '18', color: typeInfo.color }}>{typeInfo.label}</span>
+            {job.isDirect && <span className="jb-type-badge" style={{ background: 'rgba(250, 204, 21, 0.15)', color: '#facc15' }}>⭐ Easy Apply</span>}
             {appliedAt && <span className="jb-applied-badge">✅ Postulé {timeAgo(appliedAt)}</span>}
           </div>
           <div className="jb-card-actions">
@@ -495,6 +496,7 @@ export default function JobBoard() {
         date:        r.date,
         scrapedAt:   r.scraped_at,
         type:        r.type || 'emploi',
+        isDirect:    r.is_direct || false,
       }));
 
       if (silent) {
