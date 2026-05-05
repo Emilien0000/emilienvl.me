@@ -466,7 +466,8 @@ export default function JobBoard() {
 
   // ── Chargement offres (Supabase direct) ─────────────────────────
   // silent=true → merge sans spinner ni reset du scroll
-  const fetchJobs = useCallback(async ({ silent = false } = {}) => {
+  // firstOpen=true → charge tout d'un coup (pas de drain 1 par 1), car l'onglet était fermé
+  const fetchJobs = useCallback(async ({ silent = false, firstOpen = false } = {}) => {
     if (!silent) { setLoading(true); setError(null); }
     if (!silent && activeTab !== 'results') setActiveTab('results');
     try {
@@ -497,21 +498,36 @@ export default function JobBoard() {
       }));
 
       if (silent) {
-        // Nouveaux jobs → on les met en queue, ils seront injectés 1 par 1
+        // Nouveaux jobs → file d'attente 1 par 1 (polling live pendant que l'onglet est ouvert)
+        // SAUF si c'est la première ouverture après que l'onglet était fermé (firstOpen)
+        // → dans ce cas on injecte tout d'un coup pour ne pas attendre des minutes
         const newOnes = normalized.filter(j => !knownJobIdsRef.current.has(j.id));
         if (newOnes.length > 0) {
           newOnes.forEach(j => knownJobIdsRef.current.add(j.id));
-          // Trier du plus ancien au plus récent pour injecter dans l'ordre chronologique
-          const sorted = [...newOnes].sort((a, b) => new Date(a.date) - new Date(b.date));
-          pendingQueueRef.current = [...pendingQueueRef.current, ...sorted];
-          setQueueSize(pendingQueueRef.current.length);
+          if (firstOpen && newOnes.length > 5) {
+            // Beaucoup de nouvelles annonces accumulées pendant l'absence → tout charger d'un coup
+            setJobs(prev => {
+              const existingIds = new Set(prev.map(j => j.id));
+              const toAdd = newOnes.filter(j => !existingIds.has(j.id));
+              return [...toAdd, ...prev].sort((a, b) => new Date(b.date) - new Date(a.date));
+            });
+            setNewJobIds(prev => new Set([...prev, ...newOnes.map(j => j.id)]));
+            setNewJobsCount(c => c + newOnes.length);
+          } else {
+            // Polling normal → drain 1 par 1
+            const sorted = [...newOnes].sort((a, b) => new Date(a.date) - new Date(b.date));
+            pendingQueueRef.current = [...pendingQueueRef.current, ...sorted];
+            setQueueSize(pendingQueueRef.current.length);
+          }
         }
       } else {
-        // Chargement initial → on stocke tout ce qu'on a récupéré
-        // <-- 3. Supprime la constante "capped" et passe tout le tableau "normalized"
+        // Chargement initial → on vide la queue en attente pour éviter
+        // que d'anciens jobs en queue viennent écraser le fresh load
+        pendingQueueRef.current = [];
+        setQueueSize(0);
         knownJobIdsRef.current = new Set(normalized.map(j => j.id));
         setNewJobIds(new Set());
-        setJobs(normalized); // on garde tout en mémoire, le slice est dans visibleJobs
+        setJobs(normalized);
         setFetched(true);
       }
     } catch (err) {
@@ -521,7 +537,7 @@ export default function JobBoard() {
     }
   }, [activeTab, userId]);
 
-  useEffect(() => { if (filtersLoaded && userId) fetchJobs(); }, [filtersLoaded, userId]);
+  useEffect(() => { if (filtersLoaded && userId) fetchJobs({ firstOpen: true }); }, [filtersLoaded, userId]);
 
   // ── Polling silencieux + décompte visuel ────────────────────────
   useEffect(() => {
