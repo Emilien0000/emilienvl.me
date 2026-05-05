@@ -6,6 +6,7 @@ import './App.css';
 import { supabase } from './supabase';
 import JobBoard from './pages/JobBoard';
 import AdminPage from './pages/AdminPage';
+import AuthCallback from './pages/AuthCallback';
 
 
 // ─── Variants animations ───────────────────────────────────────────────────────
@@ -860,9 +861,6 @@ function App() {
 
   const toggleDark = () => setDark(v => !v);
 
-  // Détecte le token de recovery Supabase dans le hash AVANT que le router ne redirige
-  const isRecovery = window.location.hash.includes('type=recovery');
-
   return (
     <BrowserRouter>
       <VisitTracker>
@@ -883,8 +881,10 @@ function App() {
           <Route path="/skills"   element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
           <Route path="/contact"  element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
           <Route path="/alternances" element={<JobBoard />} />
-          {/* Redirect racine → /alternances si token recovery, sinon /home */}
-          <Route path="/" element={<Navigate to={isRecovery ? "/alternances" : "/home"} replace />} />
+          {/* Callback PKCE pour reset password et auth */}
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          {/* Redirect racine → /home */}
+          <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>
       </VisitTracker>
