@@ -356,7 +356,7 @@ export default function JobBoard() {
   const [savesLoaded, setSavesLoaded]   = useState(false);
   const [applied, setApplied]           = useState([]);
   const [appliedLoaded, setAppliedLoaded] = useState(false);
-  const [deletedIds, setDeletedIds]     = useState(() => new Set(LS.get('jb_deleted', [])));
+  const [deletedKeys, setDeletedKeys]   = useState(() => new Set(LS.get('jb_deleted', [])));
   const [undoToast, setUndoToast]       = useState(null); // { job, timerId, remaining }
   const undoTimerRef                    = useRef(null);
   const undoIntervalRef                 = useRef(null);
@@ -406,7 +406,7 @@ export default function JobBoard() {
     });
   }, [urlFilters, filtersLoaded, userId]);
 
-  useEffect(() => { LS.set('jb_deleted', [...deletedIds]); }, [deletedIds]);
+  useEffect(() => { LS.set('jb_deleted', [...deletedKeys]); }, [deletedKeys]);
 
   // ── Chargement banwords (Supabase) ───────────────────────────────
   useEffect(() => {
@@ -683,9 +683,11 @@ export default function JobBoard() {
   }, [fetchJobs, activeTab, userId, urlFilters]);
 
   // ── Actions carte ─────────────────────────────────────────────────
+  const jobKey = (job) => `${(job.title||'').toLowerCase().trim()}|${(job.company||'').toLowerCase().trim()}`;
+
   const handleApply = useCallback((job) => {
     setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{ job, appliedAt: new Date().toISOString() }, ...prev]);
-    setDeletedIds(prev => new Set([...prev, job.id]));
+    setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
   }, []);
 
   const handleDelete = useCallback((job) => {
@@ -693,7 +695,7 @@ export default function JobBoard() {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);
 
-    setDeletedIds(prev => new Set([...prev, job.id]));
+    setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
 
     let remaining = 10;
     setUndoToast({ job, remaining });
@@ -713,7 +715,7 @@ export default function JobBoard() {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);
     if (undoToast) {
-      setDeletedIds(prev => { const next = new Set(prev); next.delete(undoToast.job.id); return next; });
+      setDeletedKeys(prev => { const next = new Set(prev); next.delete(jobKey(undoToast.job)); return next; });
       setUndoToast(null);
     }
   }, [undoToast]);
@@ -731,7 +733,8 @@ export default function JobBoard() {
   }, [userId]);
 
   // ── Filtres visuels ───────────────────────────────────────────────
-  const appliedIds = new Set(applied.map(e => e.job.id));
+  const appliedIds  = new Set(applied.map(e => e.job.id));
+  const appliedKeys = new Set(applied.map(e => `${(e.job.title||'').toLowerCase().trim()}|${(e.job.company||'').toLowerCase().trim()}`));
 
   // Filtre par liens actifs : si tous sont désactivés → on montre tout,
   // sinon on ne garde que les jobs dont sourceUrl correspond à un filtre actif.
@@ -743,7 +746,8 @@ export default function JobBoard() {
   const baseFiltered = jobs
     .filter(j => !jobMatchesBanwords(j, banwords))
     .filter(j => typeFilter === 'all' || j.type === typeFilter)
-    .filter(j => !deletedIds.has(j.id))
+    .filter(j => !deletedKeys.has(`${j.title.toLowerCase().trim()}|${j.company.toLowerCase().trim()}`))
+    .filter(j => !appliedKeys.has(`${j.title.toLowerCase().trim()}|${j.company.toLowerCase().trim()}`))
     .filter(j => {
       if (!hasActiveFilters) return true;
       return enabledFilterUrls.some(url => j.sourceUrl === url);
@@ -908,7 +912,7 @@ export default function JobBoard() {
           {activeTab === 'saves'    && <motion.div key="saves"><SavesPanel saves={saves} onRemove={(id) => setSaves(p => p.filter(s => s.id !== id))} /></motion.div>}
           {activeTab === 'applied'  && <motion.div key="applied"><AppliedPanel applied={applied} onRemove={(id) => {
             setApplied(p => p.filter(e => e.job.id !== id));
-            setDeletedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+            // On garde la clé dans deletedKeys → l'offre reste hors du feed même après désistement
           }} /></motion.div>}
         </AnimatePresence>
       </main>
