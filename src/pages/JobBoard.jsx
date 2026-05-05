@@ -131,7 +131,21 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
           <a href={job.url} target="_blank" rel="noopener noreferrer" className="jb-apply-btn">Voir l'offre <IconExternal /></a>
           {showActions && (
             <div className="jb-card-action-btns">
-              {onApply && <button className="jb-action-btn jb-apply-action" onClick={() => onApply(job)} title="Marquer comme postulé"><IconSend /> Postulé</button>}
+              {onApply && (
+                canAutoApply ? (
+                  <button
+                    className="jb-action-btn jb-apply-action"
+                    onClick={() => onApply(job)}
+                    disabled={isApplying}
+                    title="Postuler automatiquement via l'extension"
+                    style={{ background: isApplying ? 'rgba(250,204,21,0.2)' : 'rgba(19,201,237,0.15)', color: isApplying ? '#facc15' : '#13c9ed', borderColor: isApplying ? '#facc15' : '#13c9ed' }}
+                  >
+                    {isApplying ? <><IconClock /> En cours…</> : <><IconSend /> ⚡ Auto Apply</>}
+                  </button>
+                ) : (
+                  <button className="jb-action-btn jb-apply-action" onClick={() => onApply(job)} title="Marquer comme postulé"><IconSend /> Postulé</button>
+                )
+              )}
               {onDelete && <button className="jb-action-btn jb-delete-action" onClick={() => onDelete(job)} title="Supprimer cette offre"><IconTrash /> Supprimer</button>}
             </div>
           )}
