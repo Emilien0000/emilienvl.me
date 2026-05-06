@@ -17,15 +17,20 @@ class ExtensionBridge {
         return resolve({ success: false, error: 'Connexion perdue : Actualisez la page avec F5.' });
       }
 
-      // On demande juste au background d'ouvrir l'onglet en arrière-plan (active: false)
       chrome.runtime.sendMessage(EXTENSION_ID, { type: 'OPEN_TAB', url: job.url }, (res) => {
+        // 1. Erreur de connexion pure (ex: ID faux)
         if (chrome.runtime.lastError) {
           console.error("❌ Erreur Bridge :", chrome.runtime.lastError.message);
-          return resolve({ success: false, error: "Communication refusée. Vérifiez l'ID et les ports." });
+          return resolve({ success: false, error: "Communication refusée. Vérifiez l'ID." });
         }
         
-        console.log("✅ Onglet ouvert en arrière-plan. L'extension prend le relais !");
-        // On valide immédiatement côté Webapp. 
+        // 2. Erreur renvoyée volontairement par le background (ex: Origin non autorisée)
+        if (res && res.error) {
+          console.error("❌ Refus du background :", res.error);
+          return resolve({ success: false, error: res.error }); // Va déclencher la notification rouge sur ton site !
+        }
+        
+        console.log("✅ Onglet ouvert en arrière-plan.");
         resolve({ success: true, appliedAt: new Date().toISOString() });
       });
     });
