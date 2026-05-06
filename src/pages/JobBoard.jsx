@@ -791,9 +791,17 @@ export default function JobBoard() {
         }, ...prev]);
         setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
       } else {
+        // 🚨 NOUVELLE GESTION DES ERREURS (Rouge ou Violet)
+        const isExternal = result.type === 'external';
         const errMsg = result.error || 'Échec de la candidature automatique';
-        updateNotif(notifId, `❌ ${errMsg}`, 'error');
-        setTimeout(() => removeNotif(notifId), 12000);
+        const notifType = isExternal ? 'external' : 'error';
+        const icon = isExternal ? '🟣' : '❌';
+        
+        updateNotif(notifId, `${icon} ${errMsg}`, notifType);
+        setTimeout(() => removeNotif(notifId), isExternal ? 8000 : 12000);
+        
+        // Si c'est un site externe, on ouvre quand même l'onglet pour l'utilisateur
+        if (isExternal) window.open(job.url, '_blank');
       }
       return;
     }

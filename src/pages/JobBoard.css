@@ -1050,6 +1050,11 @@
 .jb-notif-success { background: #091a09; border: 1px solid #4ade80; }
 .jb-notif-error   { background: #1f0909; border: 1px solid #ef4444; }
 
+/* 🚨 AJOUTE CES DEUX LIGNES POUR LE VIOLET : */
+.jb-notif-external { background: #1a0b2e; border: 1px solid #a855f7; }
+.jb-notif-external .jb-notif-msg { color: #c084fc; }
+
+
 .jb-notif-body {
   flex: 1;
   display: flex;
