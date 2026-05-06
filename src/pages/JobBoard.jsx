@@ -390,10 +390,29 @@ export default function JobBoard() {
   const [undoToast, setUndoToast]       = useState(null); // { job, timerId, remaining }
   const undoTimerRef                    = useRef(null);
   const undoIntervalRef                 = useRef(null);
-  const [extAvailable, setExtAvailable] = useState(false);
-  const [applyingIds, setApplyingIds]   = useState(new Set());
-  const [applyError, setApplyError]     = useState(null); // { job, message }
-  const [applyProgress, setApplyProgress] = useState(null); // { msg, type }
+  const [extAvailable, setExtAvailable]   = useState(false);
+  const [applyingIds, setApplyingIds]     = useState(new Set());
+  // notifications : [{ id, job, msg, type }]  — superposées en haut à droite
+  const [notifications, setNotifications] = useState([]);
+  const notifCounterRef = useRef(0);
+
+  const addNotif = useCallback((job, msg, type) => {
+    const id = ++notifCounterRef.current;
+    setNotifications(prev => [...prev, { id, job, msg, type }]);
+    // Auto-dismiss : erreur 12s, succès 5s, info jamais (géré par le résultat final)
+    if (type === 'error') setTimeout(() => removeNotif(id), 12000);
+    if (type === 'success') setTimeout(() => removeNotif(id), 5000);
+    return id;
+  }, []);
+
+  const removeNotif = useCallback((id) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  }, []);
+
+  // Met à jour le message d'une notif existante (progression en cours)
+  const updateNotif = useCallback((id, msg, type) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, msg, type } : n));
+  }, []);
 
   const filtersOwnerRef  = useRef(null);
   const initialLoadRef   = useRef(true);
@@ -401,10 +420,17 @@ export default function JobBoard() {
   // ── Extension Easy Apply ─────────────────────────────────────────
   useEffect(() => {
     extensionBridge.ping().then(ok => setExtAvailable(ok));
-
-    // Brancher le callback de progression en temps réel depuis le bridge
+    // Brancher le callback de progression → met à jour la notif en cours
     extensionBridge.onProgress(({ msg, type, job }) => {
-      setApplyProgress({ msg, type, job });
+      // La notif active pour ce job est identifiée par job.id dans les notifications
+      setNotifications(prev => {
+        const idx = prev.findLastIndex?.(n => n.job?.id === job?.id) ?? [...prev].reverse().findIndex(n => n.job?.id === job?.id);
+        if (idx === -1) return prev;
+        const updated = [...prev];
+        const realIdx = prev.findLastIndex ? idx : prev.length - 1 - idx;
+        updated[realIdx] = { ...updated[realIdx], msg, type };
+        return updated;
+      });
     });
   }, []);
   const knownJobIdsRef   = useRef(new Set());  // IDs déjà affichés → pour détecter les nouveautés
@@ -750,33 +776,27 @@ export default function JobBoard() {
     // ── Easy Apply Indeed + extension disponible → auto-apply en arrière-plan
     if (job.isDirect && job.url?.includes('indeed') && extAvailable) {
       setApplyingIds(prev => new Set([...prev, job.id]));
-      setApplyError(null);
-      setApplyProgress({ msg: '🚀 Connexion à l\'extension…', type: 'info', job });
 
-      // Lance l'apply — la card reste dans le feed jusqu'au résultat final
+      // Créer la notif de progression (elle va se mettre à jour via onProgress)
+      const notifId = addNotif(job, '🚀 Connexion à l\'extension…', 'info');
+
       const result = await extensionBridge.applyToJob(job);
-
-      // Retirer de la liste "en cours"
       setApplyingIds(prev => { const n = new Set(prev); n.delete(job.id); return n; });
 
       if (result.success) {
-        // ✅ Succès confirmé → seulement maintenant on déplace la card en "Postulé"
-        setApplyProgress({ msg: '✅ Candidature envoyée !', type: 'success', job });
+        // ✅ Succès — mettre à jour la notif en succès, puis la retirer après 4s
+        updateNotif(notifId, '✅ Candidature envoyée !', 'success');
+        setTimeout(() => removeNotif(notifId), 4000);
+        // Déplacer la card en "Postulé" seulement maintenant
         setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{
-          job,
-          appliedAt: result.appliedAt || new Date().toISOString(),
-          method: 'auto',
+          job, appliedAt: result.appliedAt || new Date().toISOString(), method: 'auto'
         }, ...prev]);
         setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
-        // Fermer le toast de progression après 4s
-        setTimeout(() => setApplyProgress(null), 4000);
       } else {
-        // ❌ Échec → effacer le toast de progression, afficher le toast d'erreur
-        setApplyProgress(null);
-        const errorMsg = result.error || 'Échec de la candidature automatique';
-        setApplyError({ job, message: errorMsg });
-        // Auto-dismiss après 10s
-        setTimeout(() => setApplyError(null), 10000);
+        // ❌ Échec — passer la notif en erreur, auto-dismiss 12s
+        const errMsg = result.error || 'Échec de la candidature automatique';
+        updateNotif(notifId, `❌ ${errMsg}`, 'error');
+        setTimeout(() => removeNotif(notifId), 12000);
       }
       return;
     }
@@ -791,7 +811,7 @@ export default function JobBoard() {
     if (job.url) window.open(job.url, '_blank');
     setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{ job, appliedAt: new Date().toISOString(), method: 'manual' }, ...prev]);
     setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
-  }, [extAvailable]);
+  }, [extAvailable, addNotif, updateNotif, removeNotif]);
 
   const handleDelete = useCallback((job) => {
     // Annuler un éventuel undo précédent
@@ -873,6 +893,35 @@ export default function JobBoard() {
 
   return (
     <div className="jb-root">
+      {/* ── Stack de notifications auto-apply (haut droite, superposées) ── */}
+      <div className="jb-notif-stack">
+        <AnimatePresence>
+          {notifications.map((n) => (
+            <motion.div
+              key={n.id}
+              className={`jb-notif jb-notif-${n.type}`}
+              initial={{ opacity: 0, x: 60 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 60 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+            >
+              <div className="jb-notif-body">
+                <div className="jb-notif-title">
+                  {n.job?.title || 'Candidature'}
+                  {n.job?.company ? <span className="jb-notif-company"> · {n.job.company}</span> : null}
+                </div>
+                <div className="jb-notif-msg">{n.msg}</div>
+                {n.type === 'error' && n.job?.url && (
+                  <a href={n.job.url} target="_blank" rel="noreferrer" className="jb-notif-link">
+                    Ouvrir l'offre manuellement →
+                  </a>
+                )}
+              </div>
+              <button className="jb-notif-close" onClick={() => removeNotif(n.id)}>✕</button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
       {/* ── Indicateur live feed ─────────────────────────────────── */}
       <AnimatePresence>
         {queueSize > 0 && (
@@ -969,49 +1018,6 @@ export default function JobBoard() {
               )}
 
               {error && !loading && <div className="jb-error-box"><p>😕 {error}</p></div>}
-
-              {/* Toast progression auto-apply */}
-              <AnimatePresence>
-                {applyProgress && (
-                  <motion.div
-                    className={`jb-apply-progress-toast jb-apply-progress-${applyProgress.type}`}
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                  >
-                    {applyProgress.job && (
-                      <span className="jb-progress-job-title">
-                        {applyProgress.job.title}{applyProgress.job.company ? ` · ${applyProgress.job.company}` : ''}
-                      </span>
-                    )}
-                    <span className="jb-progress-step">{applyProgress.msg}</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Toast erreur auto-apply */}
-              <AnimatePresence>
-                {applyError && (
-                  <motion.div
-                    className="jb-apply-error-toast"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 20 }}
-                  >
-                    <div className="jb-apply-error-inner">
-                      <span className="jb-apply-error-icon">❌</span>
-                      <div className="jb-apply-error-content">
-                        <div className="jb-apply-error-title">Candidature échouée — {applyError.job?.title}</div>
-                        <div className="jb-apply-error-msg">{applyError.message}</div>
-                        <a href={applyError.job?.url} target="_blank" rel="noreferrer" className="jb-apply-error-link">
-                          Ouvrir l'offre manuellement →
-                        </a>
-                      </div>
-                      <button className="jb-apply-error-close" onClick={() => setApplyError(null)}>✕</button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
               {loading && <div className="jb-grid">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} />)}</div>}
 
               {!loading && fetched && visibleJobs.length === 0 && (

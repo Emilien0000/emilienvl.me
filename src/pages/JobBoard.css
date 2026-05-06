@@ -1022,109 +1022,83 @@
   margin-left:     4px;
 }
 /* ── Toast erreur auto-apply ─────────────────────────────────────── */
-.jb-apply-error-toast {
+/* ── Stack de notifications auto-apply (haut droite) ────────────── */
+.jb-notif-stack {
   position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 16px;
+  right: 16px;
   z-index: 9999;
-  width: min(480px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
 }
 
-.jb-apply-error-inner {
+.jb-notif {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  background: #1a0a0a;
-  border: 1px solid #ef4444;
+  gap: 10px;
+  padding: 12px 14px;
   border-radius: 12px;
-  padding: 14px 16px;
-  box-shadow: 0 8px 32px rgba(239, 68, 68, 0.25);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+  pointer-events: all;
+  font-family: 'DM Sans', system-ui, sans-serif;
 }
 
-.jb-apply-error-icon {
-  font-size: 20px;
-  flex-shrink: 0;
-  margin-top: 1px;
-}
+.jb-notif-info    { background: #0d1a2e; border: 1px solid #13c9ed; }
+.jb-notif-success { background: #091a09; border: 1px solid #4ade80; }
+.jb-notif-error   { background: #1f0909; border: 1px solid #ef4444; }
 
-.jb-apply-error-content {
+.jb-notif-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
 }
 
-.jb-apply-error-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #ef4444;
+.jb-notif-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #e8e8f0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.jb-apply-error-msg {
+.jb-notif-company {
+  font-weight: 400;
+  color: #9090b0;
+}
+
+.jb-notif-msg {
   font-size: 12px;
-  color: #a0a0b8;
+  font-weight: 500;
   line-height: 1.4;
 }
+.jb-notif-info    .jb-notif-msg { color: #13c9ed; }
+.jb-notif-success .jb-notif-msg { color: #4ade80; }
+.jb-notif-error   .jb-notif-msg { color: #ef4444; }
 
-.jb-apply-error-link {
-  font-size: 11.5px;
+.jb-notif-link {
+  font-size: 11px;
   color: #13c9ed;
   text-decoration: none;
-  margin-top: 4px;
+  margin-top: 3px;
   display: inline-block;
 }
-.jb-apply-error-link:hover { text-decoration: underline; }
+.jb-notif-link:hover { text-decoration: underline; }
 
-.jb-apply-error-close {
+.jb-notif-close {
   background: none;
   border: none;
-  color: #666680;
+  color: #555570;
   cursor: pointer;
-  font-size: 14px;
-  padding: 2px 4px;
+  font-size: 13px;
+  padding: 1px 3px;
   border-radius: 4px;
   flex-shrink: 0;
   line-height: 1;
 }
-.jb-apply-error-close:hover { color: #ef4444; }
-
-/* ── Toast progression auto-apply ───────────────────────────────── */
-.jb-apply-progress-toast {
-  position: fixed;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 9999;
-  padding: 10px 20px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: 'DM Sans', system-ui, sans-serif;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-  pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 260px;
-  max-width: min(420px, calc(100vw - 32px));
-}
-.jb-progress-job-title {
-  font-size: 11px;
-  font-weight: 700;
-  opacity: 0.7;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  letter-spacing: 0.2px;
-}
-.jb-progress-step {
-  font-size: 13px;
-  font-weight: 600;
-}
-.jb-apply-progress-info    { background: #0d1a2e; border: 1px solid #13c9ed; color: #13c9ed; }
-.jb-apply-progress-success { background: #0a1f0a; border: 1px solid #4ade80; color: #4ade80; }
-.jb-apply-progress-error   { background: #1f0a0a; border: 1px solid #ef4444; color: #ef4444; }
+.jb-notif-close:hover { color: #ef4444; }
