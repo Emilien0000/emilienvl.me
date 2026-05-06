@@ -93,29 +93,28 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
   const source     = detectSource(job.sourceUrl, job.url);
   const isApplying = applyingIds?.has(job.id);
   const canAutoApply = job.isDirect && extAvailable;  // isDirect = Easy Apply confirmé par le scraper
+  const isIndeed = job.url && (job.url.includes('indeed.com') || job.url.includes('indeed.fr'));
   return (
     <motion.div className={`jb-card${isNew ? ' jb-card-new' : ''}`} style={{ '--source-color': source.color }} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -10 }} transition={{ duration: 0.3, delay: Math.min(index * 0.035, 0.6) }} whileHover={{ y: -3, transition: { duration: 0.18 } }}>
       <div className="jb-card-accent" />
       <div className="jb-card-inner">
         <div className="jb-card-top">
           <div className="jb-card-badges">
-            {isNew && <span className="jb-new-badge">✦ NEW</span>}
-            <span className="jb-source-badge" style={{ background: source.color + '18', color: source.color }}>{source.emoji} {source.label}</span>
-            <span className="jb-type-badge" style={{ background: typeInfo.color + '18', color: typeInfo.color }}>{typeInfo.label}</span>
-            {job.isDirect && (
-              <span
-                className="jb-type-badge"
-                style={{
-                  background: isApplying ? 'rgba(250,204,21,0.3)' : 'rgba(250,204,21,0.15)',
-                  color: '#facc15',
-                  cursor: canAutoApply ? 'pointer' : 'default',
-                }}
-                onClick={() => canAutoApply && onApply && onApply(job)}
-                title={canAutoApply ? 'Cliquer pour postuler automatiquement' : 'Installez l\'extension pour l\'auto-apply'}
-              >
-                {isApplying ? '⏳ En cours…' : canAutoApply ? '⚡ Auto Apply' : '⭐ Easy Apply'}
-              </span>
-            )}
+          {/* Remplacer job.isDirect par isIndeed ici */}
+          {isIndeed && (
+            <span
+              className="jb-type-badge"
+              style={{
+                background: isApplying ? 'rgba(250,204,21,0.3)' : 'rgba(250,204,21,0.15)',
+                color: '#facc15',
+                cursor: canAutoApply ? 'pointer' : 'default',
+              }}
+              onClick={() => canAutoApply && onApply && onApply(job)}
+              title={canAutoApply ? 'Cliquer pour postuler automatiquement' : 'Installez l\'extension pour l\'auto-apply'}
+            >
+              {isApplying ? '⏳ En cours…' : canAutoApply ? '⚡ Auto Apply' : '⭐ Easy Apply'}
+            </span>
+          )}
             {appliedAt && <span className="jb-applied-badge">✅ Postulé {timeAgo(appliedAt)}</span>}
           </div>
           <div className="jb-card-actions">
@@ -770,11 +769,11 @@ export default function JobBoard() {
   }, [fetchJobs, activeTab, userId, urlFilters]);
 
   // ── Actions carte ─────────────────────────────────────────────────
-  const jobKey = (job) => `${(job.title||'').toLowerCase().trim()}|${(job.company||'').toLowerCase().trim()}`;
-
   const handleApply = useCallback(async (job) => {
-    // ── Easy Apply (is_direct=true) + extension disponible → auto-apply en arrière-plan
-    if (job.isDirect && extAvailable) {
+    const isIndeed = job.url && (job.url.includes('indeed.com') || job.url.includes('indeed.fr'));
+    
+    // Si c'est un job Indeed et que l'extension est là -> on tente l'Auto Apply
+    if (isIndeed && extAvailable) {
       setApplyingIds(prev => new Set([...prev, job.id]));
       const notifId = addNotif(job, '🚀 Connexion à l\'extension…', 'info');
 
