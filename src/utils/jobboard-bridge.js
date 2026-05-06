@@ -61,21 +61,17 @@ class ExtensionBridge {
     }
 
     return new Promise((resolve) => {
-      try {
-        chrome.runtime.sendMessage(
-          EXTENSION_ID,
-          { type: 'TRIGGER_APPLY', job },
-          (res) => {
-            if (chrome.runtime.lastError) {
-              resolve({ success: false, error: chrome.runtime.lastError.message });
-            } else {
-              resolve(res || { success: false, error: 'Pas de réponse de l\'extension.' });
-            }
-          }
-        );
-      } catch (err) {
-        resolve({ success: false, error: err.message });
-      }
+      // On délègue TOUTE l'orchestration au background.js via TRIGGER_APPLY
+      // Cela active automatiquement les notifications natives Chrome !
+      chrome.runtime.sendMessage(EXTENSION_ID, { type: 'TRIGGER_APPLY', job }, (res) => {
+        if (chrome.runtime.lastError) {
+          resolve({ success: false, error: chrome.runtime.lastError.message });
+        } else if (!res) {
+          resolve({ success: false, error: 'Aucune réponse de l\'extension' });
+        } else {
+          resolve(res); // Contient { success, error, appliedAt }
+        }
+      });
     });
   }
 
