@@ -1091,3 +1091,23 @@
   line-height: 1;
 }
 .jb-apply-error-close:hover { color: #ef4444; }
+
+/* ── Toast progression auto-apply ───────────────────────────────── */
+.jb-apply-progress-toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  padding: 10px 20px;
+  border-radius: 30px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.jb-apply-progress-info    { background: #1a1a2e; border: 1px solid #13c9ed; color: #13c9ed; }
+.jb-apply-progress-success { background: #0a1f0a; border: 1px solid #4ade80; color: #4ade80; }
+.jb-apply-progress-error   { background: #1f0a0a; border: 1px solid #ef4444; color: #ef4444; }

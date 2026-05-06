@@ -393,12 +393,33 @@ export default function JobBoard() {
   const [extAvailable, setExtAvailable] = useState(false);
   const [applyingIds, setApplyingIds]   = useState(new Set());
   const [applyError, setApplyError]     = useState(null); // { job, message }
+  const [applyProgress, setApplyProgress] = useState(null); // { msg, type }
 
   const filtersOwnerRef  = useRef(null);
   const initialLoadRef   = useRef(true);
 
   // ── Extension Easy Apply ─────────────────────────────────────────
   useEffect(() => { extensionBridge.ping().then(ok => setExtAvailable(ok)); }, []);
+
+  // Polling des notifications de progression depuis l'extension
+  useEffect(() => {
+    if (!extAvailable) return;
+    let lastTs = 0;
+    const interval = setInterval(() => {
+      if (!window.chrome?.storage) return;
+      chrome.storage.local.get(['applyProgress'], (r) => {
+        const p = r.applyProgress;
+        if (p && p.ts > lastTs) {
+          lastTs = p.ts;
+          setApplyProgress(p);
+          if (p.type === 'success' || p.type === 'error') {
+            setTimeout(() => setApplyProgress(null), 5000);
+          }
+        }
+      });
+    }, 800);
+    return () => clearInterval(interval);
+  }, [extAvailable]);
   const knownJobIdsRef   = useRef(new Set());  // IDs déjà affichés → pour détecter les nouveautés
   const [newJobsCount, setNewJobsCount] = useState(0);  // toast "N nouvelles offres"
   const [newJobIds, setNewJobIds]       = useState(new Set());  // IDs avec badge NEW
@@ -949,6 +970,20 @@ export default function JobBoard() {
               )}
 
               {error && !loading && <div className="jb-error-box"><p>😕 {error}</p></div>}
+
+              {/* Toast progression auto-apply */}
+              <AnimatePresence>
+                {applyProgress && (
+                  <motion.div
+                    className={`jb-apply-progress-toast jb-apply-progress-${applyProgress.type}`}
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                  >
+                    {applyProgress.msg}
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Toast erreur auto-apply */}
               <AnimatePresence>
