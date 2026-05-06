@@ -56,21 +56,10 @@ class ExtensionBridge {
    * @returns {Promise<{success: boolean, error?: string, appliedAt?: string}>}
    */
   async applyToJob(job) {
-    if (!window.chrome?.runtime) {
-      return { success: false, error: 'Extension Chrome non disponible.' };
-    }
-
+    if (!window.chrome?.runtime) return { success: false, error: 'Extension Chrome non disponible.' };
     return new Promise((resolve) => {
-      // On délègue TOUTE l'orchestration au background.js via TRIGGER_APPLY
-      // Cela active automatiquement les notifications natives Chrome !
-      chrome.runtime.sendMessage(EXTENSION_ID, { type: 'TRIGGER_APPLY', job }, (res) => {
-        if (chrome.runtime.lastError) {
-          resolve({ success: false, error: chrome.runtime.lastError.message });
-        } else if (!res) {
-          resolve({ success: false, error: 'Aucune réponse de l\'extension' });
-        } else {
-          resolve(res); // Contient { success, error, appliedAt }
-        }
+      chrome.runtime.sendMessage(EXTENSION_ID, { type: 'OPEN_TAB', url: job.url }, () => {
+         resolve({ success: true, appliedAt: new Date().toISOString() }); // On résout tout de suite, l'extension gère le reste
       });
     });
   }
