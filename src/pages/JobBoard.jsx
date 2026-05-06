@@ -399,27 +399,14 @@ export default function JobBoard() {
   const initialLoadRef   = useRef(true);
 
   // ── Extension Easy Apply ─────────────────────────────────────────
-  useEffect(() => { extensionBridge.ping().then(ok => setExtAvailable(ok)); }, []);
-
-  // Polling des notifications de progression depuis l'extension
   useEffect(() => {
-    if (!extAvailable) return;
-    let lastTs = 0;
-    const interval = setInterval(() => {
-      if (!window.chrome?.storage) return;
-      chrome.storage.local.get(['applyProgress'], (r) => {
-        const p = r.applyProgress;
-        if (p && p.ts > lastTs) {
-          lastTs = p.ts;
-          setApplyProgress(p);
-          if (p.type === 'success' || p.type === 'error') {
-            setTimeout(() => setApplyProgress(null), 5000);
-          }
-        }
-      });
-    }, 800);
-    return () => clearInterval(interval);
-  }, [extAvailable]);
+    extensionBridge.ping().then(ok => setExtAvailable(ok));
+
+    // Brancher le callback de progression en temps réel depuis le bridge
+    extensionBridge.onProgress(({ msg, type, job }) => {
+      setApplyProgress({ msg, type, job });
+    });
+  }, []);
   const knownJobIdsRef   = useRef(new Set());  // IDs déjà affichés → pour détecter les nouveautés
   const [newJobsCount, setNewJobsCount] = useState(0);  // toast "N nouvelles offres"
   const [newJobIds, setNewJobIds]       = useState(new Set());  // IDs avec badge NEW
@@ -764,20 +751,32 @@ export default function JobBoard() {
     if (job.isDirect && job.url?.includes('indeed') && extAvailable) {
       setApplyingIds(prev => new Set([...prev, job.id]));
       setApplyError(null);
+      setApplyProgress({ msg: '🚀 Connexion à l\'extension…', type: 'info', job });
 
-      // Ouvrir l'onglet en arrière-plan (l'extension fait tout le travail)
+      // Lance l'apply — la card reste dans le feed jusqu'au résultat final
       const result = await extensionBridge.applyToJob(job);
+
+      // Retirer de la liste "en cours"
       setApplyingIds(prev => { const n = new Set(prev); n.delete(job.id); return n; });
 
       if (result.success) {
-        // Succès → marquer comme postulé et retirer du feed
-        setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{ job, appliedAt: result.appliedAt || new Date().toISOString(), method: 'auto' }, ...prev]);
+        // ✅ Succès confirmé → seulement maintenant on déplace la card en "Postulé"
+        setApplyProgress({ msg: '✅ Candidature envoyée !', type: 'success', job });
+        setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{
+          job,
+          appliedAt: result.appliedAt || new Date().toISOString(),
+          method: 'auto',
+        }, ...prev]);
         setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
+        // Fermer le toast de progression après 4s
+        setTimeout(() => setApplyProgress(null), 4000);
       } else {
-        // Échec → afficher toast d'erreur avec message
-        setApplyError({ job, message: result.error || 'Échec de la candidature automatique' });
-        // Auto-dismiss après 8s
-        setTimeout(() => setApplyError(null), 8000);
+        // ❌ Échec → effacer le toast de progression, afficher le toast d'erreur
+        setApplyProgress(null);
+        const errorMsg = result.error || 'Échec de la candidature automatique';
+        setApplyError({ job, message: errorMsg });
+        // Auto-dismiss après 10s
+        setTimeout(() => setApplyError(null), 10000);
       }
       return;
     }
@@ -980,7 +979,12 @@ export default function JobBoard() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
                   >
-                    {applyProgress.msg}
+                    {applyProgress.job && (
+                      <span className="jb-progress-job-title">
+                        {applyProgress.job.title}{applyProgress.job.company ? ` · ${applyProgress.job.company}` : ''}
+                      </span>
+                    )}
+                    <span className="jb-progress-step">{applyProgress.msg}</span>
                   </motion.div>
                 )}
               </AnimatePresence>
