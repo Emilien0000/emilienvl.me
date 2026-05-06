@@ -92,7 +92,7 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
   const typeInfo   = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
   const source     = detectSource(job.sourceUrl, job.url);
   const isApplying = applyingIds?.has(job.id);
-  const canAutoApply = job.isDirect && job.url?.includes('indeed') && extAvailable;
+  const canAutoApply = job.isDirect && extAvailable;  // isDirect = Easy Apply confirmé par le scraper
   return (
     <motion.div className={`jb-card${isNew ? ' jb-card-new' : ''}`} style={{ '--source-color': source.color }} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -10 }} transition={{ duration: 0.3, delay: Math.min(index * 0.035, 0.6) }} whileHover={{ y: -3, transition: { duration: 0.18 } }}>
       <div className="jb-card-accent" />
@@ -565,7 +565,7 @@ export default function JobBoard() {
         date:        r.date,
         scrapedAt:   r.scraped_at,
         type:        r.type || 'emploi',
-        isDirect:    r.is_direct || /indeed\./i.test(r.url || '') || false,
+        isDirect:    r.is_direct === true,  // Uniquement si le scraper l'a marqué Easy Apply
       }));
 
       if (silent) {
@@ -773,27 +773,22 @@ export default function JobBoard() {
   const jobKey = (job) => `${(job.title||'').toLowerCase().trim()}|${(job.company||'').toLowerCase().trim()}`;
 
   const handleApply = useCallback(async (job) => {
-    // ── Easy Apply Indeed + extension disponible → auto-apply en arrière-plan
-    if (job.isDirect && job.url?.includes('indeed') && extAvailable) {
+    // ── Easy Apply (is_direct=true) + extension disponible → auto-apply en arrière-plan
+    if (job.isDirect && extAvailable) {
       setApplyingIds(prev => new Set([...prev, job.id]));
-
-      // Créer la notif de progression (elle va se mettre à jour via onProgress)
       const notifId = addNotif(job, '🚀 Connexion à l\'extension…', 'info');
 
       const result = await extensionBridge.applyToJob(job);
       setApplyingIds(prev => { const n = new Set(prev); n.delete(job.id); return n; });
 
       if (result.success) {
-        // ✅ Succès — mettre à jour la notif en succès, puis la retirer après 4s
         updateNotif(notifId, '✅ Candidature envoyée !', 'success');
         setTimeout(() => removeNotif(notifId), 4000);
-        // Déplacer la card en "Postulé" seulement maintenant
         setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{
           job, appliedAt: result.appliedAt || new Date().toISOString(), method: 'auto'
         }, ...prev]);
         setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
       } else {
-        // ❌ Échec — passer la notif en erreur, auto-dismiss 12s
         const errMsg = result.error || 'Échec de la candidature automatique';
         updateNotif(notifId, `❌ ${errMsg}`, 'error');
         setTimeout(() => removeNotif(notifId), 12000);
@@ -801,13 +796,13 @@ export default function JobBoard() {
       return;
     }
 
-    // ── Easy Apply mais extension non disponible → ouvrir dans nouvel onglet
-    if (job.isDirect && job.url?.includes('indeed') && !extAvailable) {
+    // ── Easy Apply mais extension non disponible → ouvrir l'offre manuellement
+    if (job.isDirect && !extAvailable) {
       window.open(job.url, '_blank');
       return;
     }
 
-    // ── Candidature manuelle (autres sources)
+    // ── Offre Indeed ordinaire (non Easy Apply) → ouvrir dans un onglet, marquer postulé
     if (job.url) window.open(job.url, '_blank');
     setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{ job, appliedAt: new Date().toISOString(), method: 'manual' }, ...prev]);
     setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
