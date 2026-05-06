@@ -1,105 +1,145 @@
-// jobboard-bridge.js — v4
-// Architecture :
-//   1. START_APPLY  → background (stocke le job, ouvre l'onglet)  [réponse immédiate]
-//   2. GET_PROGRESS → background (lit applyProgress du storage)    [poll 800ms]
-//   3. WAIT_RESULT  → background (bloque jusqu'au résultat, max 100s) [long-poll]
-//
-// Aucun accès direct à chrome.storage depuis la webapp.
+// jobboard-bridge.js — communication webapp ↔ extension
+// Flow : START_APPLY (fire-and-forget) + WAIT_RESULT (long-poll) + GET_PROGRESS (polling 800ms)
 
 const EXTENSION_ID = 'mhhjagimonemfbndjladapcophgjginl';
 
 class ExtensionBridge {
   constructor() {
-    this._available = null;
-    this._progressCallback = null;
-    window.addEventListener('message', (e) => {
-      if (e.data?.type === 'JB_EASY_APPLY_DETECTED') this._onEasyApplyDetected?.(e.data.url);
-    });
+    this._available      = null;
+    this._onProgress     = null;
+    this._progressTimer  = null;
   }
 
-  _send(msg, timeoutMs = 5000) {
-    return new Promise((resolve) => {
-      const t = setTimeout(() => resolve(null), timeoutMs);
-      try {
-        chrome.runtime.sendMessage(EXTENSION_ID, msg, (res) => {
-          clearTimeout(t);
-          if (chrome.runtime.lastError) resolve(null);
-          else resolve(res);
-        });
-      } catch { clearTimeout(t); resolve(null); }
-    });
-  }
+  // ── Ping ──────────────────────────────────────────────────────────────────
 
   async ping() {
     if (!window.chrome?.runtime) return false;
-    const res = await this._send({ type: 'PING' });
-    this._available = !!res?.ok;
-    return this._available;
+    return new Promise(resolve => {
+      try {
+        chrome.runtime.sendMessage(EXTENSION_ID, { type: 'PING' }, (res) => {
+          if (chrome.runtime.lastError || !res?.ok) {
+            this._available = false;
+            resolve(false);
+          } else {
+            this._available = true;
+            resolve(true);
+          }
+        });
+      } catch {
+        this._available = false;
+        resolve(false);
+      }
+    });
   }
 
   get isAvailable() { return this._available; }
-  onProgress(cb) { this._progressCallback = cb; }
+
+  // ── onProgress callback ───────────────────────────────────────────────────
+  // Appelé par JobBoard.jsx pour recevoir les mises à jour de progression.
+  // On démarre un polling GET_PROGRESS toutes les 800ms dès qu'un apply est en cours.
+
+  onProgress(cb) {
+    this._onProgress = cb;
+  }
+
+  _startProgressPolling(job) {
+    this._stopProgressPolling();
+    this._progressTimer = setInterval(() => {
+      if (!window.chrome?.runtime) return;
+      try {
+        chrome.runtime.sendMessage(EXTENSION_ID, { type: 'GET_PROGRESS' }, (res) => {
+          if (chrome.runtime.lastError) return;
+          if (res?.progress && this._onProgress) {
+            this._onProgress({ ...res.progress, job });
+          }
+        });
+      } catch {}
+    }, 800);
+  }
+
+  _stopProgressPolling() {
+    if (this._progressTimer) {
+      clearInterval(this._progressTimer);
+      this._progressTimer = null;
+    }
+  }
+
+  // ── applyToJob ────────────────────────────────────────────────────────────
+  // 1. Envoie START_APPLY → le background ouvre l'onglet + orchestre l'apply
+  // 2. Démarre le polling de progression
+  // 3. Attend le résultat via WAIT_RESULT (long-poll, Chrome garde le canal ouvert)
 
   async applyToJob(job) {
     if (!window.chrome?.runtime) {
       return { success: false, error: 'Extension Chrome non disponible.' };
     }
 
-    return new Promise((resolve) => {
-      const TIMEOUT = 110_000;
-      let resolved = false;
-      let progressInterval = null;
-      let lastProgressTs = null;
+    this._startProgressPolling(job);
 
-      const done = (result) => {
-        if (resolved) return;
-        resolved = true;
-        clearInterval(progressInterval);
-        clearTimeout(timeoutTimer);
-        resolve(result);
-      };
-
-      const timeoutTimer = setTimeout(() => {
-        done({ success: false, error: 'Timeout (110s) — la candidature a pris trop de temps.' });
-      }, TIMEOUT);
-
-      // ── Étape 1 : demander au background de démarrer (réponse immédiate) ──
-      this._send({ type: 'START_APPLY', job }).then((res) => {
-        if (!res?.ok) {
-          done({ success: false, error: res?.error || 'Impossible de démarrer la candidature.' });
-          return;
-        }
-
-        // ── Étape 2 : poll la progression intermédiaire (800ms) ──────────────
-        progressInterval = setInterval(async () => {
-          if (resolved) return;
-          const r = await this._send({ type: 'GET_PROGRESS', jobUrl: job.url });
-          const p = r?.progress;
-          if (!p || p.ts === lastProgressTs) return;
-          lastProgressTs = p.ts;
-          this._progressCallback?.({ msg: p.msg, type: p.type, job });
-        }, 800);
-
-        // ── Étape 3 : long-poll le résultat final (le background bloque) ─────
-        // On envoie WAIT_RESULT avec un timeout côté background de 100s.
-        // Chrome autorise les réponses async dans onMessageExternal si on retourne true.
-        this._send({ type: 'WAIT_RESULT', jobUrl: job.url }, 105_000).then((result) => {
-          if (!result) {
-            done({ success: false, error: 'Pas de réponse de l\'extension après 100s.' });
-            return;
+    // ── Étape 1 : démarrer la candidature (réponse immédiate "ok") ──────────
+    const started = await new Promise(resolve => {
+      try {
+        chrome.runtime.sendMessage(EXTENSION_ID, { type: 'START_APPLY', job }, (res) => {
+          if (chrome.runtime.lastError) {
+            resolve({ ok: false, error: chrome.runtime.lastError.message });
+          } else {
+            resolve(res || { ok: false, error: 'Pas de réponse du background' });
           }
-          done(result);
         });
-      });
+      } catch (e) {
+        resolve({ ok: false, error: e.message });
+      }
     });
+
+    if (!started.ok) {
+      this._stopProgressPolling();
+      return { success: false, error: started.error || 'Impossible de contacter l\'extension.' };
+    }
+
+    // ── Étape 2 : attendre le résultat via long-poll (100s max côté background) ─
+    // On ajoute un timeout côté bridge de 110s pour laisser le background expirer proprement.
+    const result = await new Promise(resolve => {
+      const safetyTimer = setTimeout(() => {
+        resolve({ success: false, error: 'Timeout côté webapp (110s).' });
+      }, 110_000);
+
+      try {
+        chrome.runtime.sendMessage(
+          EXTENSION_ID,
+          { type: 'WAIT_RESULT', jobUrl: job.url },
+          (res) => {
+            clearTimeout(safetyTimer);
+            if (chrome.runtime.lastError) {
+              resolve({ success: false, error: chrome.runtime.lastError.message });
+            } else {
+              resolve(res || { success: false, error: 'Résultat vide.' });
+            }
+          }
+        );
+      } catch (e) {
+        clearTimeout(safetyTimer);
+        resolve({ success: false, error: e.message });
+      }
+    });
+
+    this._stopProgressPolling();
+    return result;
   }
+
+  // ── getStatus ─────────────────────────────────────────────────────────────
 
   async getStatus() {
     if (!window.chrome?.runtime) return { queue: [], history: [] };
-    return (await this._send({ type: 'GET_STATUS' })) || { queue: [], history: [] };
+    return new Promise(resolve => {
+      try {
+        chrome.runtime.sendMessage(EXTENSION_ID, { type: 'GET_STATUS' }, (res) => {
+          resolve(res || { queue: [], history: [] });
+        });
+      } catch {
+        resolve({ queue: [], history: [] });
+      }
+    });
   }
-
-  onEasyApplyDetected(cb) { this._onEasyApplyDetected = cb; }
 }
 
 export const extensionBridge = new ExtensionBridge();
