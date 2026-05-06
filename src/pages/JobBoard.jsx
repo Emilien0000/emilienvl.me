@@ -392,6 +392,7 @@ export default function JobBoard() {
   const undoIntervalRef                 = useRef(null);
   const [extAvailable, setExtAvailable] = useState(false);
   const [applyingIds, setApplyingIds]   = useState(new Set());
+  const [applyError, setApplyError]     = useState(null); // { job, message }
 
   const filtersOwnerRef  = useRef(null);
   const initialLoadRef   = useRef(true);
@@ -738,22 +739,37 @@ export default function JobBoard() {
   const jobKey = (job) => `${(job.title||'').toLowerCase().trim()}|${(job.company||'').toLowerCase().trim()}`;
 
   const handleApply = useCallback(async (job) => {
-    // Auto-apply si Easy Apply Indeed + extension disponible
+    // ── Easy Apply Indeed + extension disponible → auto-apply en arrière-plan
     if (job.isDirect && job.url?.includes('indeed') && extAvailable) {
       setApplyingIds(prev => new Set([...prev, job.id]));
+      setApplyError(null);
+
+      // Ouvrir l'onglet en arrière-plan (l'extension fait tout le travail)
       const result = await extensionBridge.applyToJob(job);
       setApplyingIds(prev => { const n = new Set(prev); n.delete(job.id); return n; });
+
       if (result.success) {
-        setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{ job, appliedAt: result.appliedAt, method: 'auto' }, ...prev]);
+        // Succès → marquer comme postulé et retirer du feed
+        setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{ job, appliedAt: result.appliedAt || new Date().toISOString(), method: 'auto' }, ...prev]);
         setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
       } else {
-        console.error('Auto-apply échoué:', result.error);
-        window.open(job.url, '_blank');
+        // Échec → afficher toast d'erreur avec message
+        setApplyError({ job, message: result.error || 'Échec de la candidature automatique' });
+        // Auto-dismiss après 8s
+        setTimeout(() => setApplyError(null), 8000);
       }
       return;
     }
-    // Candidature manuelle
-    setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{ job, appliedAt: new Date().toISOString() }, ...prev]);
+
+    // ── Easy Apply mais extension non disponible → ouvrir dans nouvel onglet
+    if (job.isDirect && job.url?.includes('indeed') && !extAvailable) {
+      window.open(job.url, '_blank');
+      return;
+    }
+
+    // ── Candidature manuelle (autres sources)
+    if (job.url) window.open(job.url, '_blank');
+    setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{ job, appliedAt: new Date().toISOString(), method: 'manual' }, ...prev]);
     setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
   }, [extAvailable]);
 
@@ -933,6 +949,30 @@ export default function JobBoard() {
               )}
 
               {error && !loading && <div className="jb-error-box"><p>😕 {error}</p></div>}
+
+              {/* Toast erreur auto-apply */}
+              <AnimatePresence>
+                {applyError && (
+                  <motion.div
+                    className="jb-apply-error-toast"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 20 }}
+                  >
+                    <div className="jb-apply-error-inner">
+                      <span className="jb-apply-error-icon">❌</span>
+                      <div className="jb-apply-error-content">
+                        <div className="jb-apply-error-title">Candidature échouée — {applyError.job?.title}</div>
+                        <div className="jb-apply-error-msg">{applyError.message}</div>
+                        <a href={applyError.job?.url} target="_blank" rel="noreferrer" className="jb-apply-error-link">
+                          Ouvrir l'offre manuellement →
+                        </a>
+                      </div>
+                      <button className="jb-apply-error-close" onClick={() => setApplyError(null)}>✕</button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
               {loading && <div className="jb-grid">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} />)}</div>}
 
               {!loading && fetched && visibleJobs.length === 0 && (
