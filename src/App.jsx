@@ -387,7 +387,7 @@ function MainLayout({ dark, onToggleDark }) {
     { id: 'experiences', label: 'Expériences' },
     { id: 'skills', label: 'Compétences' },
     { id: 'contact', label: 'Contact' },
-    { id: 'alternances', label: "Scraper d'offres" },
+    //{ id: 'alternances', label: "Scraper d'offres" },
   ];
 
   return (
