@@ -118,6 +118,17 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
               {isApplying ? '⏳ En cours…' : canAutoApply ? '⚡ Auto Apply' : '⭐ Easy Apply'}
             </span>
           )}
+            <span
+              className="jb-source-badge"
+              style={{
+                background: `${source.color}22`,
+                color: source.color,
+                border: `1px solid ${source.color}44`,
+              }}
+              title={`Source : ${source.label}`}
+            >
+              {source.emoji} {source.label}
+            </span>
             {appliedAt && <span className="jb-applied-badge">✅ Postulé {timeAgo(appliedAt)}</span>}
           </div>
           <div className="jb-card-actions">

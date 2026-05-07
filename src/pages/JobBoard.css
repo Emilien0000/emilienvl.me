@@ -243,7 +243,6 @@
   margin-bottom: 0.65rem;
 }
 .jb-card-badges { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-.jb-source-badge,
 .jb-type-badge {
   display: inline-block;
   padding: 0.18rem 0.55rem;
@@ -252,6 +251,18 @@
   font-weight: 600;
   letter-spacing: 0.03em;
 }
+.jb-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28em;
+  padding: 0.18rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  transition: opacity 0.18s;
+}
+.jb-source-badge:hover { opacity: 0.8; }
 .jb-card-actions {
   display: flex;
   align-items: center;
