@@ -118,17 +118,6 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
               {isApplying ? '⏳ En cours…' : canAutoApply ? '⚡ Auto Apply' : '⭐ Easy Apply'}
             </span>
           )}
-            <span
-              className="jb-source-badge"
-              style={{
-                background: `${source.color}22`,
-                color: source.color,
-                border: `1px solid ${source.color}44`,
-              }}
-              title={`Source : ${source.label}`}
-            >
-              {source.emoji} {source.label}
-            </span>
             {appliedAt && <span className="jb-applied-badge">✅ Postulé {timeAgo(appliedAt)}</span>}
           </div>
           <div className="jb-card-actions">
@@ -801,18 +790,19 @@ export default function JobBoard() {
           job, appliedAt: result.appliedAt || new Date().toISOString(), method: 'auto'
         }, ...prev]);
         setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
+      } else if (result.type === 'external') {
+        // Redirection vers site employeur : on marque comme postulé et on retire du feed
+        updateNotif(notifId, '🟣 Redirigé vers le site employeur — marqué comme postulé', 'external');
+        setTimeout(() => removeNotif(notifId), 6000);
+        setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{
+          job, appliedAt: new Date().toISOString(), method: 'external'
+        }, ...prev]);
+        setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
       } else {
-        // 🚨 NOUVELLE GESTION DES ERREURS (Rouge ou Violet)
-        const isExternal = result.type === 'external';
+        // Vraie erreur
         const errMsg = result.error || 'Échec de la candidature automatique';
-        const notifType = isExternal ? 'external' : 'error';
-        const icon = isExternal ? '🟣' : '❌';
-        
-        updateNotif(notifId, `${icon} ${errMsg}`, notifType);
-        setTimeout(() => removeNotif(notifId), isExternal ? 8000 : 12000);
-        
-        // Si c'est un site externe, on ouvre quand même l'onglet pour l'utilisateur
-        if (isExternal) window.open(job.url, '_blank');
+        updateNotif(notifId, `❌ ${errMsg}`, 'error');
+        setTimeout(() => removeNotif(notifId), 12000);
       }
       return;
     }
