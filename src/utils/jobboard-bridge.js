@@ -53,6 +53,7 @@ class ExtensionBridge {
             if (chrome.runtime.lastError) return;
 
             // 🌟 Mise à jour visuelle des notifications en temps réel !
+            // 🌟 Mise à jour visuelle des notifications en temps réel !
             if (checkRes && checkRes.progress && this._onProgressCb) {
               this._onProgressCb({ msg: checkRes.progress.msg, type: checkRes.progress.type, job });
             }
