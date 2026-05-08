@@ -60,15 +60,17 @@ class ExtensionBridge {
             if (checkRes && checkRes.done) {
               clearInterval(pollInterval);
               clearTimeout(timeoutTimer);
-              // 🌟 FIX : Mise à jour du message final avant de résoudre
               if (this._onProgressCb) {
                 const r = checkRes.result;
                 if (r && r.success) {
-                  this._onProgressCb({ msg: '✅ Candidature envoyée !', type: 'success', job });
-                } else if (r && r.type === 'external') {
-                  this._onProgressCb({ msg: '🟣 Site recruteur ouvert — candidature manuelle requise.', type: 'external', job });
+                  // On distingue les deux types de succès pour la notif finale du bridge
+                  const msg = r.type === 'external' 
+                    ? '🟣 Site recruteur ouvert — marqué comme postulé.' 
+                    : '✅ Candidature envoyée !';
+                  const type = r.type === 'external' ? 'external' : 'success';
+                  this._onProgressCb({ msg, type, job });
                 } else if (r && !r.success) {
-                  this._onProgressCb({ msg: `❌ ${r.error || 'Échec de la candidature'}`, type: 'error', job });
+                  this._onProgressCb({ msg: `❌ ${r.error || 'Échec'}`, type: 'error', job });
                 }
               }
               resolve(checkRes.result);

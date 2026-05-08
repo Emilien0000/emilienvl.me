@@ -900,23 +900,32 @@ export default function JobBoard() {
       setApplyingIds(prev => { const n = new Set(prev); n.delete(job.id); return n; });
 
       if (result.success) {
-        updateNotif(notifId, '✅ Candidature envoyée !', 'success');
-        setTimeout(() => removeNotif(notifId), 4000);
+        // --- CORRECTIF ICI ---
+        const isExternal = result.type === 'external';
+        
+        updateNotif(
+          notifId,
+          isExternal ? '🟣 Redirection externe — marqué comme postulé' : '✅ Candidature envoyée !',
+          isExternal ? 'external' : 'success'
+        );
+        
+        setTimeout(() => removeNotif(notifId), isExternal ? 8000 : 4000);
+
         setApplied(prev =>
           prev.find(e => e.job.id === job.id)
             ? prev
-            : [{ job, appliedAt: result.appliedAt || new Date().toISOString(), method: 'auto' }, ...prev]
+            : [{ job, appliedAt: result.appliedAt || new Date().toISOString(), method: isExternal ? 'external_redirect' : 'auto' }, ...prev]
         );
         setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
+        // ---------------------
       } else {
-        const isExternal = result.type === 'external';
+        // Le bloc else ne doit gérer que les vraies erreurs (timeout, sélecteur introuvable, etc.)
         updateNotif(
           notifId,
-          `${isExternal ? '🟣' : '❌'} ${result.error || 'Échec de la candidature automatique'}`,
-          isExternal ? 'external' : 'error'
+          `❌ ${result.error || 'Échec de la candidature automatique'}`,
+          'error'
         );
-        setTimeout(() => removeNotif(notifId), isExternal ? 8000 : 12000);
-        if (isExternal) window.open(job.url, '_blank');
+        setTimeout(() => removeNotif(notifId), 12000);
       }
       return;
     }
