@@ -1,5 +1,5 @@
 // src/pages/JobBoard.jsx
-// v7 — Extension Easy Apply intégrée
+// v8 — Fix badges source + handleApply unifié
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,7 +27,9 @@ const IconCheck     = () => <svg width="13" height="13" viewBox="0 0 24 24" fill
 const IconSend      = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
 const IconUser      = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
 const IconLogout    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+const IconCancel    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
 
+// ── Sources ───────────────────────────────────────────────────────────────────
 const SOURCE_PATTERNS = [
   { id: 'indeed',    label: 'Indeed',                color: '#2557a7', emoji: '💼', pattern: /indeed\./i },
   { id: 'hellowork', label: 'HelloWork',             color: '#7c3aed', emoji: '👋', pattern: /hellowork\.com/i },
@@ -39,7 +41,7 @@ const SOURCE_PATTERNS = [
   { id: 'welcomejb', label: 'Welcome to the Jungle', color: '#ff4655', emoji: '🌴', pattern: /welcometothejungle\.com/i },
   { id: 'monster',   label: 'Monster',               color: '#6600cc', emoji: '👾', pattern: /monster\./i },
 ];
-// Teste plusieurs URLs (sourceUrl d'abord, puis url de l'offre) pour trouver la source
+
 function detectSource(...urls) {
   for (const url of urls) {
     if (!url) continue;
@@ -58,7 +60,7 @@ const TYPE_LABELS = {
 
 const LS = {
   get: (key, fallback) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; } },
-  set: (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
+  set: (key, value)    => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
 };
 
 function timeAgo(iso) {
@@ -80,57 +82,106 @@ function jobMatchesBanwords(job, banwords) {
   return banwords.some(w => w && text.includes(w.toLowerCase()));
 }
 
-function normalizeDate(d) {
-  if (!d) return new Date().toISOString();
-  const parsed = new Date(d);
-  return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
-}
+const jobKey = (job) =>
+  `${(job.title || '').toLowerCase().trim()}|${(job.company || '').toLowerCase().trim()}`;
 
-// COPIE-COLLE CETTE LIGNE ICI 👇
-const jobKey = (job) => `${(job.title||'').toLowerCase().trim()}|${(job.company||'').toLowerCase().trim()}`;
-
-const IconCancel = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
-
+// ── JobCard ───────────────────────────────────────────────────────────────────
 function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showActions = true, appliedAt, isNew, extAvailable, applyingIds }) {
-  const typeInfo   = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
-  const source     = detectSource(job.sourceUrl, job.url);
-  const isApplying = applyingIds?.has(job.id);
-  const canAutoApply = job.isDirect && extAvailable;  // isDirect = Easy Apply confirmé par le scraper
-  const isIndeed = job.url && (job.url.includes('indeed.com') || job.url.includes('indeed.fr'));
+  const typeInfo    = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
+  const source      = detectSource(job.sourceUrl, job.url);
+  const isApplying  = applyingIds?.has(job.id);
+
+  const isIndeed    = job.url && (job.url.includes('indeed.com') || job.url.includes('indeed.fr'));
+  const isHelloWork = job.url && job.url.includes('hellowork.com');
+  const isEasyApply = isIndeed || isHelloWork;
+  const canAutoApply = isEasyApply && extAvailable;
+
   return (
-    <motion.div className={`jb-card${isNew ? ' jb-card-new' : ''}`} style={{ '--source-color': source.color }} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -10 }} transition={{ duration: 0.3, delay: Math.min(index * 0.035, 0.6) }} whileHover={{ y: -3, transition: { duration: 0.18 } }}>
+    <motion.div
+      className={`jb-card${isNew ? ' jb-card-new' : ''}`}
+      style={{ '--source-color': source.color }}
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95, y: -10 }}
+      transition={{ duration: 0.3, delay: Math.min(index * 0.035, 0.6) }}
+      whileHover={{ y: -3, transition: { duration: 0.18 } }}
+    >
       <div className="jb-card-accent" />
       <div className="jb-card-inner">
         <div className="jb-card-top">
           <div className="jb-card-badges">
-          {/* Remplacer job.isDirect par isIndeed ici */}
-          {isIndeed && (
+
+            {/* Badge source (Indeed, LinkedIn, HelloWork…) */}
+            <a
+              href={job.sourceUrl || job.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="jb-source-badge"
+              style={{
+                background: `${source.color}18`,
+                color: source.color,
+                border: `1px solid ${source.color}40`,
+                textDecoration: 'none',
+              }}
+              title={source.label}
+            >
+              {source.emoji} {source.label}
+            </a>
+
+            {/* Badge type (Alternance / Stage / Emploi) */}
             <span
               className="jb-type-badge"
-              style={{
-                background: isApplying ? 'rgba(250,204,21,0.3)' : 'rgba(250,204,21,0.15)',
-                color: '#facc15',
-                cursor: canAutoApply ? 'pointer' : 'default',
-              }}
-              onClick={() => canAutoApply && onApply && onApply(job)}
-              title={canAutoApply ? 'Cliquer pour postuler automatiquement' : 'Installez l\'extension pour l\'auto-apply'}
+              style={{ background: `${typeInfo.color}18`, color: typeInfo.color }}
             >
-              {isApplying ? '⏳ En cours…' : canAutoApply ? '⚡ Auto Apply' : '⭐ Easy Apply'}
+              {typeInfo.label}
             </span>
-          )}
-            {appliedAt && <span className="jb-applied-badge">✅ Postulé {timeAgo(appliedAt)}</span>}
+
+            {/* Badge Easy Apply */}
+            {isEasyApply && (
+              <span
+                className="jb-type-badge"
+                style={{
+                  background: isApplying ? 'rgba(250,204,21,0.3)' : 'rgba(250,204,21,0.15)',
+                  color: '#facc15',
+                  cursor: canAutoApply ? 'pointer' : 'default',
+                }}
+                onClick={() => canAutoApply && onApply && onApply(job)}
+                title={canAutoApply ? 'Cliquer pour postuler automatiquement' : 'Installez l\'extension pour l\'auto-apply'}
+              >
+                {isApplying ? '⏳ En cours…' : canAutoApply ? '⚡ Auto Apply' : '⭐ Easy Apply'}
+              </span>
+            )}
+
+            {appliedAt && (
+              <span className="jb-applied-badge">✅ Postulé {timeAgo(appliedAt)}</span>
+            )}
           </div>
+
           <div className="jb-card-actions">
-            {onSave && <button className={`jb-save-btn ${saved ? 'saved' : ''}`} onClick={() => onSave(job)} title={saved ? 'Retirer' : 'Sauvegarder'} style={{ color: saved ? '#13c9ed' : undefined }}><IconBookmark filled={saved} /></button>}
+            {onSave && (
+              <button
+                className={`jb-save-btn ${saved ? 'saved' : ''}`}
+                onClick={() => onSave(job)}
+                title={saved ? 'Retirer' : 'Sauvegarder'}
+                style={{ color: saved ? '#13c9ed' : undefined }}
+              >
+                <IconBookmark filled={saved} />
+              </button>
+            )}
             <span className="jb-date"><IconCalendar />{timeAgo(job.date)}</span>
           </div>
         </div>
+
         <h3 className="jb-title">{job.title}</h3>
         {job.company  && <p className="jb-company"><IconBriefcase />{job.company}</p>}
         {job.location && <p className="jb-location"><IconMap />{job.location}</p>}
         {job.description && <p className="jb-desc">{job.description}</p>}
+
         <div className="jb-card-footer">
-          <a href={job.url} target="_blank" rel="noopener noreferrer" className="jb-apply-btn">Voir l'offre <IconExternal /></a>
+          <a href={job.url} target="_blank" rel="noopener noreferrer" className="jb-apply-btn">
+            Voir l'offre <IconExternal />
+          </a>
+
           {showActions && (
             <div className="jb-card-action-btns">
               {onApply && (
@@ -140,20 +191,45 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
                     onClick={() => onApply(job)}
                     disabled={isApplying}
                     title="Postuler automatiquement via l'extension"
-                    style={{ background: isApplying ? 'rgba(250,204,21,0.2)' : 'rgba(19,201,237,0.15)', color: isApplying ? '#facc15' : '#13c9ed', borderColor: isApplying ? '#facc15' : '#13c9ed' }}
+                    style={{
+                      background: isApplying ? 'rgba(250,204,21,0.2)' : 'rgba(19,201,237,0.15)',
+                      color: isApplying ? '#facc15' : '#13c9ed',
+                      borderColor: isApplying ? '#facc15' : '#13c9ed',
+                    }}
                   >
                     {isApplying ? <><IconClock /> En cours…</> : <><IconSend /> ⚡ Auto Apply</>}
                   </button>
                 ) : (
-                  <button className="jb-action-btn jb-apply-action" onClick={() => onApply(job)} title="Marquer comme postulé"><IconSend /> Postulé</button>
+                  <button
+                    className="jb-action-btn jb-apply-action"
+                    onClick={() => onApply(job)}
+                    title="Ouvrir l'offre et marquer comme postulé"
+                  >
+                    <IconSend /> Postulé
+                  </button>
                 )
               )}
-              {onDelete && <button className="jb-action-btn jb-delete-action" onClick={() => onDelete(job)} title="Supprimer cette offre"><IconTrash /> Supprimer</button>}
+              {onDelete && (
+                <button
+                  className="jb-action-btn jb-delete-action"
+                  onClick={() => onDelete(job)}
+                  title="Supprimer cette offre"
+                >
+                  <IconTrash /> Supprimer
+                </button>
+              )}
             </div>
           )}
+
           {onCancel && (
             <div className="jb-card-action-btns">
-              <button className="jb-action-btn jb-delete-action" onClick={() => onCancel(job)} title="Annuler ma candidature"><IconCancel /> Annuler la candidature</button>
+              <button
+                className="jb-action-btn jb-delete-action"
+                onClick={() => onCancel(job)}
+                title="Annuler ma candidature"
+              >
+                <IconCancel /> Annuler la candidature
+              </button>
             </div>
           )}
         </div>
@@ -162,6 +238,7 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
   );
 }
 
+// ── Skeleton ──────────────────────────────────────────────────────────────────
 function Skeleton() {
   return (
     <div className="jb-card jb-skeleton">
@@ -177,16 +254,44 @@ function Skeleton() {
   );
 }
 
+// ── FilterRow ─────────────────────────────────────────────────────────────────
 function FilterRow({ filter, onToggle, onDelete, isNew }) {
   const source = detectSource(filter.url);
   return (
-    <motion.div className={`jb-filter-row ${filter.enabled ? '' : 'disabled'} ${isNew ? 'new' : ''}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} layout>
+    <motion.div
+      className={`jb-filter-row ${filter.enabled ? '' : 'disabled'} ${isNew ? 'new' : ''}`}
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 10 }}
+      layout
+    >
       <div className="jb-filter-row-left">
-        <button className={`jb-toggle-btn ${filter.enabled ? 'on' : 'off'}`} onClick={() => onToggle(filter.id)}>{filter.enabled ? <IconCheck /> : null}</button>
+        <button
+          className={`jb-toggle-btn ${filter.enabled ? 'on' : 'off'}`}
+          onClick={() => onToggle(filter.id)}
+        >
+          {filter.enabled ? <IconCheck /> : null}
+        </button>
         <div className="jb-filter-info">
-          {source && <span className="jb-filter-source" style={{ color: source.color }}>{source.emoji} {source.label}</span>}
-          <a href={filter.url} target="_blank" rel="noopener noreferrer" className="jb-filter-url" title={filter.url}>{filter.label || filter.url} <IconExternal /></a>
-          {filter.lastScraped && <span className="jb-filter-meta"><IconClock /> Scrapé {timeAgo(filter.lastScraped)} · {filter.jobCount ?? 0} offre(s)</span>}
+          {source && (
+            <span className="jb-filter-source" style={{ color: source.color }}>
+              {source.emoji} {source.label}
+            </span>
+          )}
+          <a
+            href={filter.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="jb-filter-url"
+            title={filter.url}
+          >
+            {filter.label || filter.url} <IconExternal />
+          </a>
+          {filter.lastScraped && (
+            <span className="jb-filter-meta">
+              <IconClock /> Scrapé {timeAgo(filter.lastScraped)} · {filter.jobCount ?? 0} offre(s)
+            </span>
+          )}
         </div>
       </div>
       <button className="jb-filter-del" onClick={() => onDelete(filter.id)}><IconTrash /></button>
@@ -194,11 +299,12 @@ function FilterRow({ filter, onToggle, onDelete, isNew }) {
   );
 }
 
+// ── FiltersPanel ──────────────────────────────────────────────────────────────
 function FiltersPanel({ filters, onChange, onScrapeNow, scrapeStatus, onClearJobs }) {
-  const [urlInput, setUrlInput] = useState('');
+  const [urlInput,   setUrlInput]   = useState('');
   const [labelInput, setLabelInput] = useState('');
-  const [urlError, setUrlError] = useState('');
-  const [newId, setNewId] = useState(null);
+  const [urlError,   setUrlError]   = useState('');
+  const [newId,      setNewId]      = useState(null);
 
   const addFilter = () => {
     const url = urlInput.trim();
@@ -221,27 +327,69 @@ function FiltersPanel({ filters, onChange, onScrapeNow, scrapeStatus, onClearJob
         <div className="jb-url-form">
           <div className={`jb-url-input-wrap ${urlError ? 'error' : ''}`}>
             <span className="jb-url-prefix">🔗</span>
-            <input className="jb-input" value={urlInput} onChange={e => { setUrlInput(e.target.value); setUrlError(''); }} onKeyDown={e => e.key === 'Enter' && addFilter()} placeholder="https://fr.indeed.com/jobs?q=alternance+dev" />
-            {urlInput && <button className="jb-url-clear" onClick={() => { setUrlInput(''); setUrlError(''); }}><IconX /></button>}
+            <input
+              className="jb-input"
+              value={urlInput}
+              onChange={e => { setUrlInput(e.target.value); setUrlError(''); }}
+              onKeyDown={e => e.key === 'Enter' && addFilter()}
+              placeholder="https://fr.indeed.com/jobs?q=alternance+dev"
+            />
+            {urlInput && (
+              <button className="jb-url-clear" onClick={() => { setUrlInput(''); setUrlError(''); }}>
+                <IconX />
+              </button>
+            )}
           </div>
           {urlError && <p className="jb-url-error">{urlError}</p>}
-          <input className="jb-input jb-label-input" value={labelInput} onChange={e => setLabelInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addFilter()} placeholder="Nom (ex: Dev React Paris)" />
-          <button className="jb-search-btn" onClick={addFilter} disabled={!urlInput.trim()}><IconPlus /> Ajouter le lien</button>
+          <input
+            className="jb-input jb-label-input"
+            value={labelInput}
+            onChange={e => setLabelInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addFilter()}
+            placeholder="Nom (ex: Dev React Paris)"
+          />
+          <button className="jb-search-btn" onClick={addFilter} disabled={!urlInput.trim()}>
+            <IconPlus /> Ajouter le lien
+          </button>
         </div>
       </div>
+
       {filters.length > 0 && (
         <div className="jb-panel-section">
           <div className="jb-panel-label-row">
-            <h4 className="jb-panel-label" style={{ margin: 0 }}>📋 Liens actifs ({enabledCount}/{filters.length})</h4>
+            <h4 className="jb-panel-label" style={{ margin: 0 }}>
+              📋 Liens actifs ({enabledCount}/{filters.length})
+            </h4>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="jb-ghost-btn" style={{ marginTop: 0, fontSize: '0.78rem' }} onClick={onScrapeNow} disabled={isRunning || enabledCount === 0}><IconRefresh spinning={isRunning} /> {isRunning ? 'Scraping…' : 'Scraper maintenant'}</button>
-              <button className="jb-ghost-btn" style={{ marginTop: 0, fontSize: '0.78rem', color: '#ef4444', borderColor: '#ef4444' }} onClick={onClearJobs} disabled={isRunning} title="Vider tous les résultats en DB"><IconTrash /> Vider les résultats</button>
+              <button
+                className="jb-ghost-btn"
+                style={{ marginTop: 0, fontSize: '0.78rem' }}
+                onClick={onScrapeNow}
+                disabled={isRunning || enabledCount === 0}
+              >
+                <IconRefresh spinning={isRunning} /> {isRunning ? 'Scraping…' : 'Scraper maintenant'}
+              </button>
+              <button
+                className="jb-ghost-btn"
+                style={{ marginTop: 0, fontSize: '0.78rem', color: '#ef4444', borderColor: '#ef4444' }}
+                onClick={onClearJobs}
+                disabled={isRunning}
+                title="Vider tous les résultats en DB"
+              >
+                <IconTrash /> Vider les résultats
+              </button>
             </div>
           </div>
           <div className="jb-filter-list">
             <AnimatePresence>
               {filters.map(f => (
-                <FilterRow key={f.id} filter={f} isNew={f.id === newId} onToggle={(id) => onChange(filters.map(fi => fi.id === id ? { ...fi, enabled: !fi.enabled } : fi))} onDelete={(id) => onChange(filters.filter(fi => fi.id !== id))} />
+                <FilterRow
+                  key={f.id}
+                  filter={f}
+                  isNew={f.id === newId}
+                  onToggle={(id) => onChange(filters.map(fi => fi.id === id ? { ...fi, enabled: !fi.enabled } : fi))}
+                  onDelete={(id) => onChange(filters.filter(fi => fi.id !== id))}
+                />
               ))}
             </AnimatePresence>
           </div>
@@ -251,9 +399,14 @@ function FiltersPanel({ filters, onChange, onScrapeNow, scrapeStatus, onClearJob
   );
 }
 
+// ── BanwordsPanel ─────────────────────────────────────────────────────────────
 function BanwordsPanel({ banwords, onChange }) {
   const [val, setVal] = useState('');
-  const add = () => { const t = val.trim(); if (t && !banwords.includes(t)) onChange([...banwords, t]); setVal(''); };
+  const add = () => {
+    const t = val.trim();
+    if (t && !banwords.includes(t)) onChange([...banwords, t]);
+    setVal('');
+  };
   return (
     <div className="jb-panel">
       <div className="jb-panel-section">
@@ -261,12 +414,25 @@ function BanwordsPanel({ banwords, onChange }) {
         <div className="jb-tag-input-wrap">
           <div className="jb-tags-list">
             {banwords.map(t => (
-              <span key={t} className="jb-tag" style={{ '--tag-color': '#ef4444' }}>{t} <button className="jb-tag-rm" onClick={() => onChange(banwords.filter(b => b !== t))}><IconX /></button></span>
+              <span key={t} className="jb-tag" style={{ '--tag-color': '#ef4444' }}>
+                {t}
+                <button className="jb-tag-rm" onClick={() => onChange(banwords.filter(b => b !== t))}>
+                  <IconX />
+                </button>
+              </span>
             ))}
           </div>
           <div className="jb-tag-field">
-            <input className="jb-input jb-tag-input" value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} placeholder="Ex : senior, manager..." />
-            <button className="jb-tag-add-btn" onClick={add} style={{ color: '#ef4444' }}><IconPlus /></button>
+            <input
+              className="jb-input jb-tag-input"
+              value={val}
+              onChange={e => setVal(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+              placeholder="Ex : senior, manager..."
+            />
+            <button className="jb-tag-add-btn" onClick={add} style={{ color: '#ef4444' }}>
+              <IconPlus />
+            </button>
           </div>
         </div>
       </div>
@@ -274,12 +440,15 @@ function BanwordsPanel({ banwords, onChange }) {
   );
 }
 
+// ── AppliedPanel ──────────────────────────────────────────────────────────────
 function AppliedPanel({ applied, onRemove }) {
   if (!applied.length) return (
     <div className="jb-empty">
       <div className="jb-empty-icon">📨</div>
       <h3>Aucune candidature</h3>
-      <p style={{ color: '#666', fontSize: '0.85rem' }}>Clique sur "Postulé" sur une offre pour la retrouver ici.</p>
+      <p style={{ color: '#666', fontSize: '0.85rem' }}>
+        Clique sur "Postulé" sur une offre pour la retrouver ici.
+      </p>
     </div>
   );
   return (
@@ -287,8 +456,14 @@ function AppliedPanel({ applied, onRemove }) {
       <div className="jb-grid">
         <AnimatePresence>
           {applied.map((entry) => (
-            <JobCard key={entry.job.id} job={entry.job} saved={false} showActions={false} appliedAt={entry.appliedAt}
-              onCancel={(job) => onRemove(job.id)} />
+            <JobCard
+              key={entry.job.id}
+              job={entry.job}
+              saved={false}
+              showActions={false}
+              appliedAt={entry.appliedAt}
+              onCancel={(job) => onRemove(job.id)}
+            />
           ))}
         </AnimatePresence>
       </div>
@@ -296,40 +471,50 @@ function AppliedPanel({ applied, onRemove }) {
   );
 }
 
+// ── SavesPanel ────────────────────────────────────────────────────────────────
 function SavesPanel({ saves, onRemove }) {
-  if (!saves.length) return <div className="jb-empty"><div className="jb-empty-icon">🔖</div><h3>Aucune offre sauvegardée</h3></div>;
+  if (!saves.length) return (
+    <div className="jb-empty">
+      <div className="jb-empty-icon">🔖</div>
+      <h3>Aucune offre sauvegardée</h3>
+    </div>
+  );
   return (
     <div className="jb-panel jb-saves-panel">
       <div className="jb-grid">
         {saves.map((job) => (
-          <JobCard key={job.id} job={job} saved={true} showActions={false} onSave={() => onRemove(job.id)} />
+          <JobCard
+            key={job.id}
+            job={job}
+            saved={true}
+            showActions={false}
+            onSave={() => onRemove(job.id)}
+          />
         ))}
       </div>
     </div>
   );
 }
 
+// ── Tabs ──────────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'results',  label: 'Résultats',    icon: '🔍' },
-  { id: 'filters',  label: 'Mes liens',    icon: '🔗' },
-  { id: 'banwords', label: 'Banwords',     icon: '🚫' },
-  { id: 'saves',    label: 'Sauvegardes',  icon: '🔖' },
-  { id: 'applied',  label: 'Postulé',      icon: '📨' },
+  { id: 'results',  label: 'Résultats',   icon: '🔍' },
+  { id: 'filters',  label: 'Mes liens',   icon: '🔗' },
+  { id: 'banwords', label: 'Banwords',    icon: '🚫' },
+  { id: 'saves',    label: 'Sauvegardes', icon: '🔖' },
+  { id: 'applied',  label: 'Postulé',     icon: '📨' },
 ];
 
-// ── Décompte circulaire ───────────────────────────────────────────
+// ── CountdownRing ─────────────────────────────────────────────────────────────
 function CountdownRing({ value, total = 30 }) {
   const radius = 10;
   const circ   = 2 * Math.PI * radius;
-  const frac   = value / total;
-  const dash   = circ * frac;
+  const dash   = circ * (value / total);
   const isLow  = value <= 5;
   return (
     <span className="jb-countdown-ring" title={`Prochain polling dans ${value}s`}>
       <svg width="30" height="30" viewBox="0 0 30 30">
-        {/* Piste de fond */}
         <circle cx="15" cy="15" r={radius} fill="none" stroke="var(--ring-track, #2a2a3a)" strokeWidth="2.5" />
-        {/* Arc de progression */}
         <circle
           cx="15" cy="15" r={radius}
           fill="none"
@@ -340,7 +525,6 @@ function CountdownRing({ value, total = 30 }) {
           transform="rotate(-90 15 15)"
           style={{ transition: 'stroke-dasharray 0.9s linear, stroke 0.3s' }}
         />
-        {/* Nombre central */}
         <text x="15" y="15" textAnchor="middle" dominantBaseline="central"
           fontSize="8" fontWeight="700" fill={isLow ? '#ef4444' : '#13c9ed'}
           style={{ fontFamily: 'inherit', transition: 'fill 0.3s' }}>
@@ -351,11 +535,12 @@ function CountdownRing({ value, total = 30 }) {
   );
 }
 
+// ── JobBoard (page principale) ────────────────────────────────────────────────
 export default function JobBoard() {
   const navigate = useNavigate();
 
-  // ── Session ───────────────────────────────────────────────
-  const [session, setSession] = useState(null);
+  // ── Session ───────────────────────────────────────────────────────────────
+  const [session,     setSession]     = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
@@ -371,38 +556,40 @@ export default function JobBoard() {
 
   const userId = session?.userId ?? null;
 
-  // ── State ───────────────────────────────────────────────────────
-  const [activeTab, setActiveTab]       = useState('results');
-  const [typeFilter, setTypeFilter]     = useState('all');
-  const [jobs, setJobs]                 = useState([]);
-  const [loading, setLoading]           = useState(false);
-  const [error, setError]               = useState(null);
-  const [fetched, setFetched]           = useState(false);
-  const [scrapeStatus, setScrapeStatus] = useState(null);
-  const [debugInfo, setDebugInfo]       = useState(null);
-  const [urlFilters, setUrlFilters]     = useState([]);
-  const [filtersLoaded, setFiltersLoaded] = useState(false);
-  const [banwords, setBanwords]         = useState([]);
+  // ── State ─────────────────────────────────────────────────────────────────
+  const [activeTab,      setActiveTab]      = useState('results');
+  const [typeFilter,     setTypeFilter]     = useState('all');
+  const [jobs,           setJobs]           = useState([]);
+  const [loading,        setLoading]        = useState(false);
+  const [error,          setError]          = useState(null);
+  const [fetched,        setFetched]        = useState(false);
+  const [scrapeStatus,   setScrapeStatus]   = useState(null);
+  const [debugInfo,      setDebugInfo]      = useState(null);
+  const [urlFilters,     setUrlFilters]     = useState([]);
+  const [filtersLoaded,  setFiltersLoaded]  = useState(false);
+  const [banwords,       setBanwords]       = useState([]);
   const [banwordsLoaded, setBanwordsLoaded] = useState(false);
-  const [saves, setSaves]               = useState([]);
-  const [savesLoaded, setSavesLoaded]   = useState(false);
-  const [applied, setApplied]           = useState([]);
-  const [appliedLoaded, setAppliedLoaded] = useState(false);
-  const [deletedKeys, setDeletedKeys]   = useState(() => new Set(LS.get('jb_deleted', [])));
-  const [undoToast, setUndoToast]       = useState(null); // { job, timerId, remaining }
-  const undoTimerRef                    = useRef(null);
-  const undoIntervalRef                 = useRef(null);
-  const [extAvailable, setExtAvailable]   = useState(false);
-  const [applyingIds, setApplyingIds]     = useState(new Set());
-  // notifications : [{ id, job, msg, type }]  — superposées en haut à droite
+  const [saves,          setSaves]          = useState([]);
+  const [savesLoaded,    setSavesLoaded]    = useState(false);
+  const [applied,        setApplied]        = useState([]);
+  const [appliedLoaded,  setAppliedLoaded]  = useState(false);
+  const [deletedKeys,    setDeletedKeys]    = useState(() => new Set(LS.get('jb_deleted', [])));
+  const [undoToast,      setUndoToast]      = useState(null);
+  const undoTimerRef    = useRef(null);
+  const undoIntervalRef = useRef(null);
+
+  // ── Extension ─────────────────────────────────────────────────────────────
+  const [extAvailable, setExtAvailable] = useState(false);
+  const [applyingIds,  setApplyingIds]  = useState(new Set());
+
+  // ── Notifications ─────────────────────────────────────────────────────────
   const [notifications, setNotifications] = useState([]);
   const notifCounterRef = useRef(0);
 
   const addNotif = useCallback((job, msg, type) => {
     const id = ++notifCounterRef.current;
     setNotifications(prev => [...prev, { id, job, msg, type }]);
-    // Auto-dismiss : erreur 12s, succès 5s, info jamais (géré par le résultat final)
-    if (type === 'error') setTimeout(() => removeNotif(id), 12000);
+    if (type === 'error')   setTimeout(() => removeNotif(id), 12000);
     if (type === 'success') setTimeout(() => removeNotif(id), 5000);
     return id;
   }, []);
@@ -411,43 +598,42 @@ export default function JobBoard() {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
 
-  // Met à jour le message d'une notif existante (progression en cours)
   const updateNotif = useCallback((id, msg, type) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, msg, type } : n));
   }, []);
 
-  const filtersOwnerRef  = useRef(null);
-  const initialLoadRef   = useRef(true);
+  // ── Refs ──────────────────────────────────────────────────────────────────
+  const filtersOwnerRef = useRef(null);
+  const initialLoadRef  = useRef(true);
+  const knownJobIdsRef  = useRef(new Set());
+  const pendingQueueRef = useRef([]);
+  const drainTimerRef   = useRef(null);
 
-  // ── Extension Easy Apply ─────────────────────────────────────────
+  const [newJobsCount, setNewJobsCount] = useState(0);
+  const [newJobIds,    setNewJobIds]    = useState(new Set());
+  const [queueSize,    setQueueSize]    = useState(0);
+
+  // ── Décompte polling ──────────────────────────────────────────────────────
+  const POLL_INTERVAL = 30;
+  const [countdown, setCountdown] = useState(POLL_INTERVAL);
+  const countdownRef = useRef(POLL_INTERVAL);
+
+  // ── Init extension ────────────────────────────────────────────────────────
   useEffect(() => {
     extensionBridge.ping().then(ok => setExtAvailable(ok));
-    // Brancher le callback de progression → met à jour la notif en cours
     extensionBridge.onProgress(({ msg, type, job }) => {
-      // La notif active pour ce job est identifiée par job.id dans les notifications
       setNotifications(prev => {
-        const idx = prev.findLastIndex?.(n => n.job?.id === job?.id) ?? [...prev].reverse().findIndex(n => n.job?.id === job?.id);
+        const idx = [...prev].reverse().findIndex(n => n.job?.id === job?.id);
         if (idx === -1) return prev;
+        const realIdx = prev.length - 1 - idx;
         const updated = [...prev];
-        const realIdx = prev.findLastIndex ? idx : prev.length - 1 - idx;
         updated[realIdx] = { ...updated[realIdx], msg, type };
         return updated;
       });
     });
   }, []);
-  const knownJobIdsRef   = useRef(new Set());  // IDs déjà affichés → pour détecter les nouveautés
-  const [newJobsCount, setNewJobsCount] = useState(0);  // toast "N nouvelles offres"
-  const [newJobIds, setNewJobIds]       = useState(new Set());  // IDs avec badge NEW
-  const pendingQueueRef  = useRef([]);          // file d'attente des jobs à injecter 1 par 1
-  const drainTimerRef    = useRef(null);         // timer du drain
-  const [queueSize, setQueueSize] = useState(0); // pour afficher le nb en attente
 
-  // ── Décompte visuel polling ───────────────────────────────────────
-  const POLL_INTERVAL = 30;
-  const [countdown, setCountdown]       = useState(POLL_INTERVAL);
-  const countdownRef                    = useRef(POLL_INTERVAL);
-
-  // ── Chargement filtres (Supabase direct) ─────────────────────────
+  // ── Chargement filtres ────────────────────────────────────────────────────
   useEffect(() => {
     if (!userId) return;
     let isMounted = true;
@@ -457,7 +643,7 @@ export default function JobBoard() {
       initialLoadRef.current = true;
       try {
         const { data, error } = await supabase.from('user_filters').select('filters').eq('id', userId).single();
-        if (error && error.code !== 'PGRST116') console.error('Erreur chargement filtres Supabase:', error);
+        if (error && error.code !== 'PGRST116') console.error('Erreur chargement filtres:', error);
         if (isMounted) {
           setUrlFilters(data?.filters && Array.isArray(data.filters) ? data.filters : []);
           filtersOwnerRef.current = userId;
@@ -469,7 +655,7 @@ export default function JobBoard() {
     return () => { isMounted = false; };
   }, [userId]);
 
-  // ── Sauvegarde filtres (Supabase direct) ─────────────────────────
+  // ── Sauvegarde filtres ────────────────────────────────────────────────────
   useEffect(() => {
     if (!filtersLoaded || !userId || filtersOwnerRef.current !== userId) return;
     if (initialLoadRef.current) { initialLoadRef.current = false; return; }
@@ -480,7 +666,7 @@ export default function JobBoard() {
 
   useEffect(() => { LS.set('jb_deleted', [...deletedKeys]); }, [deletedKeys]);
 
-  // ── Chargement banwords (Supabase) ───────────────────────────────
+  // ── Chargement banwords + saves ───────────────────────────────────────────
   useEffect(() => {
     if (!userId) return;
     let isMounted = true;
@@ -497,8 +683,7 @@ export default function JobBoard() {
     return () => { isMounted = false; };
   }, [userId]);
 
-  // ── Sauvegarde banwords + saves ensemble (1 seul upsert) ───────
-  // IMPORTANT : évite que banwords écrase saves et vice-versa
+  // ── Sauvegarde banwords + saves ───────────────────────────────────────────
   useEffect(() => {
     if (!banwordsLoaded || !savesLoaded || !userId) return;
     supabase.from('user_prefs').upsert({ id: userId, banwords, saves }).then(({ error }) => {
@@ -506,29 +691,23 @@ export default function JobBoard() {
     });
   }, [banwords, saves, banwordsLoaded, savesLoaded, userId]);
 
-  // ── Chargement candidatures (Supabase) ──────────────────────────
+  // ── Chargement candidatures ───────────────────────────────────────────────
   useEffect(() => {
     if (!userId) return;
     let isMounted = true;
-    async function loadApplied() {
-      try {
-        const { data, error } = await supabase
-          .from('user_applied')
-          .select('applied')
-          .eq('id', userId)
-          .single();
+    supabase.from('user_applied').select('applied').eq('id', userId).single()
+      .then(({ data, error }) => {
         if (error && error.code !== 'PGRST116') console.error('Erreur chargement candidatures:', error);
         if (isMounted) {
           setApplied(data?.applied && Array.isArray(data.applied) ? data.applied : []);
           setAppliedLoaded(true);
         }
-      } catch (err) { console.error(err); if (isMounted) setAppliedLoaded(true); }
-    }
-    loadApplied();
+      })
+      .catch(err => { console.error(err); if (isMounted) setAppliedLoaded(true); });
     return () => { isMounted = false; };
   }, [userId]);
 
-  // ── Sauvegarde candidatures (Supabase) ──────────────────────────
+  // ── Sauvegarde candidatures ───────────────────────────────────────────────
   useEffect(() => {
     if (!appliedLoaded || !userId) return;
     supabase.from('user_applied').upsert({ id: userId, applied }).then(({ error }) => {
@@ -536,23 +715,18 @@ export default function JobBoard() {
     });
   }, [applied, appliedLoaded, userId]);
 
-  // ── Chargement offres (Supabase direct) ─────────────────────────
-  // silent=true → merge sans spinner ni reset du scroll
-  // firstOpen=true → charge tout d'un coup (pas de drain 1 par 1), car l'onglet était fermé
+  // ── fetchJobs ─────────────────────────────────────────────────────────────
   const fetchJobs = useCallback(async ({ silent = false, firstOpen = false } = {}) => {
     if (!silent) { setLoading(true); setError(null); }
     if (!silent && activeTab !== 'results') setActiveTab('results');
     try {
-      console.log('🔍 fetchJobs — userId utilisé:', userId);
       const { data, error: dbErr } = await supabase
         .from('jb_jobs')
         .select('*')
         .eq('user_id', userId)
         .order('scraped_at', { ascending: false })
-        .order('date', { ascending: false })
+        .order('date',       { ascending: false })
         .limit(1000);
-
-      console.log('🔍 fetchJobs — résultats:', data?.length, 'erreur:', dbErr?.message);
 
       if (dbErr) throw new Error(`Supabase: ${dbErr.message}`);
 
@@ -567,18 +741,14 @@ export default function JobBoard() {
         date:        r.date,
         scrapedAt:   r.scraped_at,
         type:        r.type || 'emploi',
-        isDirect:    r.is_direct === true,  // Uniquement si le scraper l'a marqué Easy Apply
+        isDirect:    r.is_direct === true,
       }));
 
       if (silent) {
-        // Nouveaux jobs → file d'attente 1 par 1 (polling live pendant que l'onglet est ouvert)
-        // SAUF si c'est la première ouverture après que l'onglet était fermé (firstOpen)
-        // → dans ce cas on injecte tout d'un coup pour ne pas attendre des minutes
         const newOnes = normalized.filter(j => !knownJobIdsRef.current.has(j.id));
         if (newOnes.length > 0) {
           newOnes.forEach(j => knownJobIdsRef.current.add(j.id));
           if (firstOpen && newOnes.length > 5) {
-            // Beaucoup de nouvelles annonces accumulées pendant l'absence → tout charger d'un coup
             setJobs(prev => {
               const existingIds = new Set(prev.map(j => j.id));
               const toAdd = newOnes.filter(j => !existingIds.has(j.id));
@@ -587,15 +757,12 @@ export default function JobBoard() {
             setNewJobIds(prev => new Set([...prev, ...newOnes.map(j => j.id)]));
             setNewJobsCount(c => c + newOnes.length);
           } else {
-            // Polling normal → drain 1 par 1
             const sorted = [...newOnes].sort((a, b) => new Date(a.date) - new Date(b.date));
             pendingQueueRef.current = [...pendingQueueRef.current, ...sorted];
             setQueueSize(pendingQueueRef.current.length);
           }
         }
       } else {
-        // Chargement initial → on vide la queue en attente pour éviter
-        // que d'anciens jobs en queue viennent écraser le fresh load
         pendingQueueRef.current = [];
         setQueueSize(0);
         knownJobIdsRef.current = new Set(normalized.map(j => j.id));
@@ -610,29 +777,28 @@ export default function JobBoard() {
     }
   }, [activeTab, userId]);
 
-  useEffect(() => { if (filtersLoaded && userId) fetchJobs({ firstOpen: true }); }, [filtersLoaded, userId]);
+  useEffect(() => {
+    if (filtersLoaded && userId) fetchJobs({ firstOpen: true });
+  }, [filtersLoaded, userId]);
 
-  // ── Polling silencieux + décompte visuel ────────────────────────
+  // ── Polling silencieux ────────────────────────────────────────────────────
   useEffect(() => {
     if (!filtersLoaded || !userId) return;
     countdownRef.current = POLL_INTERVAL;
     setCountdown(POLL_INTERVAL);
-
     const tick = setInterval(() => {
       countdownRef.current -= 1;
       setCountdown(countdownRef.current);
-
       if (countdownRef.current <= 0) {
         countdownRef.current = POLL_INTERVAL;
         setCountdown(POLL_INTERVAL);
         fetchJobs({ silent: true });
       }
     }, 1000);
-
     return () => clearInterval(tick);
   }, [filtersLoaded, userId, fetchJobs]);
 
-  // ── Drain de la queue : injecte 1 job toutes les 2s ───────────────
+  // ── Drain queue ───────────────────────────────────────────────────────────
   useEffect(() => {
     const drainOne = () => {
       if (pendingQueueRef.current.length === 0) {
@@ -653,7 +819,7 @@ export default function JobBoard() {
     return () => clearTimeout(drainTimerRef.current);
   }, []);
 
-  // ── SCRAPING DIRECT (Navigateur → Render → Supabase) ─────────────
+  // ── triggerScrape ─────────────────────────────────────────────────────────
   const triggerScrape = useCallback(async () => {
     setScrapeStatus('pending');
     setError(null);
@@ -665,15 +831,11 @@ export default function JobBoard() {
       if (activeFilters.length === 0) return setScrapeStatus(null);
       setScrapeStatus('running');
 
-      // ── Purge silencieuse en DB (l'UI garde les jobs affichés le temps du scrape)
       const { error: purgeErr } = await supabase.from('jb_jobs').delete().eq('user_id', userId);
       if (purgeErr) console.warn('⚠️ Purge jobs avant scrape échouée:', purgeErr.message);
-      // On ne vide PAS setJobs([]) ici → le feed reste visible pendant le scraping
 
       const pythonUrl     = 'https://scraper-jobs.onrender.com';
       const scraperSecret = import.meta.env.VITE_SCRAPER_SECRET || 'MA_CLE_SECRETE';
-
-      console.log('🚀 Scrape — envoi vers Render:', activeFilters.map(f => f.url));
 
       const scrapeRes = await fetch(`${pythonUrl}/scrape`, {
         method:  'POST',
@@ -681,103 +843,55 @@ export default function JobBoard() {
         body:    JSON.stringify({ urls: activeFilters.map(f => f.url), results_wanted: 30, user_id: userId }),
       });
 
-      if (!scrapeRes.ok) throw new Error(`Erreur Render: ${scrapeRes.status} (As-tu bien mis la clé secrète ?)`);
+      if (!scrapeRes.ok) throw new Error(`Erreur Render: ${scrapeRes.status}`);
 
       const scrapeData = await scrapeRes.json();
-      console.log('🔎 scrapeData complet:', scrapeData);
-      console.log('🔎 results[0] RAW:', JSON.stringify(scrapeData.results?.[0], null, 2));
 
-      // ── FIX v6 : détection intelligente du format de réponse ────────────
-      // Le scraper peut renvoyer 3 formats différents :
-      //   A) { results: [{ url, jobs: [...], scrapedAt, count }] }  ← format groupé attendu
-      //   B) { results: [{ title, company, url, ... }] }             ← jobs à plat dans results
-      //   C) { jobs: [...] }                                          ← jobs à la racine
       let results = [];
-
       if (Array.isArray(scrapeData.results)) {
         const firstItem = scrapeData.results[0];
         if (firstItem && Array.isArray(firstItem.jobs)) {
-          // Format A : groupé par URL avec sous-tableau jobs → on utilise tel quel
           results = scrapeData.results;
         } else {
-          // Format B : results EST la liste de jobs à plat → on les enveloppe
-          console.log('⚠️ Format B détecté : results[] contient des jobs à plat, on les regroupe');
-          results = [{
-            url:       activeFilters[0]?.url,
-            jobs:      scrapeData.results,
-            scrapedAt: new Date().toISOString(),
-            count:     scrapeData.results.length,
-          }];
+          results = [{ url: activeFilters[0]?.url, jobs: scrapeData.results, scrapedAt: new Date().toISOString(), count: scrapeData.results.length }];
         }
       } else if (Array.isArray(scrapeData.jobs)) {
-        // Format C : jobs directement à la racine
-        console.log('⚠️ Format C détecté : jobs[] à la racine, on les regroupe');
-        results = [{
-          url:       activeFilters[0]?.url,
-          jobs:      scrapeData.jobs,
-          scrapedAt: new Date().toISOString(),
-          count:     scrapeData.jobs.length,
-        }];
-      } else {
-        console.warn('⚠️ Format de réponse scraper inconnu — clés reçues :', Object.keys(scrapeData));
+        results = [{ url: activeFilters[0]?.url, jobs: scrapeData.jobs, scrapedAt: new Date().toISOString(), count: scrapeData.jobs.length }];
       }
 
-      // ── Debug snapshot enrichi ────────────────────────────────────────────
-      const debugSnapshot = {
+      setDebugInfo({
         rawKeys:     Object.keys(scrapeData),
         nbResults:   results.length,
-        firstResult: results[0]
-          ? {
-              url:       results[0].url,
-              nbJobs:    results[0].jobs?.length ?? 0,
-              firstJob:  results[0].jobs?.[0],
-              // Affiche le 1er élément brut si on a dû faire la détection Format B
-              rawSample: !Array.isArray(scrapeData.results?.[0]?.jobs)
-                ? scrapeData.results?.[0]
-                : undefined,
-            }
-          : null,
-      };
-      console.log('🔎 debug snapshot:', debugSnapshot);
-      setDebugInfo(debugSnapshot);
+        firstResult: results[0] ? { url: results[0].url, nbJobs: results[0].jobs?.length ?? 0, firstJob: results[0].jobs?.[0] } : null,
+      });
 
-      const allJobs        = [];
-      const seen           = new Set();
       const updatedFilters = [...urlFilters];
-
       for (const result of results) {
-        const filterIndex = updatedFilters.findIndex(f => f.url === result.url);
-        if (filterIndex !== -1) {
-          updatedFilters[filterIndex].lastScraped = result.scrapedAt;
-          updatedFilters[filterIndex].jobCount    = result.count ?? result.jobs?.length ?? 0;
-        }
-        for (const job of (result.jobs || [])) {
-          if (job.url && !seen.has(job.url)) { seen.add(job.url); allJobs.push(job); }
+        const idx = updatedFilters.findIndex(f => f.url === result.url);
+        if (idx !== -1) {
+          updatedFilters[idx].lastScraped = result.scrapedAt;
+          updatedFilters[idx].jobCount    = result.count ?? result.jobs?.length ?? 0;
         }
       }
-
-      console.log(`✅ ${allJobs.length} offre(s) unique(s) collectée(s) — insérées côté serveur`);
 
       await supabase.from('user_filters').update({ filters: updatedFilters }).eq('id', userId);
       setUrlFilters(updatedFilters);
       await fetchJobs();
       setScrapeStatus('done');
       setTimeout(() => setScrapeStatus(null), 5000);
-
     } catch (err) {
-      console.error('❌ triggerScrape error:', err);
       setError(err.message);
       setScrapeStatus(null);
     }
   }, [fetchJobs, activeTab, userId, urlFilters]);
 
-  // ── Actions carte ─────────────────────────────────────────────────
+  // ── handleApply ───────────────────────────────────────────────────────────
   const handleApply = useCallback(async (job) => {
     const isIndeed    = job.url && (job.url.includes('indeed.com') || job.url.includes('indeed.fr'));
     const isHelloWork = job.url && job.url.includes('hellowork.com');
     const usesExtension = extAvailable && (isIndeed || isHelloWork);
 
-    // Si Indeed ou HelloWork et extension disponible → Auto Apply
+    // CAS 1 : extension dispo + site supporté → Auto Apply complet
     if (usesExtension) {
       setApplyingIds(prev => new Set([...prev, job.id]));
       const notifId = addNotif(job, '🚀 Connexion à l\'extension…', 'info');
@@ -788,41 +902,38 @@ export default function JobBoard() {
       if (result.success) {
         updateNotif(notifId, '✅ Candidature envoyée !', 'success');
         setTimeout(() => removeNotif(notifId), 4000);
-        setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{
-          job, appliedAt: result.appliedAt || new Date().toISOString(), method: 'auto'
-        }, ...prev]);
+        setApplied(prev =>
+          prev.find(e => e.job.id === job.id)
+            ? prev
+            : [{ job, appliedAt: result.appliedAt || new Date().toISOString(), method: 'auto' }, ...prev]
+        );
         setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
       } else {
-        // 🚨 NOUVELLE GESTION DES ERREURS (Rouge ou Violet)
         const isExternal = result.type === 'external';
-        const errMsg = result.error || 'Échec de la candidature automatique';
-        const notifType = isExternal ? 'external' : 'error';
-        const icon = isExternal ? '🟣' : '❌';
-        
-        updateNotif(notifId, `${icon} ${errMsg}`, notifType);
+        updateNotif(
+          notifId,
+          `${isExternal ? '🟣' : '❌'} ${result.error || 'Échec de la candidature automatique'}`,
+          isExternal ? 'external' : 'error'
+        );
         setTimeout(() => removeNotif(notifId), isExternal ? 8000 : 12000);
-        
-        // Si c'est un site externe, on ouvre quand même l'onglet pour l'utilisateur
         if (isExternal) window.open(job.url, '_blank');
       }
       return;
     }
 
-    // ── Easy Apply mais extension non disponible → ouvrir l'offre manuellement
-    if (job.isDirect && !extAvailable) {
-      window.open(job.url, '_blank');
-      return;
-    }
-
-    // ── Offre Indeed ordinaire (non Easy Apply) → ouvrir dans un onglet, marquer postulé
+    // CAS 2 : pas d'extension ou site non supporté → ouvre l'offre + marque postulé
     if (job.url) window.open(job.url, '_blank');
-    setApplied(prev => prev.find(e => e.job.id === job.id) ? prev : [{ job, appliedAt: new Date().toISOString(), method: 'manual' }, ...prev]);
+    setApplied(prev =>
+      prev.find(e => e.job.id === job.id)
+        ? prev
+        : [{ job, appliedAt: new Date().toISOString(), method: 'manual' }, ...prev]
+    );
     setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
   }, [extAvailable, addNotif, updateNotif, removeNotif]);
 
+  // ── handleDelete ──────────────────────────────────────────────────────────
   const handleDelete = useCallback((job) => {
-    // Annuler un éventuel undo précédent
-    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    if (undoTimerRef.current)    clearTimeout(undoTimerRef.current);
     if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);
 
     setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
@@ -841,8 +952,9 @@ export default function JobBoard() {
     }, 10000);
   }, []);
 
+  // ── handleUndo ────────────────────────────────────────────────────────────
   const handleUndo = useCallback(() => {
-    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    if (undoTimerRef.current)    clearTimeout(undoTimerRef.current);
     if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);
     if (undoToast) {
       setDeletedKeys(prev => { const next = new Set(prev); next.delete(jobKey(undoToast.job)); return next; });
@@ -850,7 +962,7 @@ export default function JobBoard() {
     }
   }, [undoToast]);
 
-  // ── Vider tous les jobs en DB ─────────────────────────────────────
+  // ── handleClearJobs ───────────────────────────────────────────────────────
   const handleClearJobs = useCallback(async () => {
     if (!userId) return;
     if (!window.confirm('Vider tous les résultats ? Un re-scrape sera nécessaire.')) return;
@@ -862,18 +974,15 @@ export default function JobBoard() {
     setFetched(true);
   }, [userId]);
 
-  // ── Filtres visuels ───────────────────────────────────────────────
-  const appliedIds  = new Set(applied.map(e => e.job.id));
-  const appliedKeys = new Set(applied.map(e => `${(e.job.title||'').toLowerCase().trim()}|${(e.job.company||'').toLowerCase().trim()}`));
-
-  // Filtre par liens actifs : si tous sont désactivés → on montre tout,
-  // sinon on ne garde que les jobs dont sourceUrl correspond à un filtre actif.
+  // ── Filtres visuels ───────────────────────────────────────────────────────
+  const appliedKeys = new Set(
+    applied.map(e => `${(e.job.title || '').toLowerCase().trim()}|${(e.job.company || '').toLowerCase().trim()}`)
+  );
   const enabledFilterUrls = urlFilters.filter(f => f.enabled).map(f => f.url);
   const hasActiveFilters  = enabledFilterUrls.length > 0 && enabledFilterUrls.length < urlFilters.length;
 
-  // ── visibleJobs : filtre → déduplique → interleave par source → slice 30 ──
   const seenTitleCompany = new Set();
-  const baseFiltered = jobs
+  const visibleJobs = jobs
     .filter(j => !jobMatchesBanwords(j, banwords))
     .filter(j => typeFilter === 'all' || j.type === typeFilter)
     .filter(j => !deletedKeys.has(jobKey(j)))
@@ -883,24 +992,29 @@ export default function JobBoard() {
       return enabledFilterUrls.some(url => j.sourceUrl === url);
     })
     .filter(j => {
-      // Déduplication sécurisée
       const key = jobKey(j);
       if (seenTitleCompany.has(key)) return false;
       seenTitleCompany.add(key);
       return true;
     })
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 30);
 
-  const visibleJobs = baseFiltered.slice(0, 30);
-  const savedIds  = new Set(saves.map(s => s.id));
+  const savedIds   = new Set(saves.map(s => s.id));
   const isScraping = scrapeStatus === 'pending' || scrapeStatus === 'running';
 
-  if (authLoading) return <div className="jb-root" style={{ display:'flex', alignItems:'center', justifyContent:'center' }}>Chargement…</div>;
-  if (!session)    return <LoginScreen onLogin={(s) => setSession(s)} />;
+  // ── Render ────────────────────────────────────────────────────────────────
+  if (authLoading) return (
+    <div className="jb-root" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      Chargement…
+    </div>
+  );
+  if (!session) return <LoginScreen onLogin={(s) => setSession(s)} />;
 
   return (
     <div className="jb-root">
-      {/* ── Stack de notifications auto-apply (haut droite, superposées) ── */}
+
+      {/* ── Stack notifications ── */}
       <div className="jb-notif-stack">
         <AnimatePresence>
           {notifications.map((n) => (
@@ -929,13 +1043,14 @@ export default function JobBoard() {
           ))}
         </AnimatePresence>
       </div>
-      {/* ── Indicateur live feed ─────────────────────────────────── */}
+
+      {/* ── Toasts ── */}
       <AnimatePresence>
         {queueSize > 0 && (
           <motion.div
             className="jb-new-toast"
             initial={{ opacity: 0, y: 40, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
+            animate={{ opacity: 1, y: 0,  scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 400, damping: 28 }}
           >
@@ -946,7 +1061,7 @@ export default function JobBoard() {
           <motion.div
             className="jb-undo-toast"
             initial={{ opacity: 0, y: 40, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
+            animate={{ opacity: 1, y: 0,  scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 400, damping: 28 }}
           >
@@ -957,12 +1072,19 @@ export default function JobBoard() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Header ── */}
       <div className="jb-header">
         <div className="jb-header-top">
           <button className="jb-back-btn" onClick={() => navigate(-1)}><IconBack /> Retour</button>
           <div className="jb-session-info">
             <span className="jb-session-email"><IconUser /> {session.email}</span>
-            <button className="jb-logout-btn" onClick={async () => { await supabase.auth.signOut(); setSession(null); }}><IconLogout /> Déconnexion</button>
+            <button
+              className="jb-logout-btn"
+              onClick={async () => { await supabase.auth.signOut(); setSession(null); }}
+            >
+              <IconLogout /> Déconnexion
+            </button>
           </div>
         </div>
         <div className="jb-hero">
@@ -971,16 +1093,29 @@ export default function JobBoard() {
         </div>
       </div>
 
+      {/* ── Tabs ── */}
       <div className="jb-tabs-bar">
         <div className="jb-tabs-inner">
           {TABS.map(tab => (
-            <button key={tab.id} className={`jb-tab ${activeTab === tab.id ? 'active' : ''}`} onClick={() => setActiveTab(tab.id)}>
+            <button
+              key={tab.id}
+              className={`jb-tab ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
               <span className="jb-tab-icon">{tab.icon}</span> {tab.label}
-              {tab.id === 'applied' && applied.length > 0 && <span className="jb-tab-badge">{applied.length}</span>}
+              {tab.id === 'applied' && applied.length > 0 && (
+                <span className="jb-tab-badge">{applied.length}</span>
+              )}
             </button>
           ))}
-          <button className="jb-tab jb-tab-refresh" onClick={triggerScrape} disabled={loading || isScraping} title="Scraper maintenant">
-            <IconRefresh spinning={loading || isScraping} /> {isScraping ? 'Scraping…' : 'Actualiser'}
+          <button
+            className="jb-tab jb-tab-refresh"
+            onClick={triggerScrape}
+            disabled={loading || isScraping}
+            title="Scraper maintenant"
+          >
+            <IconRefresh spinning={loading || isScraping} />
+            {isScraping ? 'Scraping…' : 'Actualiser'}
           </button>
           {!isScraping && filtersLoaded && userId && (
             <CountdownRing value={countdown} total={POLL_INTERVAL} />
@@ -988,15 +1123,21 @@ export default function JobBoard() {
         </div>
       </div>
 
+      {/* ── Main ── */}
       <main className="jb-main">
         <AnimatePresence mode="wait">
+
           {activeTab === 'results' && (
             <motion.div key="results" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
 
               {fetched && !loading && (
                 <div className="jb-type-filters">
                   {['all', 'alternance', 'stage', 'emploi'].map(t => (
-                    <button key={t} className={`jb-filter-btn ${typeFilter === t ? 'active' : ''}`} onClick={() => setTypeFilter(t)}>
+                    <button
+                      key={t}
+                      className={`jb-filter-btn ${typeFilter === t ? 'active' : ''}`}
+                      onClick={() => setTypeFilter(t)}
+                    >
                       {t === 'all' ? `Tout (${visibleJobs.length})` : TYPE_LABELS[t]?.label}
                     </button>
                   ))}
@@ -1009,29 +1150,43 @@ export default function JobBoard() {
                 </motion.div>
               )}
 
-              {/* ── Panneau debug (s'affiche après chaque scrape) ── */}
               {debugInfo && !isScraping && (
                 <div style={{ margin: '12px 0', padding: '12px 16px', background: '#1a1a2e', border: '1px solid #334', borderRadius: 10, fontSize: '0.78rem', color: '#aaa', fontFamily: 'monospace' }}>
                   <strong style={{ color: '#13c9ed' }}>🔎 Debug dernier scrape</strong><br />
-                  Clés reçues : <span style={{ color: '#fff' }}>{debugInfo.rawKeys.join(', ')}</span><br />
-                  Nb de results : <span style={{ color: '#fff' }}>{debugInfo.nbResults}</span><br />
+                  Clés : <span style={{ color: '#fff' }}>{debugInfo.rawKeys.join(', ')}</span><br />
+                  Nb results : <span style={{ color: '#fff' }}>{debugInfo.nbResults}</span><br />
                   {debugInfo.firstResult && <>
-                    Premier result — URL : <span style={{ color: '#fff' }}>{debugInfo.firstResult.url}</span> · <span style={{ color: debugInfo.firstResult.nbJobs > 0 ? '#4ade80' : '#ef4444' }}>{debugInfo.firstResult.nbJobs} job(s)</span><br />
-                    Premier job : <span style={{ color: '#fff' }}>{JSON.stringify(debugInfo.firstResult.firstJob ?? debugInfo.firstResult.rawSample)}</span>
+                    1er result — URL : <span style={{ color: '#fff' }}>{debugInfo.firstResult.url}</span>
+                    {' · '}
+                    <span style={{ color: debugInfo.firstResult.nbJobs > 0 ? '#4ade80' : '#ef4444' }}>
+                      {debugInfo.firstResult.nbJobs} job(s)
+                    </span><br />
+                    1er job : <span style={{ color: '#fff' }}>{JSON.stringify(debugInfo.firstResult.firstJob)}</span>
                   </>}
-                  {!debugInfo.firstResult && <span style={{ color: '#ef4444' }}>⚠️ Aucun result reçu — vérifie la console</span>}
-                  <button onClick={() => setDebugInfo(null)} style={{ marginTop: 8, display: 'block', background: 'none', border: '1px solid #334', color: '#aaa', borderRadius: 6, padding: '2px 10px', cursor: 'pointer' }}>Fermer</button>
+                  <button
+                    onClick={() => setDebugInfo(null)}
+                    style={{ marginTop: 8, display: 'block', background: 'none', border: '1px solid #334', color: '#aaa', borderRadius: 6, padding: '2px 10px', cursor: 'pointer' }}
+                  >
+                    Fermer
+                  </button>
                 </div>
               )}
 
               {error && !loading && <div className="jb-error-box"><p>😕 {error}</p></div>}
-              {loading && <div className="jb-grid">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} />)}</div>}
+
+              {loading && (
+                <div className="jb-grid">
+                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} />)}
+                </div>
+              )}
 
               {!loading && fetched && visibleJobs.length === 0 && (
                 <div className="jb-empty">
                   <div className="jb-empty-icon">🔍</div>
                   <h3>Aucune offre trouvée</h3>
-                  <p style={{ color: '#666', fontSize: '0.85rem' }}>Lance un scrape depuis "Mes liens" ou vérifie la console pour le debug.</p>
+                  <p style={{ color: '#666', fontSize: '0.85rem' }}>
+                    Lance un scrape depuis "Mes liens" ou vérifie la console.
+                  </p>
                 </div>
               )}
 
@@ -1039,13 +1194,20 @@ export default function JobBoard() {
                 <div className="jb-grid">
                   <AnimatePresence>
                     {visibleJobs.map((job, i) => (
-                      <JobCard key={job.id} job={job} index={i} saved={savedIds.has(job.id)}
+                      <JobCard
+                        key={job.id}
+                        job={job}
+                        index={i}
+                        saved={savedIds.has(job.id)}
                         isNew={newJobIds.has(job.id)}
                         extAvailable={extAvailable}
                         applyingIds={applyingIds}
-                        onSave={(j) => setSaves(p => p.find(s => s.id === j.id) ? p.filter(s => s.id !== j.id) : [j, ...p])}
+                        onSave={(j) => setSaves(p =>
+                          p.find(s => s.id === j.id) ? p.filter(s => s.id !== j.id) : [j, ...p]
+                        )}
                         onApply={handleApply}
-                        onDelete={handleDelete} />
+                        onDelete={handleDelete}
+                      />
                     ))}
                   </AnimatePresence>
                 </div>
@@ -1053,13 +1215,39 @@ export default function JobBoard() {
             </motion.div>
           )}
 
-          {activeTab === 'filters'  && <motion.div key="filters"><FiltersPanel filters={urlFilters} onChange={setUrlFilters} onScrapeNow={triggerScrape} scrapeStatus={scrapeStatus} onClearJobs={handleClearJobs} /></motion.div>}
-          {activeTab === 'banwords' && <motion.div key="banwords"><BanwordsPanel banwords={banwords} onChange={setBanwords} /></motion.div>}
-          {activeTab === 'saves'    && <motion.div key="saves"><SavesPanel saves={saves} onRemove={(id) => setSaves(p => p.filter(s => s.id !== id))} /></motion.div>}
-          {activeTab === 'applied'  && <motion.div key="applied"><AppliedPanel applied={applied} onRemove={(id) => {
-            setApplied(p => p.filter(e => e.job.id !== id));
-            // On garde la clé dans deletedKeys → l'offre reste hors du feed même après désistement
-          }} /></motion.div>}
+          {activeTab === 'filters' && (
+            <motion.div key="filters">
+              <FiltersPanel
+                filters={urlFilters}
+                onChange={setUrlFilters}
+                onScrapeNow={triggerScrape}
+                scrapeStatus={scrapeStatus}
+                onClearJobs={handleClearJobs}
+              />
+            </motion.div>
+          )}
+
+          {activeTab === 'banwords' && (
+            <motion.div key="banwords">
+              <BanwordsPanel banwords={banwords} onChange={setBanwords} />
+            </motion.div>
+          )}
+
+          {activeTab === 'saves' && (
+            <motion.div key="saves">
+              <SavesPanel saves={saves} onRemove={(id) => setSaves(p => p.filter(s => s.id !== id))} />
+            </motion.div>
+          )}
+
+          {activeTab === 'applied' && (
+            <motion.div key="applied">
+              <AppliedPanel
+                applied={applied}
+                onRemove={(id) => setApplied(p => p.filter(e => e.job.id !== id))}
+              />
+            </motion.div>
+          )}
+
         </AnimatePresence>
       </main>
     </div>
