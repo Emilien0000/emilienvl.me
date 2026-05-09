@@ -39,7 +39,7 @@ class ExtensionBridge {
     }
 
     return new Promise((resolve) => {
-      const TIMEOUT = 120_000; // 2 minutes max
+      const TIMEOUT = 190_000; // 2 minutes max
       let pollInterval = null;
 
       chrome.runtime.sendMessage(EXTENSION_ID, { type: 'START_APPLY', job }, (startRes) => {
@@ -58,15 +58,6 @@ class ExtensionBridge {
                 
                 // 🌟 FIX : Si on reçoit la notification de redirection externe, on force la réussite !
                 // 🌟 FIX : On force la réussite si on reçoit 'external' OU 'success' !
-                    if (checkRes.progress.type === 'external' || checkRes.progress.type === 'success') {
-                      clearInterval(pollInterval);
-                      clearTimeout(timeoutTimer);
-                      resolve({ 
-                        success: true, 
-                        type: checkRes.progress.type, 
-                        appliedAt: new Date().toISOString() 
-                      });
-                    }
               }
 
             if (checkRes && checkRes.done) {
