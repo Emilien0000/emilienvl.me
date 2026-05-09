@@ -916,8 +916,7 @@ export default function JobBoard() {
             ? prev
             : [{ job, appliedAt: result.appliedAt || new Date().toISOString(), method: isExternal ? 'external_redirect' : 'auto' }, ...prev]
         );
-        setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
-        // ---------------------
+        
       } else {
         // Le bloc else ne doit gérer que les vraies erreurs (timeout, sélecteur introuvable, etc.)
         updateNotif(
@@ -937,7 +936,6 @@ export default function JobBoard() {
         ? prev
         : [{ job, appliedAt: new Date().toISOString(), method: 'manual' }, ...prev]
     );
-    setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
   }, [extAvailable, addNotif, updateNotif, removeNotif]);
 
   // ── handleDelete ──────────────────────────────────────────────────────────
@@ -1252,11 +1250,22 @@ export default function JobBoard() {
             <motion.div key="applied">
               <AppliedPanel
                 applied={applied}
-                onRemove={(id) => setApplied(p => p.filter(e => e.job.id !== id))}
+                onRemove={(id) => {
+                  const entry = applied.find(e => e.job.id === id);
+                  if (entry) {
+                    // On purge l'offre des deletedKeys (pour corriger les anciennes sessions buggées)
+                    setDeletedKeys(prev => {
+                      const next = new Set(prev);
+                      next.delete(jobKey(entry.job));
+                      return next;
+                    });
+                  }
+                  // On la retire de la liste des postulants
+                  setApplied(p => p.filter(e => e.job.id !== id));
+                }}
               />
             </motion.div>
           )}
-
         </AnimatePresence>
       </main>
     </div>
