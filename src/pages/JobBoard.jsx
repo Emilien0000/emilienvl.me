@@ -577,7 +577,8 @@ export default function JobBoard() {
   const [savesLoaded,    setSavesLoaded]    = useState(false);
   const [applied,        setApplied]        = useState([]);
   const [appliedLoaded,  setAppliedLoaded]  = useState(false);
-  const [deletedKeys,    setDeletedKeys]    = useState(() => new Set(LS.get('jb_deleted', [])));
+  const [deletedKeys,    setDeletedKeys]    = useState(() => new Set(LS.get('jb_deleted_ids', [])));
+  const deletedKeysRef = useRef(new Set(LS.get('jb_deleted_ids', [])));
   const [undoToast,      setUndoToast]      = useState(null);
   const undoTimerRef    = useRef(null);
   const undoIntervalRef = useRef(null);
@@ -668,7 +669,10 @@ export default function JobBoard() {
     });
   }, [urlFilters, filtersLoaded, userId]);
 
-  useEffect(() => { LS.set('jb_deleted', [...deletedKeys]); }, [deletedKeys]);
+  useEffect(() => {
+    LS.set('jb_deleted_ids', [...deletedKeys]);
+    deletedKeysRef.current = deletedKeys;
+  }, [deletedKeys]);
 
   // ── Chargement banwords + saves ───────────────────────────────────────────
   useEffect(() => {
@@ -749,7 +753,7 @@ export default function JobBoard() {
       }));
 
       if (silent) {
-        const newOnes = normalized.filter(j => !knownJobIdsRef.current.has(j.id));
+        const newOnes = normalized.filter(j => !knownJobIdsRef.current.has(j.id) && !deletedKeysRef.current.has(j.id));
         if (newOnes.length > 0) {
           newOnes.forEach(j => knownJobIdsRef.current.add(j.id));
           if (firstOpen && newOnes.length > 5) {
@@ -966,7 +970,8 @@ export default function JobBoard() {
     if (undoTimerRef.current)    clearTimeout(undoTimerRef.current);
     if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);
 
-    setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
+    // Masquage immédiat par ID (stable, pas titre|company qui peut changer)
+    setDeletedKeys(prev => new Set([...prev, job.id]));
 
     let remaining = 10;
     setUndoToast({ job, remaining });
@@ -979,15 +984,23 @@ export default function JobBoard() {
     undoTimerRef.current = setTimeout(() => {
       clearInterval(undoIntervalRef.current);
       setUndoToast(null);
+      // Suppression physique Supabase après le délai d'annulation
+      if (job.id && userId) {
+        supabase.from('jb_jobs').delete().eq('id', job.id).eq('user_id', userId)
+          .then(({ error }) => {
+            if (error) console.error('❌ Erreur suppression job:', error.message);
+          });
+      }
     }, 10000);
-  }, []);
+  }, [userId]);
 
   // ── handleUndo ────────────────────────────────────────────────────────────
   const handleUndo = useCallback(() => {
     if (undoTimerRef.current)    clearTimeout(undoTimerRef.current);
     if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);
     if (undoToast) {
-      setDeletedKeys(prev => { const next = new Set(prev); next.delete(jobKey(undoToast.job)); return next; });
+      // Restauration par ID stable
+      setDeletedKeys(prev => { const next = new Set(prev); next.delete(undoToast.job.id); return next; });
       setUndoToast(null);
     }
   }, [undoToast]);
@@ -1015,7 +1028,7 @@ export default function JobBoard() {
   const visibleJobs = jobs
     .filter(j => !jobMatchesBanwords(j, banwords))
     .filter(j => typeFilter === 'all' || j.type === typeFilter)
-    .filter(j => !deletedKeys.has(jobKey(j)))
+    .filter(j => !deletedKeys.has(j.id))
     .filter(j => !appliedKeys.has(jobKey(j)))
     .filter(j => {
       if (!hasActiveFilters) return true;
