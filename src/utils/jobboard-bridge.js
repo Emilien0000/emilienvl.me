@@ -52,11 +52,17 @@ class ExtensionBridge {
           chrome.runtime.sendMessage(EXTENSION_ID, { type: 'CHECK_RESULT', jobId: job.id, jobUrl: job.url }, (checkRes) => {
             if (chrome.runtime.lastError) return;
 
-            // 🌟 Mise à jour visuelle des notifications en temps réel !
-            // 🌟 Mise à jour visuelle des notifications en temps réel !
-            if (checkRes && checkRes.progress && this._onProgressCb) {
-              this._onProgressCb({ msg: checkRes.progress.msg, type: checkRes.progress.type, job });
-            }
+            
+              if (checkRes && checkRes.progress && this._onProgressCb) {
+                this._onProgressCb({ msg: checkRes.progress.msg, type: checkRes.progress.type, job });
+                
+                // 🌟 FIX : Si on reçoit la notification de redirection externe, on force la réussite !
+                if (checkRes.progress.type === 'external') {
+                  clearInterval(pollInterval);
+                  clearTimeout(timeoutTimer);
+                  resolve({ success: true, type: 'external', appliedAt: new Date().toISOString() });
+                }
+              }
 
             if (checkRes && checkRes.done) {
               clearInterval(pollInterval);
