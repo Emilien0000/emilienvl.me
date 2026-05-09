@@ -93,7 +93,10 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
 
   const isIndeed    = job.url && (job.url.includes('indeed.com') || job.url.includes('indeed.fr'));
   const isHelloWork = job.url && job.url.includes('hellowork.com');
-  const isEasyApply = isIndeed || isHelloWork;
+  const isThales    = job.url && job.url.includes('thalesgroup.com');
+  const isEightfold = job.url && job.url.includes('eightfold.ai');
+  const isLinkedIn  = job.url && job.url.includes('linkedin.com/jobs');
+  const isEasyApply = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn;
   const canAutoApply = isEasyApply && extAvailable;
 
   return (
@@ -890,39 +893,49 @@ export default function JobBoard() {
   const handleApply = useCallback(async (job) => {
     const isIndeed    = job.url && (job.url.includes('indeed.com') || job.url.includes('indeed.fr'));
     const isHelloWork = job.url && job.url.includes('hellowork.com');
-    const usesExtension = extAvailable && (isIndeed || isHelloWork);
+    const isThales    = job.url && job.url.includes('thalesgroup.com');
+    const isEightfold = job.url && job.url.includes('eightfold.ai');
+    const isLinkedIn  = job.url && job.url.includes('linkedin.com/jobs');
+    const supportsExtension = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn;
+    const usesExtension = extAvailable && supportsExtension;
 
-    // CAS 1 : extension dispo + site supporté → Auto Apply complet
+    // CAS 1 : extension disponible + site supporté → tout se passe en background
     if (usesExtension) {
       setApplyingIds(prev => new Set([...prev, job.id]));
-      const notifId = addNotif(job, '🚀 Connexion à l\'extension…', 'info');
+      const notifId = addNotif(job, '🚀 Candidature en cours (background)…', 'info');
 
       const result = await extensionBridge.applyToJob(job);
       setApplyingIds(prev => { const n = new Set(prev); n.delete(job.id); return n; });
 
-      if (result.success) {
-        // --- CORRECTIF ICI ---
+      if (result && result.success) {
         const isExternal = result.type === 'external';
-        
+        // Thales : le succès est garanti par la page de confirmation → label spécifique
+        const isThalesResult = isThales && !isExternal;
+
         updateNotif(
           notifId,
-          isExternal ? '🟣 Redirection externe — marqué comme postulé' : '✅ Candidature envoyée !',
+          isExternal
+            ? '🟣 Site recruteur ouvert en arrière-plan — marqué comme postulé'
+            : isThalesResult
+              ? '✅ Formulaire Thales soumis — candidature enregistrée !'
+              : '✅ Candidature envoyée !',
           isExternal ? 'external' : 'success'
         );
-        
         setTimeout(() => removeNotif(notifId), isExternal ? 8000 : 4000);
 
         setApplied(prev =>
           prev.find(e => e.job.id === job.id)
             ? prev
-            : [{ job, appliedAt: result.appliedAt || new Date().toISOString(), method: isExternal ? 'external_redirect' : 'auto' }, ...prev]
+            : [{
+                job,
+                appliedAt: result.appliedAt || new Date().toISOString(),
+                method: isExternal ? 'external_redirect' : isThalesResult ? 'thales_auto' : 'auto',
+              }, ...prev]
         );
-        
       } else {
-        // Le bloc else ne doit gérer que les vraies erreurs (timeout, sélecteur introuvable, etc.)
         updateNotif(
           notifId,
-          `❌ ${result.error || 'Échec de la candidature automatique'}`,
+          `❌ ${result?.error || 'Échec de la candidature automatique'}`,
           'error'
         );
         setTimeout(() => removeNotif(notifId), 12000);
@@ -930,7 +943,9 @@ export default function JobBoard() {
       return;
     }
 
-    // CAS 2 : pas d'extension ou site non supporté → ouvre l'offre + marque postulé
+    // CAS 2 : pas d'extension ou site non supporté
+    // → redirection externe : ouvre l'offre dans un nouvel onglet et valide immédiatement
+    // → (l'utilisateur postule manuellement)
     if (job.url) window.open(job.url, '_blank');
     setApplied(prev =>
       prev.find(e => e.job.id === job.id)
