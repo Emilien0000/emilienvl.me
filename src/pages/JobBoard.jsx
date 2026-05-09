@@ -98,7 +98,7 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
 
   return (
     <motion.div
-      className={`jb-card${isNew ? ' jb-card-new' : ''}`}
+      className={`jb-card${isNew ? ' jb-card-new' : ''}${isApplying ? ' jb-card-applying' : ''}`}
       style={{ '--source-color': source.color }}
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
@@ -141,14 +141,14 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
               <span
                 className="jb-type-badge"
                 style={{
-                  background: isApplying ? 'rgba(250,204,21,0.3)' : 'rgba(250,204,21,0.15)',
-                  color: '#facc15',
+                  background: isApplying ? 'rgba(74,222,128,0.2)' : 'rgba(250,204,21,0.15)',
+                  color: isApplying ? '#4ade80' : '#facc15',
                   cursor: canAutoApply ? 'pointer' : 'default',
                 }}
                 onClick={() => canAutoApply && onApply && onApply(job)}
                 title={canAutoApply ? 'Cliquer pour postuler automatiquement' : 'Installez l\'extension pour l\'auto-apply'}
               >
-                {isApplying ? '⏳ En cours…' : canAutoApply ? '⚡ Auto Apply' : '⭐ Easy Apply'}
+                {isApplying ? '⏳ Candidature en cours…' : canAutoApply ? '⚡ Auto Apply' : '⭐ Easy Apply'}
               </span>
             )}
 
@@ -192,12 +192,13 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
                     disabled={isApplying}
                     title="Postuler automatiquement via l'extension"
                     style={{
-                      background: isApplying ? 'rgba(250,204,21,0.2)' : 'rgba(19,201,237,0.15)',
-                      color: isApplying ? '#facc15' : '#13c9ed',
-                      borderColor: isApplying ? '#facc15' : '#13c9ed',
+                      background: isApplying ? 'rgba(74,222,128,0.15)' : 'rgba(19,201,237,0.15)',
+                      color: isApplying ? '#4ade80' : '#13c9ed',
+                      borderColor: isApplying ? '#4ade80' : '#13c9ed',
+                      cursor: isApplying ? 'wait' : 'pointer'
                     }}
                   >
-                    {isApplying ? <><IconClock /> En cours…</> : <><IconSend /> ⚡ Auto Apply</>}
+                    {isApplying ? <><IconRefresh spinning={true} /> En cours…</> : <><IconSend /> ⚡ Auto Apply</>}
                   </button>
                 ) : (
                   <button

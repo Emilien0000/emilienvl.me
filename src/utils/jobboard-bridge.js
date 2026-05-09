@@ -57,11 +57,16 @@ class ExtensionBridge {
                 this._onProgressCb({ msg: checkRes.progress.msg, type: checkRes.progress.type, job });
                 
                 // 🌟 FIX : Si on reçoit la notification de redirection externe, on force la réussite !
-                if (checkRes.progress.type === 'external') {
-                  clearInterval(pollInterval);
-                  clearTimeout(timeoutTimer);
-                  resolve({ success: true, type: 'external', appliedAt: new Date().toISOString() });
-                }
+                // 🌟 FIX : On force la réussite si on reçoit 'external' OU 'success' !
+                    if (checkRes.progress.type === 'external' || checkRes.progress.type === 'success') {
+                      clearInterval(pollInterval);
+                      clearTimeout(timeoutTimer);
+                      resolve({ 
+                        success: true, 
+                        type: checkRes.progress.type, 
+                        appliedAt: new Date().toISOString() 
+                      });
+                    }
               }
 
             if (checkRes && checkRes.done) {
