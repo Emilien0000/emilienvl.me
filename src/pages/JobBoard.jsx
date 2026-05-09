@@ -904,8 +904,15 @@ export default function JobBoard() {
       setApplyingIds(prev => new Set([...prev, job.id]));
       const notifId = addNotif(job, '🚀 Candidature en cours (background)…', 'info');
 
-      const result = await extensionBridge.applyToJob(job);
-      setApplyingIds(prev => { const n = new Set(prev); n.delete(job.id); return n; });
+      let result;
+      try {
+        result = await extensionBridge.applyToJob(job);
+      } catch (e) {
+        result = { success: false, error: e.message || 'Erreur inattendue' };
+      } finally {
+        // Toujours retirer l'id de la liste "en cours", quoi qu'il arrive
+        setApplyingIds(prev => { const n = new Set(prev); n.delete(job.id); return n; });
+      }
 
       if (result && result.success) {
         const isExternal = result.type === 'external';

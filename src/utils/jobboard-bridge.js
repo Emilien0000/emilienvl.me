@@ -47,28 +47,40 @@ class ExtensionBridge {
           return resolve({ success: false, error: 'Erreur de communication avec l\'extension.' });
         }
 
-        // On interroge le background toutes les secondes (plus fluide pour la progression)
+        // On interroge le background toutes les secondes
         pollInterval = setInterval(() => {
           chrome.runtime.sendMessage(EXTENSION_ID, { type: 'CHECK_RESULT', jobId: job.id, jobUrl: job.url }, (checkRes) => {
             if (chrome.runtime.lastError) return;
 
-            
-              if (checkRes && checkRes.progress && this._onProgressCb) {
-                this._onProgressCb({ msg: checkRes.progress.msg, type: checkRes.progress.type, job });
-                
-                // 🌟 FIX : Si on reçoit la notification de redirection externe, on force la réussite !
-                // 🌟 FIX : On force la réussite si on reçoit 'external' OU 'success' !
-              }
+            // Mise à jour de la progression affichée dans le JobBoard
+            if (checkRes?.progress && this._onProgressCb) {
+              this._onProgressCb({ msg: checkRes.progress.msg, type: checkRes.progress.type, job });
 
-            if (checkRes && checkRes.done) {
+              // 🌟 Si le background signale un succès via la progression (type 'success' ou 'external'),
+              // on résout immédiatement sans attendre le prochain CHECK_RESULT.
+              // Ça règle le cas où webappResults est rempli mais le poll rate la fenêtre.
+              const pType = checkRes.progress.type;
+              if ((pType === 'success' || pType === 'external') && !checkRes.done) {
+                const isExt = pType === 'external';
+                clearInterval(pollInterval);
+                clearTimeout(timeoutTimer);
+                this._onProgressCb({
+                  msg: isExt ? '🟣 Site recruteur ouvert — marqué comme postulé.' : '✅ Candidature envoyée !',
+                  type: pType, job,
+                });
+                resolve({ success: true, type: isExt ? 'external' : 'success' });
+                return;
+              }
+            }
+
+            if (checkRes?.done) {
               clearInterval(pollInterval);
               clearTimeout(timeoutTimer);
               if (this._onProgressCb) {
                 const r = checkRes.result;
-                if (r && r.success) {
-                  // On distingue les deux types de succès pour la notif finale du bridge
-                  const msg = r.type === 'external' 
-                    ? '🟣 Site recruteur ouvert — marqué comme postulé.' 
+                if (r?.success) {
+                  const msg = r.type === 'external'
+                    ? '🟣 Site recruteur ouvert — marqué comme postulé.'
                     : '✅ Candidature envoyée !';
                   const type = r.type === 'external' ? 'external' : 'success';
                   this._onProgressCb({ msg, type, job });
