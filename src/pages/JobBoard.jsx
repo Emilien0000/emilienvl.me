@@ -982,8 +982,8 @@ export default function JobBoard() {
     if (undoTimerRef.current)    clearTimeout(undoTimerRef.current);
     if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);
 
-    // Masquage immédiat par ID (stable, pas titre|company qui peut changer)
-    setDeletedKeys(prev => new Set([...prev, job.id]));
+    // Masquage immédiat basé sur le Titre+Entreprise (infaillible)
+    setDeletedKeys(prev => new Set([...prev, jobKey(job)]));
 
     let remaining = 10;
     setUndoToast({ job, remaining });
@@ -1012,8 +1012,8 @@ export default function JobBoard() {
     if (undoIntervalRef.current) clearInterval(undoIntervalRef.current);
     if (undoToast) {
       // Restauration par ID stable
-      setDeletedKeys(prev => { const next = new Set(prev); next.delete(undoToast.job.id); return next; });
-      setUndoToast(null);
+      // Restauration par Titre+Entreprise
+      setDeletedKeys(prev => { const next = new Set(prev); next.delete(jobKey(undoToast.job)); return next; });setUndoToast(null);
     }
   }, [undoToast]);
 
@@ -1040,7 +1040,7 @@ export default function JobBoard() {
   const visibleJobs = jobs
     .filter(j => !jobMatchesBanwords(j, banwords))
     .filter(j => typeFilter === 'all' || j.type === typeFilter)
-    .filter(j => !deletedKeys.has(j.id))
+    .filter(j => !deletedKeys.has(jobKey(j)))
     .filter(j => !appliedKeys.has(jobKey(j)))
     .filter(j => {
       if (!hasActiveFilters) return true;
