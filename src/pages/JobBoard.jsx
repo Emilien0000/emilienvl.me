@@ -87,23 +87,20 @@ const jobKey = (job) =>
 
 // ── JobCard ───────────────────────────────────────────────────────────────────
 function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showActions = true, appliedAt, isNew, extAvailable, applyingIds }) {
-  const typeInfo    = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
-  const source      = detectSource(job.sourceUrl, job.url);
-  
-  // 🚨 C'est cette ligne qui a dû sauter par erreur !
-  const isApplying  = applyingIds?.has(job.id); 
+    const companyStr  = (job.company || '').toLowerCase();
+    const titleStr    = (job.title || '').toLowerCase();
 
-  const isIndeed    = job.url && (job.url.includes('indeed.com') || job.url.includes('indeed.fr'));
-  const isHelloWork = job.url && job.url.includes('hellowork.com');
-  const isThales    = job.url && job.url.includes('thalesgroup.com');
-  const isEightfold = job.url && job.url.includes('eightfold.ai');
-  const isLinkedIn  = job.url && job.url.includes('linkedin.com/jobs');
-  
-  // Notre nouvel ajout pour Atos
-  const isAtos      = job.url && (job.url.includes('jobs.atos.net') || job.url.includes('successfactors.eu') || job.url.includes('atos'));
-  
-  const isEasyApply = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn || isAtos;
-  const canAutoApply = isEasyApply && extAvailable;
+    const isIndeed    = job.url && (job.url.includes('indeed.com') || job.url.includes('indeed.fr'));
+    const isHelloWork = job.url && job.url.includes('hellowork.com');
+    const isThales    = (job.url && job.url.includes('thalesgroup.com')) || companyStr.includes('thales') || titleStr.includes('thales');
+    const isEightfold = job.url && job.url.includes('eightfold.ai');
+    const isLinkedIn  = job.url && job.url.includes('linkedin.com/jobs');
+    
+    // 🌟 FIX : On détecte Atos même si l'URL est cryptique, via le nom de l'entreprise
+    const isAtos      = (job.url && (job.url.includes('jobs.atos.net') || job.url.includes('successfactors.eu') || job.url.includes('atos'))) || companyStr.includes('atos') || titleStr.includes('atos');
+    
+    const isEasyApply = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn || isAtos;
+    const canAutoApply = isEasyApply && extAvailable;
 
   return (
     // ... la suite ne change pas
@@ -902,16 +899,18 @@ export default function JobBoard() {
 
   // ── handleApply ───────────────────────────────────────────────────────────
   const handleApply = useCallback(async (job) => {
+    const companyStr  = (job.company || '').toLowerCase();
+    const titleStr    = (job.title || '').toLowerCase();
+
     const isIndeed    = job.url && (job.url.includes('indeed.com') || job.url.includes('indeed.fr'));
     const isHelloWork = job.url && job.url.includes('hellowork.com');
-    const isThales    = job.url && job.url.includes('thalesgroup.com');
+    const isThales    = (job.url && job.url.includes('thalesgroup.com')) || companyStr.includes('thales') || titleStr.includes('thales');
     const isEightfold = job.url && job.url.includes('eightfold.ai');
     const isLinkedIn  = job.url && job.url.includes('linkedin.com/jobs');
     
-    // 🌟 FIX : On ajoute la détection ici aussi
-    const isAtos      = job.url && (job.url.includes('jobs.atos.net') || job.url.includes('successfactors.eu') || job.url.includes('atos'));
+    // 🌟 FIX : Détection d'Atos renforcée
+    const isAtos      = (job.url && (job.url.includes('jobs.atos.net') || job.url.includes('successfactors.eu') || job.url.includes('atos'))) || companyStr.includes('atos') || titleStr.includes('atos');
     
-    // 🌟 FIX : On inclut isAtos dans la condition
     const supportsExtension = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn || isAtos;
     const usesExtension = extAvailable && supportsExtension;
 
@@ -932,15 +931,15 @@ export default function JobBoard() {
 
       if (result && result.success) {
         const isExternal = result.type === 'external';
-        // Thales : le succès est garanti par la page de confirmation → label spécifique
-        const isThalesResult = isThales && !isExternal;
+        // 🌟 FIX : Thales et Atos ont le même niveau de validation forte
+        const isThalesOrAtosResult = (isThales || isAtos) && !isExternal;
 
         updateNotif(
           notifId,
           isExternal
             ? '🟣 Site recruteur ouvert en arrière-plan — marqué comme postulé'
-            : isThalesResult
-              ? '✅ Formulaire Thales soumis — candidature enregistrée !'
+            : isThalesOrAtosResult
+              ? '✅ Formulaire soumis — candidature enregistrée !'
               : '✅ Candidature envoyée !',
           isExternal ? 'external' : 'success'
         );
