@@ -5,13 +5,27 @@ const EXTENSION_ID = 'mhhjagimonemfbndjladapcophgjginl';
 class ExtensionBridge {
   constructor() {
     this._available = null;
-    this._onProgressCb = null; // Stocke la fonction qui affiche les notifications
-    
+    this._onProgressCb = null;
+    this._bgPollInterval = null; // Poll permanent pour les confirmations SF manuelles
+
     window.addEventListener('message', (e) => {
       if (e.data?.type === 'JB_EASY_APPLY_DETECTED') {
         this._onEasyApplyDetected?.(e.data.url);
       }
     });
+  }
+
+  // Poll permanent : tourne même sans START_APPLY en cours.
+  // Attrape les confirmations SuccessFactors quand l'utilisateur postule manuellement.
+  _startBgPoll() {
+    if (this._bgPollInterval) return;
+    this._bgPollInterval = setInterval(() => {
+      if (!window.chrome?.runtime || !this._onProgressCb) return;
+      chrome.runtime.sendMessage(EXTENSION_ID, { type: 'CHECK_MANUAL_CONFIRM' }, (res) => {
+        if (chrome.runtime.lastError || !res?.confirmed) return;
+        this._onProgressCb({ msg: '✅ Candidature confirmée par SuccessFactors !', type: 'success', job: res.job });
+      });
+    }, 2000);
   }
 
   async ping() {
@@ -20,7 +34,7 @@ class ExtensionBridge {
       try {
         chrome.runtime.sendMessage(EXTENSION_ID, { type: 'PING' }, (res) => {
           if (chrome.runtime.lastError || !res?.ok) { this._available = false; resolve(false); }
-          else { this._available = true; resolve(true); }
+          else { this._available = true; this._startBgPoll(); resolve(true); }
         });
       } catch { this._available = false; resolve(false); }
     });

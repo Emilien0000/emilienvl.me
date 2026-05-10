@@ -634,14 +634,33 @@ export default function JobBoard() {
   useEffect(() => {
     extensionBridge.ping().then(ok => setExtAvailable(ok));
     extensionBridge.onProgress(({ msg, type, job }) => {
+      // Mise à jour de la notif existante si elle est dans la liste
       setNotifications(prev => {
         const idx = [...prev].reverse().findIndex(n => n.job?.id === job?.id);
-        if (idx === -1) return prev;
+        if (idx === -1) {
+          // 🌟 FIX : Pas de notif en cours (candidature manuelle) — on en crée une nouvelle
+          // pour que l'utilisateur voie la confirmation de SuccessFactors
+          if (type === 'success' || type === 'external') {
+            return [...prev, { id: Date.now(), job, msg, type }];
+          }
+          return prev;
+        }
         const realIdx = prev.length - 1 - idx;
         const updated = [...prev];
         updated[realIdx] = { ...updated[realIdx], msg, type };
         return updated;
       });
+
+      // 🌟 FIX : Si SuccessFactors confirme la soumission (type 'success'),
+      // on marque le job comme postulé même si ce n'était pas une candidature auto.
+      if (type === 'success' && job) {
+        setApplied(prev =>
+          prev.find(e => e.job.id === job.id)
+            ? prev
+            : [{ job, appliedAt: new Date().toISOString(), method: 'sf_confirmed' }, ...prev]
+        );
+        setApplyingIds(prev => { const n = new Set(prev); n.delete(job?.id); return n; });
+      }
     });
   }, []);
 
