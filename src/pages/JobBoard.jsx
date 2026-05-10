@@ -87,16 +87,17 @@ const jobKey = (job) =>
 
 // ── JobCard ───────────────────────────────────────────────────────────────────
 function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showActions = true, appliedAt, isNew, extAvailable, applyingIds }) {
-  const typeInfo    = TYPE_LABELS[job.type] || TYPE_LABELS.emploi;
-  const source      = detectSource(job.sourceUrl, job.url);
-  const isApplying  = applyingIds?.has(job.id);
-
   const isIndeed    = job.url && (job.url.includes('indeed.com') || job.url.includes('indeed.fr'));
   const isHelloWork = job.url && job.url.includes('hellowork.com');
   const isThales    = job.url && job.url.includes('thalesgroup.com');
   const isEightfold = job.url && job.url.includes('eightfold.ai');
   const isLinkedIn  = job.url && job.url.includes('linkedin.com/jobs');
-  const isEasyApply = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn;
+  
+  // 🌟 FIX : On ajoute la détection d'Atos et SuccessFactors
+  const isAtos      = job.url && (job.url.includes('jobs.atos.net') || job.url.includes('successfactors.eu') || job.url.includes('atos'));
+  
+  // 🌟 FIX : On inclut isAtos dans la condition
+  const isEasyApply = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn || isAtos;
   const canAutoApply = isEasyApply && extAvailable;
 
   return (
@@ -900,9 +901,14 @@ export default function JobBoard() {
     const isThales    = job.url && job.url.includes('thalesgroup.com');
     const isEightfold = job.url && job.url.includes('eightfold.ai');
     const isLinkedIn  = job.url && job.url.includes('linkedin.com/jobs');
-    const supportsExtension = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn;
+    
+    // 🌟 FIX : On ajoute la détection ici aussi
+    const isAtos      = job.url && (job.url.includes('jobs.atos.net') || job.url.includes('successfactors.eu') || job.url.includes('atos'));
+    
+    // 🌟 FIX : On inclut isAtos dans la condition
+    const supportsExtension = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn || isAtos;
     const usesExtension = extAvailable && supportsExtension;
-
+    
     // CAS 1 : extension disponible + site supporté → tout se passe en background
     if (usesExtension) {
       setApplyingIds(prev => new Set([...prev, job.id]));
