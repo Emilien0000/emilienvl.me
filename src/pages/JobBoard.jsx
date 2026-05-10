@@ -102,8 +102,11 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
     const isEasyApply = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn || isAtos;
     const canAutoApply = isEasyApply && extAvailable;
 
+    const isApplying = applyingIds?.has(job.id) ?? false;
+    const source   = detectSource(job.sourceUrl, job.url);
+    const typeInfo = TYPE_LABELS[job.type] || TYPE_LABELS['emploi'];
+
   return (
-    // ... la suite ne change pas
     <motion.div
       className={`jb-card${isNew ? ' jb-card-new' : ''}${isApplying ? ' jb-card-applying' : ''}`}
       style={{ '--source-color': source.color }}
