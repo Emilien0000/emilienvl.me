@@ -988,17 +988,15 @@ export default function JobBoard() {
       }
       return;
     }
-
-// CAS 2 : pas d'extension ou site non supporté (Fallback manuel)
-
-    // 🌟 FIX : Atos et Thales sont des parcours multi-étapes (LinkedIn → Atos → SuccessFactors).
-    // On ne marque JAMAIS postulé automatiquement — l'utilisateur valide sur le site recruteur.
     const isMultiStep = isAtos || isThales || isCapgemini;
-    if (isMultiStep) {
-      addNotif(job, '🔗 Ouverture du site recruteur — reviens marquer manuellement une fois postulé.', 'info');
-      if (job.url) window.open(job.url, '_blank');
-      return;
-    }
+      if (isMultiStep) {
+        // 👇 RÉCUPÈRE L'ID ET AJOUTE LE SETTIMEOUT 👇
+        const nid = addNotif(job, '🔗 Ouverture du site recruteur — reviens marquer manuellement une fois postulé.', 'info');
+        setTimeout(() => removeNotif(nid), 15000); 
+        
+        if (job.url) window.open(job.url, '_blank');
+        return;
+      }
 
     // 1. On affiche une notif et on met la carte en mode "Attente"
     const manualNotifId = addNotif(job, '🔗 Redirection vers le site du recruteur...', 'info');
