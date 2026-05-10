@@ -951,7 +951,7 @@ export default function JobBoard() {
             : [{
                 job,
                 appliedAt: result.appliedAt || new Date().toISOString(),
-                method: isExternal ? 'external_redirect' : isThalesResult ? 'thales_auto' : 'auto',
+                method: isExternal ? 'external_redirect' : isThalesOrAtosResult ? 'thales_atos_auto' : 'auto',
               }, ...prev]
         );
       } else {

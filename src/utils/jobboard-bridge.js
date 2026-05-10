@@ -56,21 +56,10 @@ class ExtensionBridge {
             if (checkRes?.progress && this._onProgressCb) {
               this._onProgressCb({ msg: checkRes.progress.msg, type: checkRes.progress.type, job });
 
-              // 🌟 Si le background signale un succès via la progression (type 'success' ou 'external'),
-              // on résout immédiatement sans attendre le prochain CHECK_RESULT.
-              // Ça règle le cas où webappResults est rempli mais le poll rate la fenêtre.
-              const pType = checkRes.progress.type;
-              if ((pType === 'success' || pType === 'external') && !checkRes.done) {
-                const isExt = pType === 'external';
-                clearInterval(pollInterval);
-                clearTimeout(timeoutTimer);
-                this._onProgressCb({
-                  msg: isExt ? '🟣 Site recruteur ouvert — marqué comme postulé.' : '✅ Candidature envoyée !',
-                  type: pType, job,
-                });
-                resolve({ success: true, type: isExt ? 'external' : 'success' });
-                return;
-              }
+              // 🌟 FIX : On ne résout PLUS de manière anticipée sur progress type 'success'/'external'.
+              // Pour Atos/Thales (flux LinkedIn → Atos → SuccessFactors), un progress 'external'
+              // intermédiaire (émis par linkedin.js avant la redirection) ne doit PAS valider la carte.
+              // Seul checkRes.done = true (envoyé par background.js en fin réelle) est authoritative.
             }
 
             if (checkRes?.done) {
