@@ -40,6 +40,7 @@ const SOURCE_PATTERNS = [
   { id: 'linkedin',  label: 'LinkedIn',              color: '#0a66c2', emoji: '🔗', pattern: /linkedin\.com/i },
   { id: 'welcomejb', label: 'Welcome to the Jungle', color: '#ff4655', emoji: '🌴', pattern: /welcometothejungle\.com/i },
   { id: 'monster',   label: 'Monster',               color: '#6600cc', emoji: '👾', pattern: /monster\./i },
+  { id: 'workday',   label: 'Workday',               color: '#005cb9', emoji: '☁️', pattern: /myworkdayjobs\.com/i },
 ];
 
 function detectSource(...urls) {
@@ -934,8 +935,9 @@ export default function JobBoard() {
     // 🌟 FIX : Détection d'Atos renforcée
     const isAtos      = (job.url && (job.url.includes('jobs.atos.net') || job.url.includes('successfactors.eu') || job.url.includes('atos'))) || companyStr.includes('atos') || titleStr.includes('atos');
     const isCapgemini = (job.url && job.url.includes('capgemini')) || companyStr.includes('capgemini') || titleStr.includes('capgemini');
+    const isWorkday   = job.url && job.url.includes('myworkdayjobs.com'); // <-- AJOUT
     
-    const supportsExtension = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn || isAtos || isCapgemini;
+    const supportsExtension = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn || isAtos || isCapgemini || isWorkday;
     const usesExtension = extAvailable && supportsExtension;
 
     // CAS 1 : extension disponible + site supporté → tout se passe en background
