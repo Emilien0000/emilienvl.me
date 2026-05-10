@@ -98,8 +98,9 @@ function JobCard({ job, index, saved, onSave, onApply, onDelete, onCancel, showA
     
     // 🌟 FIX : On détecte Atos même si l'URL est cryptique, via le nom de l'entreprise
     const isAtos      = (job.url && (job.url.includes('jobs.atos.net') || job.url.includes('successfactors.eu') || job.url.includes('atos'))) || companyStr.includes('atos') || titleStr.includes('atos');
+    const isCapgemini = (job.url && job.url.includes('capgemini')) || companyStr.includes('capgemini') || titleStr.includes('capgemini');
     
-    const isEasyApply = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn || isAtos;
+    const isEasyApply = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn || isAtos || isCapgemini;
     const canAutoApply = isEasyApply && extAvailable;
 
     const isApplying = applyingIds?.has(job.id) ?? false;
@@ -932,8 +933,9 @@ export default function JobBoard() {
     
     // 🌟 FIX : Détection d'Atos renforcée
     const isAtos      = (job.url && (job.url.includes('jobs.atos.net') || job.url.includes('successfactors.eu') || job.url.includes('atos'))) || companyStr.includes('atos') || titleStr.includes('atos');
+    const isCapgemini = (job.url && job.url.includes('capgemini')) || companyStr.includes('capgemini') || titleStr.includes('capgemini');
     
-    const supportsExtension = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn || isAtos;
+    const supportsExtension = isIndeed || isHelloWork || isThales || isEightfold || isLinkedIn || isAtos || isCapgemini;
     const usesExtension = extAvailable && supportsExtension;
 
     // CAS 1 : extension disponible + site supporté → tout se passe en background
@@ -991,7 +993,7 @@ export default function JobBoard() {
 
     // 🌟 FIX : Atos et Thales sont des parcours multi-étapes (LinkedIn → Atos → SuccessFactors).
     // On ne marque JAMAIS postulé automatiquement — l'utilisateur valide sur le site recruteur.
-    const isMultiStep = isAtos || isThales;
+    const isMultiStep = isAtos || isThales || isCapgemini;
     if (isMultiStep) {
       addNotif(job, '🔗 Ouverture du site recruteur — reviens marquer manuellement une fois postulé.', 'info');
       if (job.url) window.open(job.url, '_blank');
