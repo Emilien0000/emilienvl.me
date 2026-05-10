@@ -954,15 +954,27 @@ export default function JobBoard() {
       return;
     }
 
-    // CAS 2 : pas d'extension ou site non supporté
-    // → redirection externe : ouvre l'offre dans un nouvel onglet et valide immédiatement
-    // → (l'utilisateur postule manuellement)
+// CAS 2 : pas d'extension ou site non supporté (Fallback manuel)
+    // 1. On affiche une notif et on met la carte en mode "Attente"
+    const manualNotifId = addNotif(job, '🔗 Redirection vers le site du recruteur...', 'info');
+    setApplyingIds(prev => new Set([...prev, job.id])); 
+
+    // 2. On ouvre le site externe
     if (job.url) window.open(job.url, '_blank');
-    setApplied(prev =>
-      prev.find(e => e.job.id === job.id)
-        ? prev
-        : [{ job, appliedAt: new Date().toISOString(), method: 'manual' }, ...prev]
-    );
+
+    // 3. On attend artificiellement 3 secondes que la page charge avant de classer l'offre
+    setTimeout(() => {
+      setApplyingIds(prev => { const n = new Set(prev); n.delete(job.id); return n; });
+      updateNotif(manualNotifId, '✅ Marqué comme postulé (mode manuel)', 'success');
+      setTimeout(() => removeNotif(manualNotifId), 4000);
+
+      setApplied(prev =>
+        prev.find(e => e.job.id === job.id)
+          ? prev
+          : [{ job, appliedAt: new Date().toISOString(), method: 'manual' }, ...prev]
+      );
+    }, 3000);
+
   }, [extAvailable, addNotif, updateNotif, removeNotif]);
 
   // ── handleDelete ──────────────────────────────────────────────────────────
