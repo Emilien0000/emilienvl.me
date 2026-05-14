@@ -1,895 +1,893 @@
-// src/App.jsx23
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate, useParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import './App.css';
-import { supabase } from './supabase';
-import JobBoard from './pages/JobBoard';
-import AdminPage from './pages/AdminPage';
-import AuthCallback from './pages/AuthCallback';
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import * as THREE from 'three'
+import { Sky, Text } from '@react-three/drei'
+import { useMemo, useRef, useEffect, useState, useCallback } from 'react'
 
-
-// ─── Variants animations ───────────────────────────────────────────────────────
-
-const containerVariants = {
-  hidden: { opacity: 0, y: 30 },
-  visible: {
-    opacity: 1, y: 0,
-    transition: { duration: 0.6, when: 'beforeChildren', staggerChildren: 0.15 },
+// -------------------------------------------------------
+// PROJETS — à personnaliser
+// -------------------------------------------------------
+const PROJECTS = [
+  {
+    id: 0,
+    title: 'Projet Alpha',
+    description: 'Application web full-stack avec React & Node.js',
+    tech: ['React', 'Node.js', 'PostgreSQL'],
+    color: '#2d6a4f',
+    link: '#',
+    angle: 0,           // direction dans la scène (radians)
+    distance: 14,       // distance depuis le centre du plateau
   },
-};
+  {
+    id: 1,
+    title: 'Projet Beta',
+    description: 'Dashboard analytics temps réel avec visualisations D3',
+    tech: ['D3.js', 'WebSocket', 'Python'],
+    color: '#1b4332',
+    link: '#',
+    angle: Math.PI * 0.4,
+    distance: 13,
+  },
+  {
+    id: 2,
+    title: 'Projet Gamma',
+    description: 'API REST micro-services déployée sur AWS',
+    tech: ['FastAPI', 'Docker', 'AWS'],
+    color: '#081c15',
+    link: '#',
+    angle: Math.PI * 0.85,
+    distance: 14,
+  },
+  {
+    id: 3,
+    title: 'Projet Delta',
+    description: 'Application mobile cross-platform React Native',
+    tech: ['React Native', 'Expo', 'Firebase'],
+    color: '#1b4332',
+    link: '#',
+    angle: Math.PI * 1.3,
+    distance: 13,
+  },
+  {
+    id: 4,
+    title: 'Projet Epsilon',
+    description: 'Moteur de rendu 3D procédural en WebGL',
+    tech: ['Three.js', 'GLSL', 'WebGL'],
+    color: '#2d6a4f',
+    link: '#',
+    angle: Math.PI * 1.7,
+    distance: 14,
+  },
+]
 
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
-};
-
-const cardVariants = {
-  hidden: { opacity: 0, scale: 0.95 },
-  visible: { opacity: 1, scale: 1, transition: { duration: 0.4 } },
-  hover: {
-    scale: 1.03,
-    boxShadow: "0px 10px 30px rgba(19, 201, 237, 0.2)", 
-    transition: { duration: 0.3 }
+// -------------------------------------------------------
+// SIMPLEX NOISE
+// -------------------------------------------------------
+function createSimplex(seed = 42) {
+  const grad3 = [
+    [1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],
+    [1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],
+    [0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]
+  ]
+  let s = seed
+  const rnd = () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646 }
+  const p = Array.from({length:256}, (_, i) => i)
+  for (let i=255; i>0; i--) { const j=Math.floor(rnd()*(i+1)); [p[i],p[j]]=[p[j],p[i]] }
+  const perm = new Array(512), permMod12 = new Array(512)
+  for (let i=0;i<512;i++) { perm[i]=p[i&255]; permMod12[i]=perm[i]%12 }
+  const F2=0.5*(Math.sqrt(3)-1), G2=(3-Math.sqrt(3))/6
+  const dot=(g,x,y)=>g[0]*x+g[1]*y
+  function noise2(xin, yin) {
+    const s2=(xin+yin)*F2
+    const i=Math.floor(xin+s2), j=Math.floor(yin+s2)
+    const t=(i+j)*G2, X0=i-t, Y0=j-t
+    const x0=xin-X0, y0=yin-Y0
+    const [i1,j1]=x0>y0?[1,0]:[0,1]
+    const x1=x0-i1+G2, y1=y0-j1+G2, x2=x0-1+2*G2, y2=y0-1+2*G2
+    const ii=i&255, jj=j&255
+    const gi0=permMod12[ii+perm[jj]], gi1=permMod12[ii+i1+perm[jj+j1]], gi2=permMod12[ii+1+perm[jj+1]]
+    let n0,n1,n2
+    let t0=0.5-x0*x0-y0*y0; if(t0<0){n0=0}else{t0*=t0;n0=t0*t0*dot(grad3[gi0],x0,y0)}
+    let t1=0.5-x1*x1-y1*y1; if(t1<0){n1=0}else{t1*=t1;n1=t1*t1*dot(grad3[gi1],x1,y1)}
+    let t2=0.5-x2*x2-y2*y2; if(t2<0){n2=0}else{t2*=t2;n2=t2*t2*dot(grad3[gi2],x2,y2)}
+    return 70*(n0+n1+n2)
   }
-};
-
-const modalVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.2 } },
-  exit: { opacity: 0, transition: { duration: 0.15 } }
-};
-
-// ─── Toast "Lien copié" ────────────────────────────────────────────────────────
-
-function CopyToast({ message, visible }) {
-  return (
-    <AnimatePresence>
-      {visible && (
-        <motion.div
-          className="copy-toast"
-          initial={{ opacity: 0, y: 16, scale: 0.92 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 8, scale: 0.95 }}
-          transition={{ duration: 0.22 }}
-        >
-          <span className="copy-toast-icon">🔗</span>
-          <span>{message || 'Lien copié !'}</span>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
+  function fbm(x, y, octaves=6, lac=2.1, gain=0.52) {
+    let val=0, amp=0.5, freq=1, sum=0
+    for (let o=0;o<octaves;o++) { val+=noise2(x*freq,y*freq)*amp; sum+=amp; amp*=gain; freq*=lac }
+    return val/sum
+  }
+  return { noise: noise2, fbm }
 }
 
-// ─── Hook useCopyToast ─────────────────────────────────────────────────────────
+const simplex = createSimplex(7331)
 
-function useCopyToast() {
-  const [toast, setToast] = useState({ visible: false, message: '' });
-  const timerRef = useRef(null);
-
-  const showCopy = useCallback((url, message = 'Lien copié !') => {
-    navigator.clipboard.writeText(url).catch(() => {});
-    if (timerRef.current) clearTimeout(timerRef.current);
-    setToast({ visible: true, message });
-    timerRef.current = setTimeout(() => setToast({ visible: false, message: '' }), 2200);
-  }, []);
-
-  return { toast, showCopy };
+// -------------------------------------------------------
+// COULEURS
+// -------------------------------------------------------
+const C = {
+  snow:      new THREE.Color('#e8eef2'),
+  snowRock:  new THREE.Color('#b8c8d0'),
+  rockLight: new THREE.Color('#8d9ea7'),
+  rockDark:  new THREE.Color('#4a5568'),
+  scree:     new THREE.Color('#6b7a82'),
+  grassHigh: new THREE.Color('#7eb14e'),
+  grassMid:  new THREE.Color('#5d913b'),
+  grassLow:  new THREE.Color('#44702d'),
+  trunk:     new THREE.Color('#5d4037'),
 }
 
+const HEIGHT_MODIFIER = 0.5
+const PLATEAU_HEIGHT  = 45 * HEIGHT_MODIFIER
+const CAMERA_EYE_HEIGHT = 1.8
+const PLATEAU_RADIUS    = 19
 
+// -------------------------------------------------------
+// TERRAIN
+// -------------------------------------------------------
+function getTerrainY(x, z) {
+  const dist = Math.sqrt(x*x + z*z)
+  if (dist < 20) return PLATEAU_HEIGHT
+  const ox = x - 18, oz = z + 6
+  const base   = simplex.fbm(ox*0.009, oz*0.009, 7, 2.1, 0.52)
+  const detail = simplex.fbm(x*0.022+100, z*0.022+200, 4, 2.0, 0.45)
+  const micro  = simplex.fbm(x*0.055+50, z*0.055-50, 3, 2.0, 0.4)
+  let y = base*60 + detail*20 + micro*7
+  y = (y + 62) * 0.56
+  const env = Math.max(0, (dist - 40) * 0.32)
+  y = y * (dist / 105) + env
+  if (dist < 30) {
+    const blend = Math.max(0, Math.min(1, (dist - 20) / 10))
+    const t = blend*blend*(3-2*blend)
+    y = PLATEAU_HEIGHT*(1-t) + y*t
+  }
+  return y * HEIGHT_MODIFIER
+}
 
-// ─── Composant galerie ─────────────────────────────────────────────────────────
+const ss = (e0, e1, v) => { const t=Math.max(0,Math.min(1,(v-e0)/(e1-e0))); return t*t*(3-2*t) }
 
-function ImageGallery({ images, imageFit, title }) {
-  const [current, setCurrent] = useState(0);
-  const [animating, setAnimating] = useState(false);
-  const [direction, setDirection] = useState(1);
-  if (!images || images.length === 0) return null;
+function getTerrainColor(y, dist) {
+  const c = new THREE.Color()
+  if (dist < 22) return c.copy(C.grassHigh)
+  if      (y > 38) c.copy(C.snow)
+  else if (y > 32) c.lerpColors(C.snowRock, C.snow,      ss(32,38,y))
+  else if (y > 26) c.lerpColors(C.rockLight, C.snowRock, ss(26,32,y))
+  else if (y > 20) c.lerpColors(C.scree,    C.rockLight, ss(20,26,y))
+  else if (y > 14) c.lerpColors(C.grassHigh, C.scree,   ss(14,20,y))
+  else if (y > 7)  c.lerpColors(C.grassMid,  C.grassHigh,ss(7,14,y))
+  else             c.lerpColors(C.grassLow,  C.grassMid, ss(0,7,y))
+  return c
+}
 
-  const goTo = (index, dir = 1) => {
-    if (animating || index === current) return;
-    setDirection(dir);
-    setAnimating(true);
-    setTimeout(() => { setCurrent(index); setAnimating(false); }, 300);
-  };
-
-  const prev = () => goTo((current - 1 + images.length) % images.length, -1);
-  const next = () => goTo((current + 1) % images.length, 1);
+// -------------------------------------------------------
+// TERRAIN MESH
+// -------------------------------------------------------
+function EpicProceduralMountains() {
+  const geometry = useMemo(() => {
+    const geom = new THREE.PlaneGeometry(800, 800, 220, 220)
+    geom.rotateX(-Math.PI / 2)
+    const pos = geom.attributes.position.array
+    const cols = []
+    for (let i=0; i<pos.length; i+=3) {
+      const x=pos[i], z=pos[i+2]
+      const y = getTerrainY(x, z)
+      pos[i+1] = y
+      const dist = Math.sqrt(x*x + z*z)
+      const c = getTerrainColor(y, dist)
+      cols.push(c.r, c.g, c.b)
+    }
+    geom.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3))
+    geom.computeVertexNormals()
+    return geom
+  }, [])
 
   return (
-    <div className="gallery-wrapper">
-      <div className="gallery-main">
-        <img
-          key={current}
-          src={images[current]}
-          alt={`${title} — vue ${current + 1}`}
-          className={`project-modal-hero gallery-img-slide${animating ? (direction > 0 ? ' slide-out-left' : ' slide-out-right') : ' slide-in'}`}
-          style={{ objectFit: imageFit || 'cover' }}
+    <mesh receiveShadow castShadow>
+      <primitive object={geometry} attach="geometry" />
+      <meshStandardMaterial vertexColors flatShading roughness={0.85} metalness={0.05} />
+    </mesh>
+  )
+}
+
+// -------------------------------------------------------
+// HERBE
+// -------------------------------------------------------
+function buildBladeGeometry() {
+  const verts=[], cols=[], indices=[], segs=4
+  for (let s=0;s<=segs;s++) {
+    const t=s/segs, w=0.05*(1-t*0.85)
+    verts.push(-w, t*0.45, 0, w, t*0.45, 0)
+    const base=new THREE.Color().setHSL(0.28,0.72,0.22)
+    const tip =new THREE.Color().setHSL(0.31,0.65,0.42)
+    const c=base.clone().lerp(tip,t)
+    cols.push(c.r,c.g,c.b,c.r,c.g,c.b)
+  }
+  verts.push(0,0.45,0); cols.push(0.55,0.82,0.25)
+  for (let s=0;s<segs;s++) { const a=s*2,b=a+1,c2=a+2,d=a+3; indices.push(a,b,c2,b,d,c2) }
+  indices.push(segs*2, segs*2+1, segs*2+2)
+  const geo=new THREE.BufferGeometry()
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3))
+  geo.setAttribute('color',   new THREE.Float32BufferAttribute(cols,3))
+  geo.setIndex(indices)
+  geo.computeVertexNormals()
+  return geo
+}
+
+const GRASS_COUNT = 80000
+
+function DenseGrass() {
+  const meshRef = useRef()
+  const bladeData = useMemo(() => {
+    const data = new Float32Array(GRASS_COUNT*6)
+    const rng={v:12345}
+    const rand=()=>{rng.v=(rng.v*16807+1)%2147483647;return rng.v/2147483647}
+    let idx=0
+    while (idx<GRASS_COUNT) {
+      const angle=rand()*Math.PI*2, r=Math.sqrt(rand())*PLATEAU_RADIUS
+      const bx=Math.cos(angle)*r, bz=Math.sin(angle)*r, by=getTerrainY(bx,bz)
+      if (Math.abs(by-PLATEAU_HEIGHT)<0.6) {
+        data[idx*6+0]=bx; data[idx*6+1]=by; data[idx*6+2]=bz
+        data[idx*6+3]=rand()*Math.PI*2; data[idx*6+4]=rand()*Math.PI*2; data[idx*6+5]=0.8+rand()*0.6
+        idx++
+      }
+    }
+    return data
+  }, [])
+
+  const bladeGeo = useMemo(()=>buildBladeGeometry(),[])
+  useEffect(()=>{
+    if (!meshRef.current) return
+    const dummy=new THREE.Object3D()
+    for (let i=0;i<GRASS_COUNT;i++) {
+      dummy.position.set(bladeData[i*6],bladeData[i*6+1],bladeData[i*6+2])
+      dummy.rotation.set(0,bladeData[i*6+4],0)
+      dummy.scale.setScalar(bladeData[i*6+5])
+      dummy.updateMatrix()
+      meshRef.current.setMatrixAt(i,dummy.matrix)
+    }
+    meshRef.current.instanceMatrix.needsUpdate=true
+  },[bladeData])
+
+  const dummy=useMemo(()=>new THREE.Object3D(),[])
+  useFrame(({clock})=>{
+    if (!meshRef.current) return
+    const t=clock.getElapsedTime()
+    for (let i=0;i<GRASS_COUNT;i++) {
+      const bx=bladeData[i*6],by=bladeData[i*6+1],bz=bladeData[i*6+2]
+      const phase=bladeData[i*6+3],rotY=bladeData[i*6+4],sc=bladeData[i*6+5]
+      const wind=Math.sin(t*1.4+phase+bx*0.1)*0.12+Math.sin(t*0.7+phase*1.3+bz*0.08)*0.06
+      dummy.position.set(bx,by,bz); dummy.rotation.set(wind,rotY,wind*0.3); dummy.scale.setScalar(sc)
+      dummy.updateMatrix(); meshRef.current.setMatrixAt(i,dummy.matrix)
+    }
+    meshRef.current.instanceMatrix.needsUpdate=true
+  })
+
+  return (
+    <instancedMesh ref={meshRef} args={[bladeGeo,null,GRASS_COUNT]}>
+      <meshStandardMaterial vertexColors side={THREE.DoubleSide} roughness={0.9}/>
+    </instancedMesh>
+  )
+}
+
+// -------------------------------------------------------
+// ARBRES
+// -------------------------------------------------------
+function Tree({ position, scaleMult=1 }) {
+  const seed=useMemo(()=>({
+    scale:(0.7+Math.random()*0.4)*scaleMult,
+    rotation:Math.random()*Math.PI*2,
+  }),[scaleMult])
+  return (
+    <group position={position} scale={seed.scale} rotation-y={seed.rotation}>
+      <mesh position={[0,0.5,0]} castShadow>
+        <cylinderGeometry args={[0.2,0.3,2.5,6]}/>
+        <meshStandardMaterial color={C.trunk} flatShading/>
+      </mesh>
+      {[0,1,2,3,4].map(i=>(
+        <mesh key={i} position={[0,1.5+i*0.8,0]} castShadow>
+          <coneGeometry args={[1.8-i*0.35,1.5,7]}/>
+          <meshStandardMaterial color={new THREE.Color(C.grassLow).multiplyScalar(1+i*0.15)} flatShading/>
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function useTreePositions(count=600) {
+  return useMemo(()=>{
+    const trees=[], rng={v:42}
+    const rand=()=>{rng.v=(rng.v*16807)%2147483647;return rng.v/2147483647}
+    let attempts=0
+    while (trees.length<count && attempts<20000) {
+      attempts++
+      const angle=rand()*Math.PI*2, dist=25+rand()*140
+      const x=Math.cos(angle)*dist, z=Math.sin(angle)*dist, y=getTerrainY(x,z)
+      if (y>2&&y<80) { const hr=(y-2)/78; if(rand()<Math.pow(1-hr,2)) trees.push([x,y-0.5,z]) }
+    }
+    return trees
+  },[count])
+}
+
+function PlateauTrees() {
+  const positions = [
+    [-6,  PLATEAU_HEIGHT, -8],
+    [ 7,  PLATEAU_HEIGHT, -10],
+    [-10, PLATEAU_HEIGHT,  9],
+    [ 9,  PLATEAU_HEIGHT,  11],
+    [-14, PLATEAU_HEIGHT,  1],
+    [ 13, PLATEAU_HEIGHT, -2],
+  ]
+  return (
+    <>
+      {positions.map((pos,i)=>(
+        <Tree key={i} position={pos} scaleMult={0.9+(i%3)*0.15}/>
+      ))}
+    </>
+  )
+}
+
+// -------------------------------------------------------
+// PANNEAU PROJET 3D — panneau en bois dans la scène
+// -------------------------------------------------------
+function ProjectSign({ project, onSelect, isSelected }) {
+  const groupRef = useRef()
+  const [hovered, setHovered] = useState(false)
+
+  // Position dans la scène autour du plateau
+  const px = Math.cos(project.angle) * project.distance
+  const pz = Math.sin(project.angle) * project.distance
+  const py = PLATEAU_HEIGHT
+
+  // Orientation du panneau vers le centre
+  const signAngle = project.angle + Math.PI
+
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return
+    const t = clock.getElapsedTime()
+    // légère oscillation
+    groupRef.current.position.y = py + Math.sin(t * 0.8 + project.id) * 0.05
+    // scale au hover
+    const target = hovered || isSelected ? 1.08 : 1.0
+    groupRef.current.scale.lerp(new THREE.Vector3(target, target, target), 0.1)
+  })
+
+  const bgColor = new THREE.Color(project.color)
+  const lightColor = new THREE.Color(project.color).multiplyScalar(2.5)
+
+  return (
+    <group
+      ref={groupRef}
+      position={[px, py, pz]}
+      rotation={[0, signAngle, 0]}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+      onClick={() => onSelect(project)}
+    >
+      {/* Poteau */}
+      <mesh position={[0, -1.5, 0]}>
+        <cylinderGeometry args={[0.07, 0.09, 3, 6]} />
+        <meshStandardMaterial color="#5d4037" flatShading />
+      </mesh>
+
+      {/* Fond du panneau */}
+      <mesh position={[0, 0.6, 0]} castShadow>
+        <boxGeometry args={[3.2, 1.9, 0.12]} />
+        <meshStandardMaterial color={bgColor} roughness={0.6} />
+      </mesh>
+
+      {/* Bordure lumineuse (hovered) */}
+      <mesh position={[0, 0.6, -0.07]}>
+        <boxGeometry args={[3.3, 2.0, 0.04]} />
+        <meshStandardMaterial
+          color={hovered || isSelected ? lightColor : bgColor}
+          emissive={hovered || isSelected ? lightColor : new THREE.Color('#000')}
+          emissiveIntensity={hovered || isSelected ? 0.6 : 0}
+          roughness={0.4}
         />
-        {images.length > 1 && (
-          <>
-            <button className="gallery-arrow gallery-arrow-left" onClick={prev}>‹</button>
-            <button className="gallery-arrow gallery-arrow-right" onClick={next}>›</button>
-            <div className="gallery-dots gallery-dots-overlay">
-              {images.map((_, i) => (
-                <button key={i} className={`gallery-dot${i === current ? ' active' : ''}`} onClick={() => goTo(i, i > current ? 1 : -1)} />
-              ))}
-            </div>
-          </>
-        )}
+      </mesh>
+
+      {/* Titre */}
+      <Text
+        position={[0, 1.05, 0.08]}
+        fontSize={0.28}
+        color="#e8f5e9"
+        anchorX="center"
+        anchorY="middle"
+        maxWidth={3}
+        font="https://fonts.gstatic.com/s/spacegrotesk/v15/V8mDoQDjQSkFtoMM3T6r8E7mF71Q-gowFXNuXmmLsQ.woff2"
+      >
+        {project.title}
+      </Text>
+
+      {/* Description */}
+      <Text
+        position={[0, 0.58, 0.08]}
+        fontSize={0.155}
+        color="#a5d6a7"
+        anchorX="center"
+        anchorY="middle"
+        maxWidth={2.8}
+        font="https://fonts.gstatic.com/s/spacegrotesk/v15/V8mDoQDjQSkFtoMM3T6r8E7mF71Q-gowFXNuXmmLsQ.woff2"
+      >
+        {project.description}
+      </Text>
+
+      {/* Tech tags */}
+      <Text
+        position={[0, 0.18, 0.08]}
+        fontSize={0.13}
+        color="#4caf50"
+        anchorX="center"
+        anchorY="middle"
+        maxWidth={3}
+        font="https://fonts.gstatic.com/s/spacegrotesk/v15/V8mDoQDjQSkFtoMM3T6r8E7mF71Q-gowFXNuXmmLsQ.woff2"
+      >
+        {project.tech.join('  ·  ')}
+      </Text>
+
+      {/* Indicateur "cliquez" */}
+      {hovered && (
+        <Text
+          position={[0, -0.3, 0.08]}
+          fontSize={0.13}
+          color="#ffffff"
+          anchorX="center"
+          anchorY="middle"
+        >
+          [ voir le projet ]
+        </Text>
+      )}
+    </group>
+  )
+}
+
+// -------------------------------------------------------
+// COMPASS HUD — indique les directions des projets
+// -------------------------------------------------------
+function CompassHUD({ yaw }) {
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom: 100,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      display: 'flex',
+      gap: 8,
+      pointerEvents: 'none',
+      zIndex: 20,
+    }}>
+      {PROJECTS.map(p => {
+        // angle relatif entre la caméra et le projet
+        let delta = p.angle - yaw
+        // normaliser entre -PI et PI
+        while (delta > Math.PI) delta -= Math.PI * 2
+        while (delta < -Math.PI) delta += Math.PI * 2
+        const inView = Math.abs(delta) < 0.7
+        const opacity = Math.max(0.25, 1 - Math.abs(delta) / Math.PI)
+        return (
+          <div key={p.id} style={{
+            padding: '4px 10px',
+            background: inView ? p.color : 'rgba(0,0,0,0.35)',
+            border: `1px solid ${p.color}`,
+            borderRadius: 4,
+            color: '#e8f5e9',
+            fontSize: 11,
+            fontFamily: 'monospace',
+            opacity,
+            transition: 'all 0.3s',
+            letterSpacing: '0.05em',
+          }}>
+            {inView ? '▶ ' : ''}{p.title}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// -------------------------------------------------------
+// CONTRÔLE CAMÉRA (drag) — expose le yaw pour le HUD
+// -------------------------------------------------------
+function CameraController({ onYawChange, onProjectSelect }) {
+  const drag = useRef(false)
+  const last = useRef({ x: 0, y: 0 })
+  const yawRef = useRef(0)
+  const pitchRef = useRef(0)
+  const touch = useRef(null)
+
+  useEffect(() => {
+    const onDown = e => {
+      drag.current = true
+      last.current = { x: e.clientX, y: e.clientY }
+    }
+    const onUp = () => { drag.current = false }
+    const onMove = e => {
+      if (!drag.current) return
+      yawRef.current   -= (e.clientX - last.current.x) * 0.003
+      pitchRef.current -= (e.clientY - last.current.y) * 0.003
+      pitchRef.current  = Math.max(-0.8, Math.min(0.8, pitchRef.current))
+      last.current = { x: e.clientX, y: e.clientY }
+      onYawChange(yawRef.current)
+    }
+    // Touch support
+    const onTouchStart = e => {
+      touch.current = e.touches[0]
+      last.current = { x: touch.current.clientX, y: touch.current.clientY }
+    }
+    const onTouchMove = e => {
+      const t = e.touches[0]
+      yawRef.current   -= (t.clientX - last.current.x) * 0.003
+      pitchRef.current -= (t.clientY - last.current.y) * 0.003
+      pitchRef.current  = Math.max(-0.8, Math.min(0.8, pitchRef.current))
+      last.current = { x: t.clientX, y: t.clientY }
+      onYawChange(yawRef.current)
+    }
+
+    window.addEventListener('mousedown', onDown)
+    window.addEventListener('mouseup', onUp)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('touchstart', onTouchStart, { passive: true })
+    window.addEventListener('touchmove', onTouchMove, { passive: true })
+    return () => {
+      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('touchstart', onTouchStart)
+      window.removeEventListener('touchmove', onTouchMove)
+    }
+  }, [onYawChange])
+
+  useFrame(({ camera }) => {
+    const dir = new THREE.Vector3(
+      Math.sin(yawRef.current) * Math.cos(pitchRef.current),
+      Math.sin(pitchRef.current),
+      Math.cos(yawRef.current) * Math.cos(pitchRef.current)
+    )
+    camera.lookAt(camera.position.clone().add(dir))
+  })
+
+  return null
+}
+
+// -------------------------------------------------------
+// MODAL PROJET (overlay 2D)
+// -------------------------------------------------------
+function ProjectModal({ project, onClose }) {
+  if (!project) return null
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.65)',
+      backdropFilter: 'blur(8px)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 100,
+      animation: 'fadeIn 0.2s ease',
+    }} onClick={onClose}>
+      <div style={{
+        background: 'linear-gradient(135deg, #1a2e1a 0%, #0d1f0d 100%)',
+        border: `1px solid ${project.color}`,
+        borderRadius: 12,
+        padding: '40px 48px',
+        maxWidth: 520,
+        width: '90%',
+        color: '#e8f5e9',
+        fontFamily: 'monospace',
+        boxShadow: `0 0 60px ${project.color}44`,
+        position: 'relative',
+      }} onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} style={{
+          position: 'absolute',
+          top: 16,
+          right: 20,
+          background: 'none',
+          border: 'none',
+          color: '#4caf50',
+          fontSize: 22,
+          cursor: 'pointer',
+          lineHeight: 1,
+        }}>✕</button>
+
+        <div style={{ fontSize: 11, color: '#4caf50', marginBottom: 8, letterSpacing: '0.15em' }}>
+          PROJET_{String(project.id + 1).padStart(2, '0')}
+        </div>
+        <h2 style={{ margin: '0 0 16px', fontSize: 28, fontWeight: 700, color: '#fff' }}>
+          {project.title}
+        </h2>
+        <p style={{ margin: '0 0 24px', color: '#a5d6a7', lineHeight: 1.7, fontSize: 15 }}>
+          {project.description}
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 32 }}>
+          {project.tech.map(t => (
+            <span key={t} style={{
+              padding: '4px 12px',
+              background: project.color + '55',
+              border: `1px solid ${project.color}`,
+              borderRadius: 20,
+              fontSize: 12,
+              color: '#c8e6c9',
+            }}>{t}</span>
+          ))}
+        </div>
+        <a href={project.link} style={{
+          display: 'inline-block',
+          padding: '12px 28px',
+          background: project.color,
+          color: '#fff',
+          borderRadius: 6,
+          textDecoration: 'none',
+          fontWeight: 600,
+          fontSize: 14,
+          letterSpacing: '0.05em',
+        }}>
+          Voir le projet →
+        </a>
       </div>
     </div>
-  );
+  )
 }
 
-// ─── Scroll Progress Bar ───────────────────────────────────────────────────────
-
-function ScrollProgressBar() {
-  const [progress, setProgress] = useState(0);
-  useEffect(() => {
-    const onScroll = () => {
-      const el = document.documentElement;
-      const scrolled = el.scrollTop || document.body.scrollTop;
-      const max = el.scrollHeight - el.clientHeight;
-      setProgress(max > 0 ? (scrolled / max) * 100 : 0);
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+// -------------------------------------------------------
+// VUE 2D PORTFOLIO (classique)
+// -------------------------------------------------------
+function PortfolioView({ onSwitch3D }) {
   return (
-    <div className="scroll-progress-track">
-      <div className="scroll-progress-bar" style={{ width: `${progress}%` }} />
-    </div>
-  );
-}
-
-// ─── Dark Mode Toggle ──────────────────────────────────────────────────────────
-
-function DarkModeToggle({ dark, onToggle }) {
-  return (
-    <button className="darkmode-toggle" onClick={onToggle} aria-label="Toggle dark mode" title={dark ? 'Mode clair' : 'Mode sombre'}>
-      <span className="darkmode-icon">{dark ? '☀️' : '🌙'}</span>
-    </button>
-  );
-}
-
-function LinksPage() {
-  const links = [
-    {
-      label: 'Portfolio',
-      sublabel: 'emilienvl.me',
-      href: 'https://emilienvl.me',
-      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>),
-      accent: 'var(--highlight-color)',
-      bg: 'rgba(19,201,237,0.08)',
-    },
-    {
-      label: 'LinkedIn',
-      sublabel: 'Emilien VITRY-LHOTTE',
-      href: 'https://www.linkedin.com/in/emilien-vitry-lhotte/',
-      icon: (<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>),
-      accent: '#0a66c2',
-      bg: 'rgba(10,102,194,0.08)',
-    },
-    {
-      label: 'GitHub',
-      sublabel: 'Emilien0000',
-      href: 'https://github.com/Emilien0000',
-      icon: (<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>),
-      accent: 'var(--text-main)',
-      bg: 'rgba(6,57,92,0.07)',
-    },
-    {
-      label: 'Email',
-      sublabel: 'emilien.vitry.lhotte1@gmail.com',
-      href: 'mailto:emilien.vitry.lhotte1@gmail.com',
-      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>),
-      accent: 'var(--highlight-color)',
-      bg: 'rgba(19,201,237,0.08)',
-    },
-    {
-      label: 'ZenTracker',
-      sublabel: 'zentracker.online',
-      href: 'https://zentracker.online',
-      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>),
-      accent: 'var(--highlight-color)',
-      bg: 'rgba(19,201,237,0.08)',
-    },
-  ];
-
-  return (
-    <div className="links-page">
-      <motion.div className="links-container" initial="hidden" animate="visible" variants={containerVariants}>
-        <motion.div className="links-identity" variants={itemVariants}>
-          <div className="links-avatar"><img src="/cv.webp" alt="Émilien Vitry-Lhotte" /></div>
-          <h1 className="links-name">Émilien <span className="highlight">Vitry-Lhotte</span></h1>
-          <p className="links-bio">Etudiant ingénieur · Réseaux & Cybersécurité</p>
-          <div className="links-badge">UniLaSalle Amiens</div>
-        </motion.div>
-        <motion.div className="links-list" variants={containerVariants}>
-          {links.map((link, i) => (
-            <motion.a
-              key={i}
-              href={link.href}
-              target={link.href.startsWith('mailto') ? undefined : '_blank'}
-              rel="noopener noreferrer"
-              className="link-card"
-              variants={itemVariants}
-              whileHover={{ y: -4, boxShadow: `0 12px 32px rgba(19,201,237,0.15)` }}
-              transition={{ duration: 0.2 }}
-            >
-              <div className="link-card-icon" style={{ background: link.bg, color: link.accent }}>{link.icon}</div>
-              <div className="link-card-body">
-                <span className="link-card-label">{link.label}</span>
-                <span className="link-card-sub">{link.sublabel}</span>
-              </div>
-              <span className="link-card-arrow" style={{ color: link.accent }}>→</span>
-            </motion.a>
-          ))}
-        </motion.div>
-        <motion.p className="links-footer-text" variants={itemVariants}>© 2026 Émilien Vitry-Lhotte</motion.p>
-      </motion.div>
-    </div>
-  );
-}
-
-// ─── Layout principal ──────────────────────────────────────────────────────────
-
-// ─── Layout principal ──────────────────────────────────────────────────────────
-
-// ─── Layout principal ──────────────────────────────────────────────────────────
-
-function MainLayout({ dark, onToggleDark }) {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { projectSlug, expSlug } = useParams();
-
-  // 1. --- STATES DE L'INTERFACE ---
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState(null);
-  const [selectedSkill, setSelectedSkill] = useState(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [activeTechFilter, setActiveTechFilter] = useState(null);
-  const [selectedExp, setSelectedExp] = useState(null);
-  const { toast: copyToast, showCopy } = useCopyToast();
-
-  // 2. --- STATES DE LA BASE DE DONNÉES ---
-  const [projects, setProjects] = useState([]);
-  const [skills, setSkills] = useState([]);
-  const [experiences, setExperiences] = useState([]);
-  const [loadingData, setLoadingData] = useState(true);
-  const [dbStatus, setDbStatus] = useState(null); // 'loading', 'success', 'error'
-
-  // 3. --- RÉCUPÉRATION SUPABASE ---
-  useEffect(() => {
-    const fetchAllData = async () => {
-      setDbStatus('loading');
-      try {
-            const [projRes, skillRes, expRes] = await Promise.all([
-            supabase.from('projets').select('*').eq('is_published', true).order('position', { ascending: true }).order('id', { ascending: false }),
-            supabase.from('skills').select('*'),
-            supabase.from('experiences').select('*').eq('is_published', true).order('position', { ascending: true })
-          ]);
-
-        if (projRes.error || skillRes.error || expRes.error) throw new Error("Erreur SQL");
-
-        const formattedSkills = (skillRes.data || []).map(s => ({
-          ...s,
-          desc: s.desc_text,
-          projectIds: s.project_ids || []
-        }));
-        setSkills(formattedSkills);
-
-        const formattedProjects = (projRes.data || []).map(p => {
-          const linkedSkillTags = formattedSkills
-            .filter(skill => skill.projectIds.includes(p.id))
-            .map(skill => skill.label);
-          return { ...p, desc: p.desc_short, skillIds: linkedSkillTags };
-        });
-        setProjects(formattedProjects);
-
-        const groupedExp = (expRes.data || []).reduce((acc, currentExp) => {
-          const formattedExp = { ...currentExp, desc: currentExp.desc_text };
-          const categoryIndex = acc.findIndex(c => c.category === formattedExp.category);
-          if (categoryIndex > -1) {
-            acc[categoryIndex].items.push(formattedExp);
-          } else {
-            acc.push({ category: formattedExp.category, items: [formattedExp] });
-          }
-          return acc;
-        }, []);
-        setExperiences(groupedExp);
-
-        // Succès : On affiche le toast puis on le cache après 4s
-        setDbStatus('success');
-        setTimeout(() => setDbStatus(null), 4000);
-
-      } catch (error) {
-        console.error("Erreur Supabase :", error);
-        setDbStatus('error');
-      } finally {
-        setLoadingData(false);
-      }
-    };
-
-    fetchAllData();
-  }, []);
-
-  // 4. --- NAVIGATION & URL ---
-  const pathSegments = location.pathname.split('/').filter(Boolean);
-  const pathTab = pathSegments[0] || 'home';
-
-  const goTo = (tab) => { navigate(`/${tab}`); setMenuOpen(false); };
-
-  useEffect(() => {
-    if (projects.length > 0 && pathTab === 'projects' && projectSlug) {
-      const found = projects.find(p => p.slug === projectSlug);
-      if (found) setSelectedProject(found);
-    }
-  }, [projectSlug, pathTab, projects]);
-
-  const allExpItems = experiences.flatMap(cat => cat.items);
-  useEffect(() => {
-    if (allExpItems.length > 0 && pathTab === 'experiences' && expSlug) {
-      const found = allExpItems.find(e => e.slug === expSlug);
-      if (found) setSelectedExp(found);
-    }
-  }, [expSlug, pathTab, experiences]);
-
-  const closeExp = useCallback(() => {
-    setSelectedExp(null);
-    if (expSlug) navigate('/experiences', { replace: true });
-  }, [expSlug, navigate]);
-
-  const openExp = useCallback((exp) => {
-    setSelectedExp(exp);
-    if (exp.slug) navigate(`/experiences/${exp.slug}`, { replace: true });
-  }, [navigate]);
-
-  const closeProject = useCallback(() => {
-    setSelectedProject(null);
-    if (projectSlug) navigate('/projects', { replace: true });
-  }, [projectSlug, navigate]);
-
-  const openProject = useCallback((project) => {
-    setSelectedProject(project);
-    navigate(`/projects/${project.slug}`, { replace: true });
-  }, [navigate]);
-
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.key === 'Escape') {
-        if (selectedProject) closeProject();
-        if (modalOpen) setModalOpen(false);
-        if (menuOpen) setMenuOpen(false);
-        if (selectedExp) closeExp();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [selectedProject, modalOpen, menuOpen, closeProject, selectedExp, closeExp]);
-
-  const linkedProjects = selectedSkill
-    ? projects.filter(p => selectedSkill.projectIds.includes(p.id))
-    : [];
-
-  const allTechs = [...new Set(projects.flatMap(p => p.skillIds))];
-
-  const filteredProjects = activeTechFilter
-    ? projects.filter(p => p.skillIds.includes(activeTechFilter))
-    : projects;
-
-  const navLinks = [
-    { id: 'home', label: 'Accueil' },
-    { id: 'about', label: 'Qui suis-je' },
-    { id: 'projects', label: 'Projets' },
-    { id: 'experiences', label: 'Expériences' },
-    { id: 'skills', label: 'Compétences' },
-    { id: 'contact', label: 'Contact' },
-    //{ id: 'alternances', label: "Scraper d'offres" },
-  ];
-
-  return (
-    <div className="app-container">
-      <ScrollProgressBar />
-
-      {/* --- NOTIFICATION TOAST --- */}
-      <AnimatePresence>
-        {dbStatus && (
-          <motion.div 
-            className="db-toast"
-            initial={{ opacity: 0, y: 50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-          >
-            <div className={`toast-dot ${dbStatus === 'success' ? 'success' : (dbStatus === 'loading' ? 'loading' : 'error')}`} />
-            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-              {dbStatus === 'loading' && "Connexion Supabase..."}
-              {dbStatus === 'success' && "Base de données connectée"}
-              {dbStatus === 'error' && "Erreur de liaison BDD"}
-            </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* --- COPY TOAST --- */}
-      <CopyToast visible={copyToast.visible} message={copyToast.message} />
-
-      {/* --- HEADER --- */}
-      <header className="app-header">
-        <div className="logo" onClick={() => goTo('home')} style={{ cursor: 'pointer' }}>EVL.</div>
-
-        <nav className="nav-desktop">
-          {navLinks.map(n => (
-            <a key={n.id} className={pathTab === n.id ? 'active' : ''} onClick={() => goTo(n.id)}>{n.label}</a>
-          ))}
-        </nav>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <DarkModeToggle dark={dark} onToggle={onToggleDark} />
-          <button
-            className={`hamburger${menuOpen ? ' open' : ''}`}
-            onClick={() => setMenuOpen(v => !v)}
-            aria-label="Menu"
-          >
-            <span /><span /><span />
-          </button>
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(160deg, #0a1a0a 0%, #0d2010 50%, #071410 100%)',
+      color: '#e8f5e9',
+      fontFamily: 'monospace',
+      overflowY: 'auto',
+    }}>
+      {/* Header */}
+      <header style={{
+        padding: '60px 60px 40px',
+        borderBottom: '1px solid #1a3a1a',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+      }}>
+        <div>
+          <div style={{ fontSize: 11, color: '#4caf50', letterSpacing: '0.2em', marginBottom: 10 }}>
+            PORTFOLIO — 2026
+          </div>
+          <h1 style={{
+            margin: 0,
+            fontSize: 'clamp(36px, 6vw, 72px)',
+            fontWeight: 900,
+            lineHeight: 1.05,
+            color: '#fff',
+            letterSpacing: '-0.02em',
+          }}>
+            Mon<br />
+            <span style={{ color: '#4caf50' }}>Portfolio</span>
+          </h1>
+          <p style={{ margin: '16px 0 0', color: '#81c784', maxWidth: 480, lineHeight: 1.7, fontSize: 15 }}>
+            Développeur passionné par les interfaces immersives et les expériences web uniques.
+          </p>
         </div>
-
-        <AnimatePresence>
-          {menuOpen && (
-            <motion.nav
-              className="nav-mobile"
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              {navLinks.map(n => (
-                <a key={n.id} className={pathTab === n.id ? 'active' : ''} onClick={() => goTo(n.id)}>{n.label}</a>
-              ))}
-            </motion.nav>
-          )}
-        </AnimatePresence>
+        <button onClick={onSwitch3D} style={{
+          padding: '14px 24px',
+          background: 'transparent',
+          border: '1px solid #4caf50',
+          color: '#4caf50',
+          borderRadius: 8,
+          cursor: 'pointer',
+          fontFamily: 'monospace',
+          fontSize: 13,
+          letterSpacing: '0.05em',
+          transition: 'all 0.2s',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = '#4caf5022' }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+        >
+          ⛰ Vue 3D
+        </button>
       </header>
 
-      {/* --- CONTENU DYNAMIQUE --- */}
-      <main className="main-content">
-
-        {/* ONGLET ACCUEIL */}
-        {pathTab === 'home' && (
-          <motion.section className="hero-section" initial="hidden" animate="visible" variants={containerVariants}>
-            <div className="hero-left">
-              <motion.h1 className="hero-title" variants={itemVariants}>
-                Emilien <br /><span className="highlight">VITRY-LHOTTE</span>
-              </motion.h1>
-              <motion.p className="hero-subtitle" variants={itemVariants}>
-                Apprenti ingénieur en <span className="highlight">Réseaux Informatiques</span> & Objets connectés — Intéressé par la <span className="highlight">Cybersécurité</span>.
-              </motion.p>
-              <motion.div className="hero-buttons" variants={itemVariants}>
-                <button onClick={() => goTo('contact')} className="cta-button">Me contacter</button>
-                <a href="/cv.pdf" download="CV-Emilien-VITRY-LHOTTE.pdf" className="cv-button">📄 Télécharger CV</a>
-              </motion.div>
-            </div>
-            <motion.div className="hero-right" variants={itemVariants}>
-              <div className="cv-preview-wrapper">
-                <img src={dark ? "/cv-nuit.webp" : "/cv.webp"} alt="Aperçu du CV d'Émilien" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      {/* Projets */}
+      <main style={{ padding: '60px', maxWidth: 1200 }}>
+        <div style={{ fontSize: 11, color: '#4caf50', letterSpacing: '0.2em', marginBottom: 32 }}>
+          PROJETS ({PROJECTS.length})
+        </div>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+          gap: 24,
+        }}>
+          {PROJECTS.map((p, i) => (
+            <div key={p.id}
+              style={{
+                background: 'linear-gradient(135deg, #111f11 0%, #0a150a 100%)',
+                border: '1px solid #1e3a1e',
+                borderRadius: 10,
+                padding: '32px',
+                cursor: 'pointer',
+                transition: 'all 0.25s',
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = p.color
+                e.currentTarget.style.transform = 'translateY(-4px)'
+                e.currentTarget.style.boxShadow = `0 16px 40px ${p.color}33`
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = '#1e3a1e'
+                e.currentTarget.style.transform = 'none'
+                e.currentTarget.style.boxShadow = 'none'
+              }}
+            >
+              <div style={{
+                position: 'absolute',
+                top: 0, right: 0,
+                width: 100, height: 100,
+                background: `radial-gradient(circle at top right, ${p.color}22, transparent 70%)`,
+              }} />
+              <div style={{ fontSize: 10, color: '#4caf50', letterSpacing: '0.15em', marginBottom: 14 }}>
+                {String(i + 1).padStart(2, '0')}
               </div>
-              <button className="expand-btn" onClick={() => setModalOpen(true)}>
-                <span className="expand-icon">⛶</span>
-                Vue détaillée
-              </button>
-            </motion.div>
-          </motion.section>
-        )}
-
-        {/* ONGLET QUI SUIS-JE */}
-        {pathTab === 'about' && (
-          <motion.section className="about-section" initial="hidden" animate="visible" variants={containerVariants}>
-            <h2>QUI SUIS-JE ?</h2>
-            <motion.div className="about-content" variants={itemVariants}>
-              <p>Actuellement étudiant à <strong>UniLaSalle Amiens</strong> en cycle Pré-Ingénieur, je me spécialise en <a href="https://www.unilasalle-amiens.fr/reseaux-informatiques-et-objets-connectes" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline' }}>Réseaux Informatiques et Objets Connectés (RIOC)</a>. Passionné par l'informatique depuis de nombreuses années, je suis activement à la recherche d'un <strong>contrat d'apprentissage de 3 ans dans le domaine de la cybersécurité</strong>, avec une prise de poste souhaitée pour septembre 2026.</p>
-              <p>En parallèle de mes études, je développe et gère ma propre activité de commerce en ligne pour laquelle je crée des outils d'automatisation (Python, API) et des sites web fullstack.</p>
-              <p>Curieux et engagé, je suis également télépilote de drone certifié (A1/A3), membre de l' association de magie "Les magiciens d'abord" depuis 2018, et j'ai eu l'honneur d'effectuer mon Service National Universel (SNU) au sein de la gendarmerie nationale d'Amiens.</p>
-            </motion.div>
-          </motion.section>
-        )}
-
-        {/* ONGLET PROJETS */}
-        {pathTab === 'projects' && (
-          <motion.section className="projects-section" initial="hidden" animate="visible" variants={containerVariants}>
-            <h2>MES PROJETS</h2>
-
-            {/* Filtres technos */}
-            <div className="project-filters">
-              <button
-                className={`filter-btn${!activeTechFilter ? ' filter-btn--active' : ''}`}
-                onClick={() => setActiveTechFilter(null)}
-              >
-                Tous
-              </button>
-              {allTechs.map(tech => (
-                <button
-                  key={tech}
-                  className={`filter-btn${activeTechFilter === tech ? ' filter-btn--active' : ''}`}
-                  onClick={() => setActiveTechFilter(activeTechFilter === tech ? null : tech)}
-                >
-                  {tech}
-                </button>
-              ))}
-            </div>
-
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTechFilter || 'all'}
-                className="projects-grid"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25 }}
-              >
-                {filteredProjects.map((project) => (
-                  <motion.div
-                    key={project.id}
-                    className="project-card"
-                    variants={cardVariants}
-                    whileHover="hover"
-                    onClick={() => openProject(project)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {project.images && project.images[0] ? (
-                      <img src={project.images[0]} alt={project.title} className="project-card-img" style={{ objectFit: project.imageFit || 'cover' }} />
-                    ) : (
-                      <div className="project-image-placeholder">VOIR LE PROJET</div>
-                    )}
-                    <div className="project-card-meta">
-                      <span className="project-date">📅 {project.date}</span>
-                    </div>
-                    <h3>{project.title}</h3>
-                    <p>{project.desc}</p>
-                    <span className="tech-stack">{project.tech}</span>
-                  </motion.div>
-                ))}
-              </motion.div>
-            </AnimatePresence>
-
-            {filteredProjects.length === 0 && (
-              <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: '40px' }}>
-                Aucun projet pour ce filtre.
+              <h3 style={{ margin: '0 0 12px', fontSize: 22, fontWeight: 700, color: '#fff' }}>
+                {p.title}
+              </h3>
+              <p style={{ margin: '0 0 20px', color: '#81c784', lineHeight: 1.6, fontSize: 14 }}>
+                {p.description}
               </p>
-            )}
-          </motion.section>
-        )}
-
-        {/* ONGLET EXPÉRIENCES */}
-        {pathTab === 'experiences' && (
-          <motion.section className="experiences-section" initial="hidden" animate="visible" variants={containerVariants}>
-            <h2>EXPÉRIENCES</h2>
-            {experiences.map((cat, ci) => (
-              <motion.div key={ci} className="exp-category" variants={itemVariants}>
-                <h3 className="exp-category-title">{cat.category}</h3>
-                <div className="exp-list">
-                  {cat.items.map((item, ii) => (
-                    <motion.div
-                      key={ii}
-                      className="exp-card"
-                      variants={itemVariants}
-                      whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(19,201,237,0.15)' }}
-                      onClick={() => openExp(item)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <div className="exp-icon">{item.icon}</div>
-                      <div className="exp-body">
-                        <div className="exp-header">
-                          <strong className="exp-title">{item.title}</strong>
-                          <span className="exp-period">{item.period}</span>
-                        </div>
-                        <p className="exp-desc">{item.desc}</p>
-                        <div className="exp-footer-row">
-                          <div className="exp-tags">
-                            {item.tags.map((tag, ti) => (
-                              <span key={ti} className="exp-tag">{tag}</span>
-                            ))}
-                          </div>
-                          <span className="exp-see-more">Voir les missions →</span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
-            ))}
-          </motion.section>
-        )}
-
-        {/* ONGLET COMPÉTENCES */}
-        {pathTab === 'skills' && (
-          <motion.section className="skills-section" initial="hidden" animate="visible" variants={containerVariants}>
-            <h2>COMPÉTENCES</h2>
-            <p className="skills-hint">Clique sur une compétence pour voir les projets associés.</p>
-            <div className="skills-tags">
-              {skills.map(skill => (
-                <motion.button
-                  key={skill.id}
-                  className={`skill-tag${skill.projectIds.length > 0 ? ' skill-tag--clickable' : ''}${selectedSkill?.id === skill.id ? ' skill-tag--active' : ''}`}
-                  variants={itemVariants}
-                  onClick={() => setSelectedSkill(selectedSkill?.id === skill.id ? null : skill)}
-                  disabled={skill.projectIds.length === 0}
-                >
-                  {skill.label}
-                </motion.button>
-              ))}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 24 }}>
+                {p.tech.map(t => (
+                  <span key={t} style={{
+                    padding: '3px 9px',
+                    background: p.color + '33',
+                    border: `1px solid ${p.color}66`,
+                    borderRadius: 20,
+                    fontSize: 11,
+                    color: '#a5d6a7',
+                  }}>{t}</span>
+                ))}
+              </div>
+              <a href={p.link} style={{
+                color: '#4caf50',
+                textDecoration: 'none',
+                fontSize: 13,
+                letterSpacing: '0.05em',
+              }}>
+                Voir le projet →
+              </a>
             </div>
-
-            <AnimatePresence>
-              {selectedSkill && linkedProjects.length > 0 && (
-                <motion.div
-                  className="skill-projects-panel"
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <div className="skill-projects-panel-header">
-                    <span className="skill-projects-panel-title">Projets illustrant <strong>{selectedSkill.label}</strong></span>
-                    <p className="skill-projects-panel-desc">{selectedSkill.desc}</p>
-                  </div>
-                  <div className="skill-projects-list">
-                    {linkedProjects.map(p => (
-                      <div key={p.id} className="skill-project-item" onClick={() => { openProject(p); setSelectedSkill(null); }}>
-                        {p.images?.[0] && (
-                          <img src={p.images[0]} alt={p.title} className="skill-project-thumb" style={{ objectFit: p.imageFit || 'cover' }} />
-                        )}
-                        <div className="skill-project-info">
-                          <strong>{p.title}</strong>
-                          <span>{p.date}</span>
-                          <span className="tech-stack" style={{ fontSize: '0.75rem', padding: '3px 10px' }}>{p.tech}</span>
-                        </div>
-                        <span className="skill-project-arrow">→</span>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.section>
-        )}
-
-        {/* ONGLET CONTACT */}
-        {pathTab === 'contact' && (
-          <motion.section className="contact-section" initial="hidden" animate="visible" variants={containerVariants}>
-            <h2>UNE QUESTION ?</h2>
-            <p>Actuellement à la recherche d'un contrat d'apprentissage en cybersécurité pour septembre 2026.</p>
-            <div className="contact-cards">
-              <motion.a href="mailto:emilien.vitry.lhotte1@gmail.com" className="contact-card" variants={itemVariants} whileHover={{ y: -6, boxShadow: '0 12px 32px rgba(19,201,237,0.18)' }}>
-                <div className="contact-card-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>
-                </div>
-                <div className="contact-card-body">
-                  <span className="contact-card-label">Email</span>
-                  <span className="contact-card-value">emilien.vitry.lhotte1@gmail.com</span>
-                </div>
-                <span className="contact-card-arrow">→</span>
-              </motion.a>
-
-              <motion.a href="tel:+33748614162" className="contact-card" variants={itemVariants} whileHover={{ y: -6, boxShadow: '0 12px 32px rgba(19,201,237,0.18)' }}>
-                <div className="contact-card-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.79 19.79 0 013.09 4.18 2 2 0 015.09 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L9.09 9.91a16 16 0 006.95 6.95l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
-                </div>
-                <div className="contact-card-body">
-                  <span className="contact-card-label">Téléphone</span>
-                  <span className="contact-card-value">+33 7 48 61 41 62</span>
-                </div>
-                <span className="contact-card-arrow">→</span>
-              </motion.a>
-
-              <motion.a href="https://github.com/Emilien0000" target="_blank" rel="noopener noreferrer" className="contact-card" variants={itemVariants} whileHover={{ y: -6, boxShadow: '0 12px 32px rgba(19,201,237,0.18)' }}>
-                <div className="contact-card-icon contact-card-icon--github">
-                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
-                </div>
-                <div className="contact-card-body">
-                  <span className="contact-card-label">GitHub</span>
-                  <span className="contact-card-value">Emilien0000</span>
-                </div>
-                <span className="contact-card-arrow">→</span>
-              </motion.a>
-
-              <motion.a href="https://www.linkedin.com/in/emilien-vitry-lhotte/" target="_blank" rel="noopener noreferrer" className="contact-card" variants={itemVariants} whileHover={{ y: -6, boxShadow: '0 12px 32px rgba(19,201,237,0.18)' }}>
-                <div className="contact-card-icon contact-card-icon--linkedin">
-                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                </div>
-                <div className="contact-card-body">
-                  <span className="contact-card-label">LinkedIn</span>
-                  <span className="contact-card-value">Emilien VITRY-LHOTTE</span>
-                </div>
-                <span className="contact-card-arrow">→</span>
-              </motion.a>
-            </div>
-          </motion.section>
-        )}
+          ))}
+        </div>
       </main>
-
-      {/* --- MODALES --- */}
-      <AnimatePresence>
-        {modalOpen && (
-          <motion.div className="cv-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} onClick={() => setModalOpen(false)}>
-            <motion.div className="cv-modal-box" variants={modalVariants} initial="hidden" animate="visible" exit="exit" onClick={e => e.stopPropagation()}>
-              <div className="cv-modal-header">
-                <div className="cv-modal-title">
-                  <div className="cv-modal-dot" />
-                  <span>CV — <strong>Émilien Vitry-Lhotte</strong></span>
-                </div>
-                <div className="cv-modal-actions">
-                  <a href="/cv.pdf" download="CV-Emilien-VITRY-LHOTTE.pdf" className="modal-dl-btn">↓ Télécharger</a>
-                  <button className="modal-close-btn" onClick={() => setModalOpen(false)}>✕</button>
-                </div>
-              </div>
-              <div className="cv-modal-body">
-                <img src={dark ? "/cv-nuit.webp" : "/cv.webp"} alt="CV d'Émilien en plein écran" className="cv-modal-img" />
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-
-        {selectedProject && (
-          <motion.div className="cv-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} onClick={closeProject}>
-            <motion.div className="project-modal-box" variants={modalVariants} initial="hidden" animate="visible" exit="exit" onClick={e => e.stopPropagation()}>
-              <div className="cv-modal-header">
-                <div className="cv-modal-title">
-                  <div className="cv-modal-dot" />
-                  <span>Projet — <strong>{selectedProject.title}</strong></span>
-                </div>
-                <div className="cv-modal-actions">
-                  <button
-                    className="modal-share-btn"
-                    title="Copier le lien du projet"
-                    onClick={() => {
-                      showCopy(
-                        selectedProject.link,
-                        `Lien "${selectedProject.title}" copié !`
-                      );
-                    }}
-                  >
-                    🔗
-                  </button>
-                  <a href={selectedProject.link} target="_blank" rel="noopener noreferrer" className="modal-dl-btn">Accéder au projet</a>
-                  <button className="modal-close-btn" onClick={closeProject}>✕</button>
-                </div>
-              </div>
-              <div className="project-modal-body">
-                <ImageGallery images={selectedProject.images} imageFit={selectedProject.imageFit} title={selectedProject.title} />
-                <div className="project-modal-content">
-                  <h2>{selectedProject.title}</h2>
-                  <div className="project-modal-meta">
-                    <span className="tech-stack">{selectedProject.tech}</span>
-                    {selectedProject.date && <span className="project-date-modal">📅 {selectedProject.date}</span>}
-                  </div>
-                  <p>{selectedProject.details || selectedProject.desc}</p>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {selectedExp && (
-          <motion.div className="cv-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} onClick={closeExp}>
-            <motion.div className="exp-modal-box" variants={modalVariants} initial="hidden" animate="visible" exit="exit" onClick={e => e.stopPropagation()}>
-              <div className="cv-modal-header">
-                <div className="cv-modal-title">
-                  <div className="cv-modal-dot" />
-                  <span><strong>{selectedExp.title}</strong></span>
-                </div>
-                <div className="cv-modal-actions">
-                  {selectedExp.slug && (
-                    <button
-                      className="modal-share-btn"
-                      title="Copier le lien"
-                      onClick={() => showCopy(
-                        `${window.location.origin}/experiences/${selectedExp.slug}`,
-                        `Lien "${selectedExp.title}" copié !`
-                      )}
-                    >🔗</button>
-                  )}
-                  <button className="modal-close-btn" onClick={closeExp}>✕</button>
-                </div>
-              </div>
-              <div className="exp-modal-body">
-                <div className="exp-modal-top">
-                  <span className="exp-modal-icon">{selectedExp.icon}</span>
-                  <div>
-                    <h2 className="exp-modal-title">{selectedExp.title}</h2>
-                    <span className="exp-modal-period">📅 {selectedExp.period}</span>
-                  </div>
-                </div>
-                <div className="exp-modal-divider" />
-                <div className="exp-modal-details">
-                  {(selectedExp.details || selectedExp.desc).split('\n\n').map((block, i) => (
-                    <p key={i} className={block.startsWith('•') ? 'exp-modal-bullet' : 'exp-modal-intro'}>
-                      {block}
-                    </p>
-                  ))}
-                </div>
-                <div className="exp-modal-tags">
-                  {selectedExp.tags.map((tag, ti) => (
-                    <span key={ti} className="exp-tag">{tag}</span>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* --- FOOTER --- */}
-      <footer className="app-footer">
-        <p>© 2026 Émilien Vitry-Lhotte. Tous droits réservés.</p>
-      </footer>
     </div>
-  );
+  )
 }
 
-// ─── Compteur de visites (enregistre à chaque chargement) ────────────────────
+// -------------------------------------------------------
+// VUE 3D (scène montagne)
+// -------------------------------------------------------
+function Scene3D({ onProjectSelect }) {
+  const treePositions = useTreePositions(600)
+  const cameraY = PLATEAU_HEIGHT + CAMERA_EYE_HEIGHT
+  const [yaw, setYaw] = useState(0)
+  const [selected, setSelected] = useState(null)
 
-function VisitTracker({ children }) {
-  useEffect(() => {
-    const count = parseInt(localStorage.getItem('portfolio_visits') || '0', 10) + 1;
-    localStorage.setItem('portfolio_visits', String(count));
-    const history = JSON.parse(localStorage.getItem('portfolio_visit_history') || '[]');
-    history.push(new Date().toLocaleString('fr-FR'));
-    if (history.length > 200) history.shift();
-    localStorage.setItem('portfolio_visit_history', JSON.stringify(history));
-  }, []);
-  return children;
-}
-
-// ─── Root App avec Router ──────────────────────────────────────────────────────
-
-function App() {
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem('portfolio_dark');
-    if (saved !== null) return saved === 'true';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-    localStorage.setItem('portfolio_dark', String(dark));
-  }, [dark]);
-
-  const toggleDark = () => setDark(v => !v);
+  const handleProjectSelect = useCallback(p => {
+    setSelected(p)
+    onProjectSelect(p)
+  }, [onProjectSelect])
 
   return (
-    <BrowserRouter>
-      <VisitTracker>
-        <Routes>
-          {/* Page cachée linktree */}
-          <Route path="/links" element={<LinksPage />} />
+    <>
+      <Canvas shadows camera={{ position: [0, cameraY, 0], fov: 75 }}
+        style={{ cursor: 'grab' }}>
+        <color attach="background" args={['#c8dff0']} />
+        <fog attach="fog" args={['#c8dff0', 80, 420]} />
+        <Sky sunPosition={[100, 50, 100]} turbidity={0.1} rayleigh={0.2} />
+        <ambientLight intensity={0.55} />
+        <directionalLight position={[80, 120, 60]} intensity={1.6} castShadow shadow-mapSize={[2048, 2048]} />
 
-          {/* Page admin */}
-          <Route path="/admin" element={<AdminPage />} />
+        <EpicProceduralMountains />
+        <DenseGrass />
+        {treePositions.map((pos, i) => <Tree key={i} position={pos} />)}
+        <PlateauTrees />
 
-          {/* Routes principales du portfolio */}
-          <Route path="/home"     element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
-          <Route path="/about"    element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
-          <Route path="/projects" element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
-          <Route path="/projects/:projectSlug" element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
-          <Route path="/experiences" element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
-          <Route path="/experiences/:expSlug" element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
-          <Route path="/skills"   element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
-          <Route path="/contact"  element={<MainLayout dark={dark} onToggleDark={toggleDark} />} />
-          <Route path="/alternances" element={<JobBoard />} />
-          {/* Callback PKCE pour reset password et auth */}
-          <Route path="/auth/callback" element={<AuthCallback />} />
-          {/* Redirect racine → /home */}
-          <Route path="/" element={<Navigate to="/home" replace />} />
-          <Route path="*" element={<Navigate to="/home" replace />} />
-        </Routes>
-      </VisitTracker>
-    </BrowserRouter>
-  );
+        {/* Panneaux projets */}
+        {PROJECTS.map(p => (
+          <ProjectSign
+            key={p.id}
+            project={p}
+            onSelect={handleProjectSelect}
+            isSelected={selected?.id === p.id}
+          />
+        ))}
+
+        <CameraController
+          onYawChange={setYaw}
+          onProjectSelect={handleProjectSelect}
+        />
+      </Canvas>
+
+      {/* HUD boussole */}
+      <CompassHUD yaw={yaw} />
+
+      {/* Instructions */}
+      <div style={{
+        position: 'fixed',
+        bottom: 28,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        color: 'rgba(255,255,255,0.55)',
+        fontSize: 12,
+        fontFamily: 'monospace',
+        letterSpacing: '0.08em',
+        pointerEvents: 'none',
+        zIndex: 10,
+      }}>
+        GLISSER pour regarder autour · CLIQUER sur un panneau pour voir le projet
+      </div>
+    </>
+  )
 }
 
-export default App;
+// -------------------------------------------------------
+// APP PRINCIPALE
+// -------------------------------------------------------
+export default function App() {
+  const [view, setView] = useState('2d') // '2d' | '3d'
+  const [selectedProject, setSelectedProject] = useState(null)
+
+  return (
+    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { overflow: hidden; }
+      `}</style>
+
+      {/* Bouton toggle toujours visible en vue 3D */}
+      {view === '3d' && (
+        <button
+          onClick={() => setView('2d')}
+          style={{
+            position: 'fixed',
+            top: 20,
+            right: 20,
+            zIndex: 50,
+            padding: '12px 20px',
+            background: 'rgba(10,30,10,0.85)',
+            border: '1px solid #4caf50',
+            color: '#4caf50',
+            borderRadius: 8,
+            cursor: 'pointer',
+            fontFamily: 'monospace',
+            fontSize: 13,
+            letterSpacing: '0.05em',
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          ← Vue 2D
+        </button>
+      )}
+
+      {/* Vues */}
+      {view === '2d' ? (
+        <div style={{ width: '100%', height: '100%', overflowY: 'auto' }}>
+          <PortfolioView onSwitch3D={() => setView('3d')} />
+        </div>
+      ) : (
+        <Scene3D onProjectSelect={setSelectedProject} />
+      )}
+
+      {/* Modal projet */}
+      <ProjectModal
+        project={selectedProject}
+        onClose={() => setSelectedProject(null)}
+      />
+    </div>
+  )
+}
