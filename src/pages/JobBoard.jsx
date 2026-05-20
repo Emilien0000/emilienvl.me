@@ -457,26 +457,45 @@ function BanwordsPanel({ banwords, onChange }) {
 // ── AppliedPanel ──────────────────────────────────────────────────────────────
 function AppliedPanel({ applied, onRemove }) {
   const exportToExcel = () => {
-    import('xlsx').then((XLSX) => {
-      const rows = applied.map((entry) => ({
-        'Titre':        entry.job.title    || '',
-        'Entreprise':   entry.job.company  || '',
-        'Localisation': entry.job.location || '',
-        'Type':         entry.job.type     || '',
-        'Source':       detectSource(entry.job.sourceUrl, entry.job.url).label,
-        'URL':          entry.job.url      || '',
-        'Date offre':   entry.job.date  ? new Date(entry.job.date).toLocaleDateString('fr-FR') : '',
-        'Postulé le':   entry.appliedAt ? new Date(entry.appliedAt).toLocaleDateString('fr-FR') : '',
-      }));
-      const ws = XLSX.utils.json_to_sheet(rows);
-      ws['!cols'] = Object.keys(rows[0] || {}).map((key) => ({
-        wch: Math.max(key.length, ...rows.map((r) => String(r[key] || '').length), 10),
-      }));
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Candidatures');
-      const date = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
-      XLSX.writeFile(wb, `candidatures_${date}.xlsx`);
-    });
+    const headers = ['Titre', 'Entreprise', 'Localisation', 'Type', 'Source', 'URL', 'Date offre', 'Postulé le'];
+    const rows = applied.map((entry) => [
+      entry.job.title    || '',
+      entry.job.company  || '',
+      entry.job.location || '',
+      entry.job.type     || '',
+      detectSource(entry.job.sourceUrl, entry.job.url).label,
+      entry.job.url      || '',
+      entry.job.date  ? new Date(entry.job.date).toLocaleDateString('fr-FR') : '',
+      entry.appliedAt ? new Date(entry.appliedAt).toLocaleDateString('fr-FR') : '',
+    ]);
+
+    const esc = (v) => String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const toRow = (cells, isHeader) =>
+      `<Row>${cells.map((c) => `<Cell${isHeader ? ' ss:StyleID="h"' : ''}><Data ss:Type="String">${esc(c)}</Data></Cell>`).join('')}</Row>`;
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <Styles>
+    <Style ss:ID="h"><Font ss:Bold="1"/><Interior ss:Color="#1a1a2e" ss:Pattern="Solid"/><Font ss:Color="#13c9ed" ss:Bold="1"/></Style>
+  </Styles>
+  <Worksheet ss:Name="Candidatures">
+    <Table>
+      ${toRow(headers, true)}
+      ${rows.map((r) => toRow(r, false)).join('\n      ')}
+    </Table>
+  </Worksheet>
+</Workbook>`;
+
+    const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const date = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
+    a.href     = url;
+    a.download = `candidatures_${date}.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const exportToCSV = () => {
