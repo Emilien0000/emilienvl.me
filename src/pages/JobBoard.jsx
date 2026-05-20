@@ -28,6 +28,7 @@ const IconSend      = () => <svg width="13" height="13" viewBox="0 0 24 24" fill
 const IconUser      = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
 const IconLogout    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 const IconCancel    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
+const IconDownload  = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
 
 // ── Sources ───────────────────────────────────────────────────────────────────
 const SOURCE_PATTERNS = [
@@ -455,6 +456,54 @@ function BanwordsPanel({ banwords, onChange }) {
 
 // ── AppliedPanel ──────────────────────────────────────────────────────────────
 function AppliedPanel({ applied, onRemove }) {
+  const exportToExcel = () => {
+    import('xlsx').then((XLSX) => {
+      const rows = applied.map((entry) => ({
+        'Titre':        entry.job.title    || '',
+        'Entreprise':   entry.job.company  || '',
+        'Localisation': entry.job.location || '',
+        'Type':         entry.job.type     || '',
+        'Source':       detectSource(entry.job.sourceUrl, entry.job.url).label,
+        'URL':          entry.job.url      || '',
+        'Date offre':   entry.job.date  ? new Date(entry.job.date).toLocaleDateString('fr-FR') : '',
+        'Postulé le':   entry.appliedAt ? new Date(entry.appliedAt).toLocaleDateString('fr-FR') : '',
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = Object.keys(rows[0] || {}).map((key) => ({
+        wch: Math.max(key.length, ...rows.map((r) => String(r[key] || '').length), 10),
+      }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Candidatures');
+      const date = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
+      XLSX.writeFile(wb, `candidatures_${date}.xlsx`);
+    });
+  };
+
+  const exportToCSV = () => {
+    const headers = ['Titre', 'Entreprise', 'Localisation', 'Type', 'Source', 'URL', 'Date offre', 'Postulé le'];
+    const rows = applied.map((entry) => [
+      entry.job.title    || '',
+      entry.job.company  || '',
+      entry.job.location || '',
+      entry.job.type     || '',
+      detectSource(entry.job.sourceUrl, entry.job.url).label,
+      entry.job.url      || '',
+      entry.job.date  ? new Date(entry.job.date).toLocaleDateString('fr-FR') : '',
+      entry.appliedAt ? new Date(entry.appliedAt).toLocaleDateString('fr-FR') : '',
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(';'))
+      .join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const date = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
+    a.href     = url;
+    a.download = `candidatures_${date}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (!applied.length) return (
     <div className="jb-empty">
       <div className="jb-empty-icon">📨</div>
@@ -464,8 +513,22 @@ function AppliedPanel({ applied, onRemove }) {
       </p>
     </div>
   );
+
   return (
     <div className="jb-panel jb-saves-panel">
+      <div className="jb-applied-export-bar">
+        <span className="jb-applied-count">
+          📨 {applied.length} candidature{applied.length > 1 ? 's' : ''}
+        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="jb-ghost-btn jb-export-btn" onClick={exportToExcel} title="Exporter en Excel (.xlsx)">
+            <IconDownload /> Excel
+          </button>
+          <button className="jb-ghost-btn jb-export-btn" onClick={exportToCSV} title="Exporter en CSV">
+            <IconDownload /> CSV
+          </button>
+        </div>
+      </div>
       <div className="jb-grid">
         <AnimatePresence>
           {applied.map((entry) => (
