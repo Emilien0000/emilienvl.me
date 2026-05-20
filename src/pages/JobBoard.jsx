@@ -456,7 +456,10 @@ function BanwordsPanel({ banwords, onChange }) {
 
 // ── AppliedPanel ──────────────────────────────────────────────────────────────
 function AppliedPanel({ applied, onRemove }) {
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    // Utilise SheetJS pour générer un vrai .xlsx (évite l'avertissement Excel)
+    const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
+
     const headers = ['Titre', 'Entreprise', 'Localisation', 'Type', 'Source', 'URL', 'Date offre', 'Postulé le'];
     const rows = applied.map((entry) => [
       entry.job.title    || '',
@@ -469,33 +472,19 @@ function AppliedPanel({ applied, onRemove }) {
       entry.appliedAt ? new Date(entry.appliedAt).toLocaleDateString('fr-FR') : '',
     ]);
 
-    const esc = (v) => String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    const toRow = (cells, isHeader) =>
-      `<Row>${cells.map((c) => `<Cell${isHeader ? ' ss:StyleID="h"' : ''}><Data ss:Type="String">${esc(c)}</Data></Cell>`).join('')}</Row>`;
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
 
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-  <Styles>
-    <Style ss:ID="h"><Font ss:Bold="1"/><Interior ss:Color="#1a1a2e" ss:Pattern="Solid"/><Font ss:Color="#13c9ed" ss:Bold="1"/></Style>
-  </Styles>
-  <Worksheet ss:Name="Candidatures">
-    <Table>
-      ${toRow(headers, true)}
-      ${rows.map((r) => toRow(r, false)).join('\n      ')}
-    </Table>
-  </Worksheet>
-</Workbook>`;
+    // Largeurs de colonnes
+    ws['!cols'] = [
+      { wch: 40 }, { wch: 25 }, { wch: 20 }, { wch: 12 },
+      { wch: 18 }, { wch: 50 }, { wch: 14 }, { wch: 14 },
+    ];
 
-    const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Candidatures');
+
     const date = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
-    a.href     = url;
-    a.download = `candidatures_${date}.xls`;
-    a.click();
-    URL.revokeObjectURL(url);
+    XLSX.writeFile(wb, `candidatures_${date}.xlsx`);
   };
 
   const exportToCSV = () => {
