@@ -465,7 +465,7 @@ function MainLayout({ dark, onToggleDark }) {
                 Emilien <br /><span className="highlight">VITRY-LHOTTE</span>
               </motion.h1>
               <motion.p className="hero-subtitle" variants={itemVariants}>
-                Apprenti ingénieur en <span className="highlight">Réseaux Informatiques</span> & Objets connectés — Intéressé par l' <span className="highlight">Informatique</span>.
+                Apprenti ingénieur en <span className="highlight">Réseaux Informatiques</span> & Objets connectés — Intéressé par l'<span className="highlight">Informatique</span>.
               </motion.p>
               <motion.div className="hero-buttons" variants={itemVariants}>
                 <button onClick={() => goTo('contact')} className="cta-button">Me contacter</button>
@@ -489,7 +489,7 @@ function MainLayout({ dark, onToggleDark }) {
           <motion.section className="about-section" initial="hidden" animate="visible" variants={containerVariants}>
             <h2>QUI SUIS-JE ?</h2>
             <motion.div className="about-content" variants={itemVariants}>
-              <p>Actuellement étudiant à <strong>UniLaSalle Amiens</strong> en cycle Pré-Ingénieur, je me spécialise en <a href="https://www.unilasalle-amiens.fr/reseaux-informatiques-et-objets-connectes" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline' }}>Réseaux Informatiques et Objets Connectés (RIOC)</a>. Passionné par l'informatique depuis de nombreuses années, je suis activement à la recherche d'un <strong>contrat d'apprentissage de 3 ans dans le domaine de la informatique</strong>, avec une prise de poste souhaitée pour septembre 2026.</p>
+              <p>Actuellement étudiant à <strong>UniLaSalle Amiens</strong> en cycle Pré-Ingénieur, je me spécialise en <a href="https://www.unilasalle-amiens.fr/reseaux-informatiques-et-objets-connectes" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline' }}>Réseaux Informatiques et Objets Connectés (RIOC)</a>. Passionné par l'informatique depuis de nombreuses années, je suis activement à la recherche d'un <strong>contrat d'apprentissage de 3 ans dans le domaine de l'informatique</strong>, avec une prise de poste souhaitée pour septembre 2026.</p>
               <p>En parallèle de mes études, je développe et gère ma propre activité de commerce en ligne pour laquelle je crée des outils d'automatisation (Python, API) et des sites web fullstack.</p>
               <p>Curieux et engagé, je suis également télépilote de drone certifié (A1/A3), membre de l' association de magie "Les magiciens d'abord" depuis 2018, et j'ai eu l'honneur d'effectuer mon Service National Universel (SNU) au sein de la gendarmerie nationale d'Amiens.</p>
             </motion.div>
