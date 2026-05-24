@@ -204,7 +204,7 @@ function LinksPage() {
         <motion.div className="links-identity" variants={itemVariants}>
           <div className="links-avatar"><img src="/cv.webp" alt="Émilien Vitry-Lhotte" /></div>
           <h1 className="links-name">Émilien <span className="highlight">Vitry-Lhotte</span></h1>
-          <p className="links-bio">Etudiant ingénieur · Réseaux & Cybersécurité</p>
+          <p className="links-bio">Etudiant ingénieur · Réseaux Informatiques et Objets Connectés</p>
           <div className="links-badge">UniLaSalle Amiens</div>
         </motion.div>
         <motion.div className="links-list" variants={containerVariants}>
@@ -465,7 +465,7 @@ function MainLayout({ dark, onToggleDark }) {
                 Emilien <br /><span className="highlight">VITRY-LHOTTE</span>
               </motion.h1>
               <motion.p className="hero-subtitle" variants={itemVariants}>
-                Apprenti ingénieur en <span className="highlight">Réseaux Informatiques</span> & Objets connectés — Intéressé par la <span className="highlight">Cybersécurité</span>.
+                Apprenti ingénieur en <span className="highlight">Réseaux Informatiques</span> & Objets connectés — Intéressé par l' <span className="highlight">Informatique</span>.
               </motion.p>
               <motion.div className="hero-buttons" variants={itemVariants}>
                 <button onClick={() => goTo('contact')} className="cta-button">Me contacter</button>
@@ -489,7 +489,7 @@ function MainLayout({ dark, onToggleDark }) {
           <motion.section className="about-section" initial="hidden" animate="visible" variants={containerVariants}>
             <h2>QUI SUIS-JE ?</h2>
             <motion.div className="about-content" variants={itemVariants}>
-              <p>Actuellement étudiant à <strong>UniLaSalle Amiens</strong> en cycle Pré-Ingénieur, je me spécialise en <a href="https://www.unilasalle-amiens.fr/reseaux-informatiques-et-objets-connectes" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline' }}>Réseaux Informatiques et Objets Connectés (RIOC)</a>. Passionné par l'informatique depuis de nombreuses années, je suis activement à la recherche d'un <strong>contrat d'apprentissage de 3 ans dans le domaine de la cybersécurité</strong>, avec une prise de poste souhaitée pour septembre 2026.</p>
+              <p>Actuellement étudiant à <strong>UniLaSalle Amiens</strong> en cycle Pré-Ingénieur, je me spécialise en <a href="https://www.unilasalle-amiens.fr/reseaux-informatiques-et-objets-connectes" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline' }}>Réseaux Informatiques et Objets Connectés (RIOC)</a>. Passionné par l'informatique depuis de nombreuses années, je suis activement à la recherche d'un <strong>contrat d'apprentissage de 3 ans dans le domaine de la informatique</strong>, avec une prise de poste souhaitée pour septembre 2026.</p>
               <p>En parallèle de mes études, je développe et gère ma propre activité de commerce en ligne pour laquelle je crée des outils d'automatisation (Python, API) et des sites web fullstack.</p>
               <p>Curieux et engagé, je suis également télépilote de drone certifié (A1/A3), membre de l' association de magie "Les magiciens d'abord" depuis 2018, et j'ai eu l'honneur d'effectuer mon Service National Universel (SNU) au sein de la gendarmerie nationale d'Amiens.</p>
             </motion.div>
@@ -660,7 +660,7 @@ function MainLayout({ dark, onToggleDark }) {
         {pathTab === 'contact' && (
           <motion.section className="contact-section" initial="hidden" animate="visible" variants={containerVariants}>
             <h2>UNE QUESTION ?</h2>
-            <p>Actuellement à la recherche d'un contrat d'apprentissage en cybersécurité pour septembre 2026.</p>
+            <p>Actuellement à la recherche d'un contrat d'apprentissage en informatique pour septembre 2026.</p>
             <div className="contact-cards">
               <motion.a href="mailto:emilien.vitry.lhotte1@gmail.com" className="contact-card" variants={itemVariants} whileHover={{ y: -6, boxShadow: '0 12px 32px rgba(19,201,237,0.18)' }}>
                 <div className="contact-card-icon">
