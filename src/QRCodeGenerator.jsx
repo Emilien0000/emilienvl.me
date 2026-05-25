@@ -1,4 +1,4 @@
-// QRCodeGenerator.jsx — QR Code Studio v2
+// QRCodeGenerator.jsx — QR Code Studio v3
 // npm install qrcode
 // Placer dans src/ et ajouter dans App.jsx :
 //   import QRCodeGenerator from './QRCodeGenerator';
@@ -7,169 +7,116 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import QRCode from 'qrcode';
 
-/* ─────────── helpers ─────────── */
+/* ─────────── gradient helper ─────────── */
 function buildGradient(ctx, type, c1, c2, angle, w, h) {
   if (type === 'solid') return c1;
   const rad = (angle * Math.PI) / 180;
   const cx = w / 2, cy = h / 2, len = Math.sqrt(w * w + h * h) / 2;
-  const x1 = cx - Math.cos(rad) * len, y1 = cy - Math.sin(rad) * len;
-  const x2 = cx + Math.cos(rad) * len, y2 = cy + Math.sin(rad) * len;
   if (type === 'radial') {
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, len);
     g.addColorStop(0, c1); g.addColorStop(1, c2); return g;
   }
+  const x1 = cx - Math.cos(rad) * len, y1 = cy - Math.sin(rad) * len;
+  const x2 = cx + Math.cos(rad) * len, y2 = cy + Math.sin(rad) * len;
   const g = ctx.createLinearGradient(x1, y1, x2, y2);
   g.addColorStop(0, c1); g.addColorStop(1, c2); return g;
 }
 
+/* ─────────── rounded rect ─────────── */
 function roundRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.moveTo(x + rr, y);
+  ctx.lineTo(x + w - rr, y); ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+  ctx.lineTo(x + w, y + h - rr); ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+  ctx.lineTo(x + rr, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+  ctx.lineTo(x, y + rr); ctx.quadraticCurveTo(x, y, x + rr, y);
   ctx.closePath();
 }
 
-function drawEye(ctx, x, y, size, outerShape, innerShape, color) {
-  const s = size;
-  const borderW = Math.round(s / 7);
-  // outer frame
+/* ─────────── draw one finder pattern eye ─────────── */
+function drawFinderEye(ctx, x, y, cellPx, outerShape, innerShape, color, bgColor) {
+  const total = 7 * cellPx;
+  // clear zone with background color
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(x, y, total, total);
+
   ctx.fillStyle = color;
+
+  // outer ring (7×7 border, 1-cell thick)
+  const outerR = cellPx * 1.0;
   if (outerShape === 'circle') {
-    ctx.beginPath(); ctx.arc(x + s / 2, y + s / 2, s / 2, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,0)';
+    const cx = x + total / 2, cy = y + total / 2, rx = total / 2;
+    ctx.beginPath(); ctx.arc(cx, cy, rx, 0, Math.PI * 2); ctx.fill();
+    // punch out inner 5×5
+    ctx.fillStyle = bgColor;
+    ctx.beginPath(); ctx.arc(cx, cy, rx - cellPx, 0, Math.PI * 2); ctx.fill();
   } else if (outerShape === 'rounded') {
-    roundRect(ctx, x, y, s, s, s * 0.22); ctx.fill();
+    roundRect(ctx, x, y, total, total, outerR); ctx.fill();
+    ctx.fillStyle = bgColor;
+    roundRect(ctx, x + cellPx, y + cellPx, 5 * cellPx, 5 * cellPx, outerR * 0.5); ctx.fill();
   } else {
-    ctx.fillRect(x, y, s, s);
+    ctx.fillRect(x, y, total, total);
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(x + cellPx, y + cellPx, 5 * cellPx, 5 * cellPx);
   }
-  // inner clear zone
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-out';
-  const inner = s - borderW * 2;
-  if (outerShape === 'circle') {
-    ctx.beginPath(); ctx.arc(x + s / 2, y + s / 2, inner / 2, 0, Math.PI * 2); ctx.fill();
-  } else if (outerShape === 'rounded') {
-    roundRect(ctx, x + borderW, y + borderW, inner, inner, inner * 0.18); ctx.fill();
-  } else {
-    ctx.fillRect(x + borderW, y + borderW, inner, inner);
-  }
-  ctx.restore();
-  // inner dot
-  const dotSize = Math.round(s * 3 / 7);
-  const dotOffset = (s - dotSize) / 2;
+
+  // inner dot (3×3)
   ctx.fillStyle = color;
+  const dotX = x + 2 * cellPx, dotY = y + 2 * cellPx, dotS = 3 * cellPx;
+  const dotR = cellPx * 0.9;
   if (innerShape === 'circle') {
-    ctx.beginPath(); ctx.arc(x + s / 2, y + s / 2, dotSize / 2, 0, Math.PI * 2); ctx.fill();
+    const cx = dotX + dotS / 2, cy = dotY + dotS / 2;
+    ctx.beginPath(); ctx.arc(cx, cy, dotS / 2, 0, Math.PI * 2); ctx.fill();
   } else if (innerShape === 'rounded') {
-    roundRect(ctx, x + dotOffset, y + dotOffset, dotSize, dotSize, dotSize * 0.25); ctx.fill();
+    roundRect(ctx, dotX, dotY, dotS, dotS, dotR); ctx.fill();
   } else {
-    ctx.fillRect(x + dotOffset, y + dotOffset, dotSize, dotSize);
+    ctx.fillRect(dotX, dotY, dotS, dotS);
   }
 }
 
 /* ─────────── theme tokens ─────────── */
 function tokens(dark) {
   if (dark) return {
-    bg: '#090d12',
-    panel: 'rgba(255,255,255,0.025)',
-    panelBorder: 'rgba(255,255,255,0.07)',
-    panelHeader: 'rgba(19,201,237,0.03)',
-    text: '#e6edf3',
-    subtext: '#8b949e',
-    accent: '#13c9ed',
-    accentDim: 'rgba(19,201,237,0.1)',
-    accentBorder: 'rgba(19,201,237,0.2)',
-    inputBg: 'rgba(255,255,255,0.04)',
-    inputBorder: 'rgba(255,255,255,0.08)',
-    inputBorderFocus: 'rgba(19,201,237,0.5)',
-    btnBg: 'rgba(255,255,255,0.05)',
-    btnActive: '#13c9ed',
-    btnActiveTxt: '#0d1117',
-    divider: 'rgba(255,255,255,0.05)',
+    bg: '#090d12', panel: 'rgba(255,255,255,0.025)', panelBorder: 'rgba(255,255,255,0.07)',
+    panelHeader: 'rgba(19,201,237,0.03)', text: '#e6edf3', subtext: '#8b949e',
+    accent: '#13c9ed', accentDim: 'rgba(19,201,237,0.1)', accentBorder: 'rgba(19,201,237,0.2)',
+    inputBg: 'rgba(255,255,255,0.04)', inputBorder: 'rgba(255,255,255,0.08)',
+    inputBorderFocus: 'rgba(19,201,237,0.5)', btnBg: 'rgba(255,255,255,0.05)',
+    btnActive: '#13c9ed', btnActiveTxt: '#0d1117', divider: 'rgba(255,255,255,0.05)',
     previewShadow: '0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)',
     globalBg: 'radial-gradient(ellipse 55% 45% at 75% 15%, rgba(19,201,237,0.07) 0%, transparent 65%)',
-    labelClr: '#8b949e',
-    hexBg: 'rgba(255,255,255,0.04)',
-    hexBorder: 'rgba(255,255,255,0.08)',
-    hexClr: '#e6edf3',
-    noteBg: 'rgba(19,201,237,0.04)',
-    noteBorder: 'rgba(19,201,237,0.1)',
-    successBg: 'rgba(35,197,94,0.08)',
-    successBorder: 'rgba(35,197,94,0.25)',
-    successClr: '#23c55e',
-    backBg: 'rgba(255,255,255,0.04)',
-    backBorder: 'rgba(255,255,255,0.1)',
-    backClr: '#8b949e',
-    toggleBg: 'rgba(255,255,255,0.07)',
-    copyBg: 'rgba(255,255,255,0.05)',
-    copyClr: '#8b949e',
+    labelClr: '#8b949e', hexBg: 'rgba(255,255,255,0.04)', hexBorder: 'rgba(255,255,255,0.08)',
+    hexClr: '#e6edf3', noteBg: 'rgba(19,201,237,0.04)', noteBorder: 'rgba(19,201,237,0.1)',
+    successBg: 'rgba(35,197,94,0.08)', successBorder: 'rgba(35,197,94,0.25)', successClr: '#23c55e',
+    backBg: 'rgba(255,255,255,0.04)', backBorder: 'rgba(255,255,255,0.1)', backClr: '#8b949e',
+    toggleBg: 'rgba(255,255,255,0.07)', copyBg: 'rgba(255,255,255,0.05)', copyClr: '#8b949e',
   };
   return {
-    bg: '#f0f4f8',
-    panel: 'rgba(255,255,255,0.85)',
-    panelBorder: 'rgba(0,0,0,0.07)',
-    panelHeader: 'rgba(19,201,237,0.04)',
-    text: '#0d1117',
-    subtext: '#5a6270',
-    accent: '#0e7fa3',
-    accentDim: 'rgba(14,127,163,0.08)',
-    accentBorder: 'rgba(14,127,163,0.22)',
-    inputBg: 'rgba(0,0,0,0.04)',
-    inputBorder: 'rgba(0,0,0,0.1)',
-    inputBorderFocus: 'rgba(14,127,163,0.5)',
-    btnBg: 'rgba(0,0,0,0.06)',
-    btnActive: '#0e7fa3',
-    btnActiveTxt: '#ffffff',
-    divider: 'rgba(0,0,0,0.06)',
+    bg: '#f0f4f8', panel: 'rgba(255,255,255,0.85)', panelBorder: 'rgba(0,0,0,0.07)',
+    panelHeader: 'rgba(19,201,237,0.04)', text: '#0d1117', subtext: '#5a6270',
+    accent: '#0e7fa3', accentDim: 'rgba(14,127,163,0.08)', accentBorder: 'rgba(14,127,163,0.22)',
+    inputBg: 'rgba(0,0,0,0.04)', inputBorder: 'rgba(0,0,0,0.1)',
+    inputBorderFocus: 'rgba(14,127,163,0.5)', btnBg: 'rgba(0,0,0,0.06)',
+    btnActive: '#0e7fa3', btnActiveTxt: '#ffffff', divider: 'rgba(0,0,0,0.06)',
     previewShadow: '0 24px 64px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
     globalBg: 'radial-gradient(ellipse 55% 45% at 75% 15%, rgba(14,127,163,0.06) 0%, transparent 65%)',
-    labelClr: '#5a6270',
-    hexBg: 'rgba(0,0,0,0.04)',
-    hexBorder: 'rgba(0,0,0,0.09)',
-    hexClr: '#0d1117',
-    noteBg: 'rgba(14,127,163,0.04)',
-    noteBorder: 'rgba(14,127,163,0.12)',
-    successBg: 'rgba(22,163,74,0.07)',
-    successBorder: 'rgba(22,163,74,0.25)',
-    successClr: '#16a34a',
-    backBg: 'rgba(0,0,0,0.04)',
-    backBorder: 'rgba(0,0,0,0.1)',
-    backClr: '#5a6270',
-    toggleBg: 'rgba(0,0,0,0.06)',
-    copyBg: 'rgba(0,0,0,0.05)',
-    copyClr: '#5a6270',
+    labelClr: '#5a6270', hexBg: 'rgba(0,0,0,0.04)', hexBorder: 'rgba(0,0,0,0.09)',
+    hexClr: '#0d1117', noteBg: 'rgba(14,127,163,0.04)', noteBorder: 'rgba(14,127,163,0.12)',
+    successBg: 'rgba(22,163,74,0.07)', successBorder: 'rgba(22,163,74,0.25)', successClr: '#16a34a',
+    backBg: 'rgba(0,0,0,0.04)', backBorder: 'rgba(0,0,0,0.1)', backClr: '#5a6270',
+    toggleBg: 'rgba(0,0,0,0.06)', copyBg: 'rgba(0,0,0,0.05)', copyClr: '#5a6270',
   };
 }
 
 /* ─────────── presets ─────────── */
 const PRESETS = [
-  {
-    label: '🌊 Ocean', fgType: 'linear', fgC1: '#0062ff', fgC2: '#13c9ed', fgAngle: 135,
-    bgType: 'solid', bgC1: '#ffffff', moduleStyle: 'rounded', eyeOuter: 'rounded', eyeInner: 'rounded',
-  },
-  {
-    label: '🌅 Sunset', fgType: 'linear', fgC1: '#ff6b35', fgC2: '#ff2d7a', fgAngle: 45,
-    bgType: 'solid', bgC1: '#ffffff', moduleStyle: 'dots', eyeOuter: 'circle', eyeInner: 'circle',
-  },
-  {
-    label: '🌿 Forest', fgType: 'radial', fgC1: '#16a34a', fgC2: '#064e3b', fgAngle: 0,
-    bgType: 'solid', bgC1: '#f0fdf4', moduleStyle: 'rounded', eyeOuter: 'rounded', eyeInner: 'circle',
-  },
-  {
-    label: '🔥 Fire', fgType: 'linear', fgC1: '#ef4444', fgC2: '#f97316', fgAngle: 90,
-    bgType: 'solid', bgC1: '#1c0a00', moduleStyle: 'dots', eyeOuter: 'circle', eyeInner: 'rounded',
-  },
-  {
-    label: '🖤 Mono', fgType: 'solid', fgC1: '#000000', fgC2: '#000000', fgAngle: 0,
-    bgType: 'solid', bgC1: '#ffffff', moduleStyle: 'square', eyeOuter: 'square', eyeInner: 'square',
-  },
-  {
-    label: '💜 Violet', fgType: 'linear', fgC1: '#7c3aed', fgC2: '#ec4899', fgAngle: 135,
-    bgType: 'solid', bgC1: '#ffffff', moduleStyle: 'rounded', eyeOuter: 'rounded', eyeInner: 'rounded',
-  },
+  { label: '🌊 Ocean',  fgType:'linear', fgC1:'#0062ff', fgC2:'#13c9ed', fgAngle:135, bgType:'solid', bgC1:'#ffffff', moduleStyle:'rounded', eyeOuter:'rounded', eyeInner:'rounded', eyeColorMode:'match' },
+  { label: '🌅 Sunset', fgType:'linear', fgC1:'#ff6b35', fgC2:'#ff2d7a', fgAngle:45,  bgType:'solid', bgC1:'#ffffff', moduleStyle:'dots',    eyeOuter:'circle',  eyeInner:'circle',  eyeColorMode:'match' },
+  { label: '🌿 Forest', fgType:'radial', fgC1:'#16a34a', fgC2:'#064e3b', fgAngle:0,   bgType:'solid', bgC1:'#f0fdf4', moduleStyle:'rounded', eyeOuter:'rounded', eyeInner:'circle',  eyeColorMode:'match' },
+  { label: '🔥 Fire',   fgType:'linear', fgC1:'#ef4444', fgC2:'#f97316', fgAngle:90,  bgType:'solid', bgC1:'#1c0a00', moduleStyle:'dots',    eyeOuter:'circle',  eyeInner:'rounded', eyeColorMode:'custom', eyeColor:'#f97316' },
+  { label: '🖤 Mono',   fgType:'solid',  fgC1:'#000000', fgC2:'#000000', fgAngle:0,   bgType:'solid', bgC1:'#ffffff', moduleStyle:'square',  eyeOuter:'square',  eyeInner:'square',  eyeColorMode:'match' },
+  { label: '💜 Violet', fgType:'linear', fgC1:'#7c3aed', fgC2:'#ec4899', fgAngle:135, bgType:'solid', bgC1:'#ffffff', moduleStyle:'rounded', eyeOuter:'rounded', eyeInner:'rounded', eyeColorMode:'match' },
 ];
 
 /* ─────────── sub-components ─────────── */
@@ -204,14 +151,14 @@ function AngleSlider({ value, onChange, t }) {
 }
 
 function GradientPicker({ type, setType, c1, setC1, c2, setC2, angle, setAngle, t }) {
-  const inputStyle = { width: '100%', padding: '9px 12px', borderRadius: 8, border: `1px solid ${t.inputBorder}`, background: t.inputBg, color: t.text, fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s', fontFamily: 'inherit' };
   const hexStyle = { flex: 1, padding: '8px 10px', borderRadius: 8, border: `1px solid ${t.hexBorder}`, background: t.hexBg, color: t.hexClr, fontSize: '0.82rem', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' };
   const swatchStyle = { width: 36, height: 36, padding: 2, border: `1px solid ${t.inputBorder}`, borderRadius: 8, background: 'none', cursor: 'pointer', flexShrink: 0 };
+  const segBtn = (active) => ({ flex: 1, padding: '7px 0', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, transition: 'all 0.15s', background: active ? t.btnActive : t.btnBg, color: active ? t.btnActiveTxt : t.subtext });
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', gap: 6 }}>
         {[['solid', 'Uni'], ['linear', 'Linear'], ['radial', 'Radial']].map(([tp, l]) => (
-          <button key={tp} onClick={() => setType(tp)} style={{ flex: 1, padding: '7px 0', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, transition: 'all 0.15s', background: type === tp ? t.btnActive : t.btnBg, color: type === tp ? t.btnActiveTxt : t.subtext }}>{l}</button>
+          <button key={tp} onClick={() => setType(tp)} style={segBtn(type === tp)}>{l}</button>
         ))}
       </div>
       <div style={{ display: 'flex', gap: 10 }}>
@@ -265,133 +212,128 @@ export default function QRCodeGenerator() {
   const [exportSize, setExportSize] = useState(1200);
   const [error, setError] = useState('');
   const [moduleStyle, setModuleStyle] = useState('rounded'); // square | rounded | dots
-  const [eyeOuter, setEyeOuter] = useState('rounded');      // square | rounded | circle
+  const [eyeOuter, setEyeOuter] = useState('rounded');
   const [eyeInner, setEyeInner] = useState('rounded');
-  const [padding, setPadding] = useState(2);                 // QR margin (modules)
-  const [eccLevel, setEccLevel] = useState('H');             // L M Q H
-  const [eyeColorMode, setEyeColorMode] = useState('match'); // match | custom
+  const [padding, setPadding] = useState(2);
+  const [eccLevel, setEccLevel] = useState('H');
+  const [eyeColorMode, setEyeColorMode] = useState('match');
   const [eyeColor, setEyeColor] = useState('#1a6fa8');
   const [copied, setCopied] = useState(false);
   const previewRef = useRef(null);
   const fileRef = useRef(null);
 
-  /* ── draw ── */
+  /* ── core draw using QRCode.create matrix ── */
   const draw = useCallback(async (canvas, size) => {
     if (!canvas) return;
     setError('');
     if (!url.trim()) { setError('Entrez une URL.'); return; }
     try {
-      const tmp = document.createElement('canvas');
-      await QRCode.toCanvas(tmp, url, { width: size, margin: padding, color: { dark: '#000000', light: '#ffffff' }, errorCorrectionLevel: eccLevel });
+      // Get raw QR matrix
+      const qr = QRCode.create(url, { errorCorrectionLevel: eccLevel });
+      const modules = qr.modules;
+      const numCells = modules.size;
+      const totalCells = numCells + padding * 2;
+      const cellPx = Math.floor(size / totalCells);
+      const actualSize = cellPx * totalCells;
 
-      canvas.width = size; canvas.height = size;
+      canvas.width = actualSize;
+      canvas.height = actualSize;
       const ctx = canvas.getContext('2d');
 
-      // background
-      ctx.fillStyle = buildGradient(ctx, bgType, bgC1, bgC2, bgAngle, size, size);
-      ctx.fillRect(0, 0, size, size);
+      // Background
+      ctx.fillStyle = buildGradient(ctx, bgType, bgC1, bgC2, bgAngle, actualSize, actualSize);
+      ctx.fillRect(0, 0, actualSize, actualSize);
 
-      // gradient canvas for fg color
-      const gc = document.createElement('canvas'); gc.width = size; gc.height = size;
+      // Build gradient pixel lookup for FG color
+      const gc = document.createElement('canvas');
+      gc.width = actualSize; gc.height = actualSize;
       const gCtx = gc.getContext('2d');
-      gCtx.fillStyle = buildGradient(gCtx, fgType, fgC1, fgC2, fgAngle, size, size);
-      gCtx.fillRect(0, 0, size, size);
-      const gradPx = gCtx.getImageData(0, 0, size, size).data;
-      const tPx = tmp.getContext('2d').getImageData(0, 0, size, size).data;
+      gCtx.fillStyle = buildGradient(gCtx, fgType, fgC1, fgC2, fgAngle, actualSize, actualSize);
+      gCtx.fillRect(0, 0, actualSize, actualSize);
+      const gradData = gCtx.getImageData(0, 0, actualSize, actualSize).data;
 
-      // determine module cell size (sample the raw QR)
-      // find the smallest "dark run" on the first row after margin to approximate cell size
-      let cellSize = 1;
-      const startX = Math.round(padding * size / (tmp.width));
-      for (let x = startX; x < tmp.width; x++) {
-        const idx = x * 4;
-        if (tPx[idx] < 128) { // dark pixel
-          let run = 0;
-          while (x + run < tmp.width && tPx[(x + run) * 4] < 128) run++;
-          cellSize = Math.max(1, run);
-          break;
-        }
-      }
+      // Finder pattern cell regions to skip during module draw
+      const finderCells = new Set();
+      // top-left: rows 0..8, cols 0..8 (7 finder + 1 separator + timing)
+      // but we only need to skip the 7x7 finder squares themselves
+      const addFinder = (startRow, startCol) => {
+        for (let r = startRow; r < startRow + 7; r++)
+          for (let c = startCol; c < startCol + 7; c++)
+            finderCells.add(r * numCells + c);
+      };
+      addFinder(0, 0);
+      addFinder(0, numCells - 7);
+      addFinder(numCells - 7, 0);
 
-      // render modules
-      const offCanvas = document.createElement('canvas');
-      offCanvas.width = size; offCanvas.height = size;
-      const offCtx = offCanvas.getContext('2d');
+      // Draw data modules cell by cell
+      for (let row = 0; row < numCells; row++) {
+        for (let col = 0; col < numCells; col++) {
+          if (finderCells.has(row * numCells + col)) continue;
+          if (!modules.data[row * numCells + col]) continue;
 
-      const r = moduleStyle === 'square' ? 0 : moduleStyle === 'dots' ? cellSize / 2 : cellSize * 0.3;
-      const shrink = moduleStyle === 'dots' ? 0.15 : 0;
+          const px = (padding + col) * cellPx;
+          const py = (padding + row) * cellPx;
+          // pick gradient color from center of cell
+          const cx = Math.min(px + Math.floor(cellPx / 2), actualSize - 1);
+          const cy = Math.min(py + Math.floor(cellPx / 2), actualSize - 1);
+          const gi = (cy * actualSize + cx) * 4;
+          ctx.fillStyle = `rgb(${gradData[gi]},${gradData[gi+1]},${gradData[gi+2]})`;
 
-      for (let py = 0; py < size; py++) {
-        for (let px = 0; px < size; px++) {
-          const i = (py * size + px) * 4;
-          if (tPx[i] < 128) {
-            offCtx.fillStyle = `rgba(${gradPx[i]},${gradPx[i + 1]},${gradPx[i + 2]},1)`;
-            if (moduleStyle === 'dots') {
-              offCtx.beginPath();
-              offCtx.arc(px + 0.5, py + 0.5, 0.5 - shrink, 0, Math.PI * 2);
-              offCtx.fill();
-            } else if (moduleStyle === 'rounded' && r > 0) {
-              // only draw one rect per cell block
-              // simple per-pixel approach for compatibility
-              offCtx.fillRect(px, py, 1, 1);
-            } else {
-              offCtx.fillRect(px, py, 1, 1);
-            }
+          if (moduleStyle === 'dots') {
+            const r = cellPx * 0.42;
+            ctx.beginPath();
+            ctx.arc(px + cellPx / 2, py + cellPx / 2, r, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (moduleStyle === 'rounded') {
+            const r = cellPx * 0.28;
+            roundRect(ctx, px + 0.5, py + 0.5, cellPx - 1, cellPx - 1, r);
+            ctx.fill();
+          } else {
+            ctx.fillRect(px, py, cellPx, cellPx);
           }
         }
       }
 
-      ctx.drawImage(offCanvas, 0, 0);
-
-      // eyes — find their positions relative to full size canvas
-      // QR code standard: top-left corner eye at module (0,0), top-right at (w-7,0), bottom-left at (0,w-7)
-      // we get module count from QRCode lib via raw data
-      const raw = await QRCode.toBuffer(url, { type: 'png', width: 100, margin: 0, errorCorrectionLevel: eccLevel }).catch(() => null);
-      // fallback: estimate module count from tmp canvas pixel analysis
-      // detect first solid dark run to get module pixel size (tmp has margin=padding)
-      let modPx = cellSize;
-      const marginPx = Math.round(padding * modPx);
-      const eyeSizePx = Math.round(7 * modPx);
-
+      // Draw finder eyes with custom style
       const eyeClr = eyeColorMode === 'custom' ? eyeColor : fgC1;
+      const bgSample = bgC1; // use solid bg color for eye background
 
-      // Draw 3 finder patterns using the custom eye renderer on a separate composited canvas
-      const eyeCanvas = document.createElement('canvas');
-      eyeCanvas.width = size; eyeCanvas.height = size;
-      const eyeCtx = eyeCanvas.getContext('2d');
-
-      const eyePositions = [
-        [marginPx, marginPx],
-        [size - marginPx - eyeSizePx, marginPx],
-        [marginPx, size - marginPx - eyeSizePx],
+      const finderPositions = [
+        [0, 0],
+        [0, numCells - 7],
+        [numCells - 7, 0],
       ];
 
-      eyePositions.forEach(([ex, ey]) => {
-        // erase underlying modules in eye area first
-        ctx.clearRect(ex, ey, eyeSizePx, eyeSizePx);
-        // refill bg in eye area
-        ctx.fillStyle = buildGradient(ctx, bgType, bgC1, bgC2, bgAngle, size, size);
-        ctx.fillRect(ex, ey, eyeSizePx, eyeSizePx);
-        // draw eye
-        drawEye(ctx, ex, ey, eyeSizePx, eyeOuter, eyeInner, eyeClr);
+      finderPositions.forEach(([startRow, startCol]) => {
+        const px = (padding + startCol) * cellPx;
+        const py = (padding + startRow) * cellPx;
+        drawFinderEye(ctx, px, py, cellPx, eyeOuter, eyeInner, eyeClr, bgSample);
       });
 
-      // logo
+      // Logo
       if (logoMode !== 'none') {
-        const ls = size * 0.22; const lx = (size - ls) / 2, ly = (size - ls) / 2; const rr = ls * 0.18;
-        ctx.save(); roundRect(ctx, lx, ly, ls, ls, rr); ctx.fillStyle = logoBg; ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.lineWidth = size * 0.003; ctx.stroke(); ctx.restore();
+        const ls = actualSize * 0.22;
+        const lx = (actualSize - ls) / 2, ly = (actualSize - ls) / 2;
+        const rr = ls * 0.18;
+        ctx.save(); roundRect(ctx, lx, ly, ls, ls, rr);
+        ctx.fillStyle = logoBg; ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.lineWidth = actualSize * 0.003; ctx.stroke();
+        ctx.restore();
         if (logoMode === 'text' && logoText.trim()) {
           ctx.save(); ctx.fillStyle = logoTextClr;
           ctx.font = `bold ${ls * 0.42}px 'Segoe UI', system-ui, sans-serif`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText(logoText.trim().toUpperCase().slice(0, 5), size / 2, size / 2); ctx.restore();
+          ctx.fillText(logoText.trim().toUpperCase().slice(0, 5), actualSize / 2, actualSize / 2);
+          ctx.restore();
         } else if (logoMode === 'image' && logoImage) {
           ctx.save(); roundRect(ctx, lx + 3, ly + 3, ls - 6, ls - 6, rr); ctx.clip();
           ctx.drawImage(logoImage, lx + 5, ly + 5, ls - 10, ls - 10); ctx.restore();
         }
       }
-    } catch (e) { setError('URL invalide ou QR trop complexe.'); console.error(e); }
+    } catch (e) {
+      setError('URL invalide ou QR trop complexe.');
+      console.error(e);
+    }
   }, [url, fgType, fgC1, fgC2, fgAngle, bgType, bgC1, bgC2, bgAngle, logoMode, logoText, logoImage, logoBg, logoTextClr, moduleStyle, eyeOuter, eyeInner, padding, eccLevel, eyeColorMode, eyeColor]);
 
   useEffect(() => { draw(previewRef.current, 300); }, [draw]);
@@ -421,8 +363,7 @@ export default function QRCodeGenerator() {
     hd.toBlob(async (blob) => {
       try {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        setCopied(true); setTimeout(() => setCopied(false), 2000);
       } catch { setError('Copie non supportée par ce navigateur.'); }
     });
   };
@@ -431,34 +372,17 @@ export default function QRCodeGenerator() {
     setFgType(p.fgType); setFgC1(p.fgC1); setFgC2(p.fgC2); setFgAngle(p.fgAngle);
     setBgType(p.bgType); setBgC1(p.bgC1);
     setModuleStyle(p.moduleStyle); setEyeOuter(p.eyeOuter); setEyeInner(p.eyeInner);
+    setEyeColorMode(p.eyeColorMode);
+    if (p.eyeColor) setEyeColor(p.eyeColor);
   };
 
-  /* ── shared styles ── */
-  const inputStyle = {
-    width: '100%', padding: '9px 12px', borderRadius: 8,
-    border: `1px solid ${t.inputBorder}`, background: t.inputBg, color: t.text,
-    fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box',
-    transition: 'border-color 0.2s', fontFamily: 'inherit',
-  };
-  const hexStyle = {
-    flex: 1, padding: '8px 10px', borderRadius: 8,
-    border: `1px solid ${t.hexBorder}`, background: t.hexBg, color: t.hexClr,
-    fontSize: '0.82rem', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box',
-  };
-  const swatchStyle = {
-    width: 36, height: 36, padding: 2, border: `1px solid ${t.inputBorder}`,
-    borderRadius: 8, background: 'none', cursor: 'pointer', flexShrink: 0,
-  };
-  const labelStyle = {
-    fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.1em',
-    textTransform: 'uppercase', color: t.labelClr, display: 'block',
-  };
-  const segBtn = (active) => ({
-    flex: 1, padding: '7px 0', borderRadius: 7, border: 'none', cursor: 'pointer',
-    fontSize: '0.75rem', fontWeight: 700, transition: 'all 0.15s',
-    background: active ? t.btnActive : t.btnBg,
-    color: active ? t.btnActiveTxt : t.subtext,
-  });
+  /* ── shared style helpers ── */
+  const inputStyle = { width: '100%', padding: '9px 12px', borderRadius: 8, border: `1px solid ${t.inputBorder}`, background: t.inputBg, color: t.text, fontSize: '0.9rem', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s', fontFamily: 'inherit' };
+  const hexStyle   = { flex: 1, padding: '8px 10px', borderRadius: 8, border: `1px solid ${t.hexBorder}`, background: t.hexBg, color: t.hexClr, fontSize: '0.82rem', outline: 'none', fontFamily: 'monospace', boxSizing: 'border-box' };
+  const swatchStyle = { width: 36, height: 36, padding: 2, border: `1px solid ${t.inputBorder}`, borderRadius: 8, background: 'none', cursor: 'pointer', flexShrink: 0 };
+  const labelStyle  = { fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: t.labelClr, display: 'block' };
+  const segBtn = (active) => ({ flex: 1, padding: '7px 4px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: '0.73rem', fontWeight: 700, transition: 'all 0.15s', background: active ? t.btnActive : t.btnBg, color: active ? t.btnActiveTxt : t.subtext });
+  const segBtnV = (active) => ({ width: '100%', padding: '8px 10px', borderRadius: 7, border: `1px solid ${active ? t.accent : 'transparent'}`, cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, textAlign: 'left', transition: 'all 0.15s', background: active ? t.accentDim : t.btnBg, color: active ? t.accent : t.subtext });
 
   return (
     <div style={{ minHeight: '100vh', background: t.bg, color: t.text, fontFamily: "'Segoe UI', system-ui, sans-serif", display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '48px 16px 80px', transition: 'background 0.3s, color 0.3s' }}>
@@ -473,8 +397,6 @@ export default function QRCodeGenerator() {
             onMouseLeave={e => { e.currentTarget.style.background = t.backBg; e.currentTarget.style.color = t.backClr; e.currentTarget.style.borderColor = t.backBorder; }}>
             ← Retour au portfolio
           </a>
-
-          {/* dark/light toggle */}
           <button onClick={() => setDark(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 30, background: t.toggleBg, border: `1px solid ${t.panelBorder}`, color: t.subtext, fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', transition: 'all 0.2s', outline: 'none' }}>
             {dark ? '☀️ Mode clair' : '🌙 Mode sombre'}
           </button>
@@ -482,7 +404,7 @@ export default function QRCodeGenerator() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24, alignItems: 'start' }} className="qr-layout">
 
-          {/* ── Controls ── */}
+          {/* ── Panel controls ── */}
           <div style={{ background: t.panel, backdropFilter: 'blur(20px)', border: `1px solid ${t.panelBorder}`, borderRadius: 20, overflow: 'hidden', transition: 'background 0.3s, border-color 0.3s' }}>
             <div style={{ padding: '22px 26px', borderBottom: `1px solid ${t.divider}`, background: t.panelHeader }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -491,7 +413,7 @@ export default function QRCodeGenerator() {
                 <span style={{ fontSize: '0.62rem', padding: '2px 9px', borderRadius: 20, fontWeight: 700, background: t.accentDim, color: t.accent, border: `1px solid ${t.accentBorder}` }}>∞ PERMANENT</span>
               </div>
               <h1 style={{ margin: 0, fontSize: '1.55rem', fontWeight: 800, letterSpacing: '-0.03em' }}>Générateur QR Code</h1>
-              <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: t.subtext }}>Dégradés · Formes · Logo · Export HD jusqu'à 2400 px</p>
+              <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: t.subtext }}>Dégradés · Formes · Coins personnalisables · Logo · Export HD</p>
             </div>
 
             <div style={{ padding: '0 26px' }}>
@@ -504,14 +426,10 @@ export default function QRCodeGenerator() {
               </Section>
 
               {/* Presets */}
-              <Section title="Préréglages rapides" t={t} defaultOpen={true}>
+              <Section title="Préréglages rapides" t={t}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                   {PRESETS.map((p) => (
-                    <button key={p.label} onClick={() => applyPreset(p)} style={{
-                      padding: '10px 6px', borderRadius: 10, border: `1px solid ${t.panelBorder}`,
-                      background: t.btnBg, color: t.text, fontSize: '0.78rem', fontWeight: 700,
-                      cursor: 'pointer', transition: 'all 0.15s', textAlign: 'center',
-                    }}
+                    <button key={p.label} onClick={() => applyPreset(p)} style={{ padding: '10px 6px', borderRadius: 10, border: `1px solid ${t.panelBorder}`, background: t.btnBg, color: t.text, fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s', textAlign: 'center' }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = t.accent; e.currentTarget.style.color = t.accent; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = t.panelBorder; e.currentTarget.style.color = t.text; }}>
                       {p.label}
@@ -520,37 +438,40 @@ export default function QRCodeGenerator() {
                 </div>
               </Section>
 
-              {/* Module style */}
-              <Section title="Style des modules" t={t}>
+              {/* Module + eye style */}
+              <Section title="Style des modules & coins" t={t}>
+
+                {/* Module shape */}
                 <div>
                   <label style={{ ...labelStyle, marginBottom: 8 }}>Forme des pixels QR</label>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    {[['square', '▪ Carré'], ['rounded', '▪ Arrondi'], ['dots', '● Dots']].map(([v, l]) => (
+                    {[['square', '▪ Carré'], ['rounded', '◼ Arrondi'], ['dots', '● Dots']].map(([v, l]) => (
                       <button key={v} onClick={() => setModuleStyle(v)} style={segBtn(moduleStyle === v)}>{l}</button>
                     ))}
                   </div>
                 </div>
 
+                {/* Eye shapes */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
                     <label style={{ ...labelStyle, marginBottom: 8 }}>Coin extérieur</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                      {[['square', '▪ Carré'], ['rounded', '◻ Arrondi'], ['circle', '○ Cercle']].map(([v, l]) => (
-                        <button key={v} onClick={() => setEyeOuter(v)} style={{ ...segBtn(eyeOuter === v), textAlign: 'left', padding: '7px 10px' }}>{l}</button>
+                      {[['square', '▪ Carré'], ['rounded', '⬜ Arrondi'], ['circle', '○ Cercle']].map(([v, l]) => (
+                        <button key={v} onClick={() => setEyeOuter(v)} style={segBtnV(eyeOuter === v)}>{l}</button>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <label style={{ ...labelStyle, marginBottom: 8 }}>Coin intérieur</label>
+                    <label style={{ ...labelStyle, marginBottom: 8 }}>Point intérieur</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                       {[['square', '▪ Carré'], ['rounded', '◻ Arrondi'], ['circle', '● Cercle']].map(([v, l]) => (
-                        <button key={v} onClick={() => setEyeInner(v)} style={{ ...segBtn(eyeInner === v), textAlign: 'left', padding: '7px 10px' }}>{l}</button>
+                        <button key={v} onClick={() => setEyeInner(v)} style={segBtnV(eyeInner === v)}>{l}</button>
                       ))}
                     </div>
                   </div>
                 </div>
 
-                {/* eye color */}
+                {/* Eye color */}
                 <div>
                   <label style={{ ...labelStyle, marginBottom: 8 }}>Couleur des coins</label>
                   <div style={{ display: 'flex', gap: 6, marginBottom: eyeColorMode === 'custom' ? 10 : 0 }}>
@@ -568,11 +489,11 @@ export default function QRCodeGenerator() {
               </Section>
 
               {/* FG color */}
-              <Section title="Couleur des modules QR" t={t}>
+              <Section title="Couleur des modules" t={t}>
                 <GradientPicker type={fgType} setType={setFgType} c1={fgC1} setC1={setFgC1} c2={fgC2} setC2={setFgC2} angle={fgAngle} setAngle={setFgAngle} t={t} />
               </Section>
 
-              {/* BG color */}
+              {/* BG */}
               <Section title="Arrière-plan" defaultOpen={false} t={t}>
                 <GradientPicker type={bgType} setType={setBgType} c1={bgC1} setC1={setBgC1} c2={bgC2} setC2={setBgC2} angle={bgAngle} setAngle={setBgAngle} t={t} />
               </Section>
@@ -625,7 +546,6 @@ export default function QRCodeGenerator() {
 
               {/* Advanced */}
               <Section title="Paramètres avancés" defaultOpen={false} t={t}>
-                {/* Padding */}
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                     <label style={labelStyle}>Marge (quiet zone)</label>
@@ -636,18 +556,14 @@ export default function QRCodeGenerator() {
                     <span>0</span><span>3 (standard)</span><span>6</span>
                   </div>
                 </div>
-
-                {/* ECC */}
                 <div>
                   <label style={{ ...labelStyle, marginBottom: 8 }}>Correction d'erreur</label>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    {[['L', 'L — 7%'], ['M', 'M — 15%'], ['Q', 'Q — 25%'], ['H', 'H — 30%']].map(([v, l]) => (
-                      <button key={v} onClick={() => setEccLevel(v)} style={segBtn(eccLevel === v)}>{l}</button>
+                    {[['L','7%'],['M','15%'],['Q','25%'],['H','30%']].map(([v,pct]) => (
+                      <button key={v} onClick={() => setEccLevel(v)} style={segBtn(eccLevel === v)}>{v} — {pct}</button>
                     ))}
                   </div>
-                  <p style={{ margin: '8px 0 0', fontSize: '0.72rem', color: t.subtext, lineHeight: 1.5 }}>
-                    Niveau H recommandé avec un logo central. Plus le niveau est élevé, plus le QR est dense.
-                  </p>
+                  <p style={{ margin: '8px 0 0', fontSize: '0.72rem', color: t.subtext, lineHeight: 1.5 }}>Niveau H requis avec logo central.</p>
                 </div>
               </Section>
 
@@ -668,7 +584,7 @@ export default function QRCodeGenerator() {
             </div>
           </div>
 
-          {/* ── Preview ── */}
+          {/* ── Preview panel ── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, position: 'sticky', top: 20 }}>
             <div style={{ background: t.panel, backdropFilter: 'blur(20px)', border: `1px solid ${t.panelBorder}`, borderRadius: 20, padding: 22, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, transition: 'background 0.3s' }}>
               <span style={{ ...labelStyle, color: t.subtext }}>Aperçu temps réel</span>
@@ -681,7 +597,6 @@ export default function QRCodeGenerator() {
               </p>
             </div>
 
-            {/* Download */}
             <button onClick={handleDownload}
               style={{ width: '100%', padding: '15px', borderRadius: 12, border: 'none', cursor: 'pointer', background: `linear-gradient(135deg, ${t.accent} 0%, #1a6fa8 100%)`, color: '#fff', fontWeight: 800, fontSize: '0.95rem', letterSpacing: '0.02em', boxShadow: `0 8px 28px ${t.accent}44`, transition: 'transform 0.15s, box-shadow 0.15s' }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 14px 36px ${t.accent}66`; }}
@@ -689,13 +604,11 @@ export default function QRCodeGenerator() {
               ↓ Télécharger PNG — {exportSize} px
             </button>
 
-            {/* Copy to clipboard */}
             <button onClick={handleCopy}
               style={{ width: '100%', padding: '12px', borderRadius: 12, border: `1px solid ${copied ? t.successBorder : t.panelBorder}`, cursor: 'pointer', background: copied ? t.successBg : t.copyBg, color: copied ? t.successClr : t.copyClr, fontWeight: 700, fontSize: '0.85rem', transition: 'all 0.2s' }}>
               {copied ? '✓ Copié dans le presse-papier !' : '⧉ Copier l\'image (PNG)'}
             </button>
 
-            {/* Info note */}
             <div style={{ padding: '14px 16px', borderRadius: 12, background: t.noteBg, border: `1px solid ${t.noteBorder}`, fontSize: '0.75rem', color: t.subtext, lineHeight: 1.7, textAlign: 'center' }}>
               QR code <strong style={{ color: t.accent }}>permanent</strong> — aucun service tiers, aucune expiration.
             </div>
@@ -707,7 +620,6 @@ export default function QRCodeGenerator() {
         @media (max-width: 760px) { .qr-layout { grid-template-columns: 1fr !important; } }
         * { box-sizing: border-box; }
         input[type=range] { cursor: pointer; }
-        input[type=color] { appearance: none; -webkit-appearance: none; }
         button { font-family: inherit; }
       `}</style>
     </div>
