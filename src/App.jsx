@@ -7,6 +7,7 @@ import { supabase } from './supabase';
 import JobBoard from './pages/JobBoard';
 import AdminPage from './pages/AdminPage';
 import AuthCallback from './pages/AuthCallback';
+import QRCodeGenerator from './QRCodeGenerator';
 
 
 // ─── Variants animations ───────────────────────────────────────────────────────
@@ -867,6 +868,9 @@ function App() {
         <Routes>
           {/* Page cachée linktree */}
           <Route path="/links" element={<LinksPage />} />
+
+          {/* Générateur QR Code illimité */}
+          <Route path="/qr" element={<QRCodeGenerator />} />
 
           {/* Page admin */}
           <Route path="/admin" element={<AdminPage />} />
