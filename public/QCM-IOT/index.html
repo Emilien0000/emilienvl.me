@@ -7,6 +7,26 @@
 <link rel="icon" href="/favicon.ico">
 <!-- Chemins absolus : le site est servi sur /QCM-IOT/ (avec ou sans slash final) -->
 <link rel="stylesheet" href="/QCM-IOT/style.css">
+<style>
+  input.name-input {
+    display: block; width: 100%; margin-top: 8px; padding: 13px 16px; border-radius: 14px;
+    border: 1.5px solid var(--border-subtle); background: var(--bg-color); color: var(--text-main);
+    font: inherit; font-weight: 600; outline: none; transition: border-color .2s;
+  }
+  input.name-input:focus { border-color: var(--highlight-color); }
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0 6px; }
+  .stat { background: var(--bg-color); border: 1px solid var(--border-subtle); border-radius: 16px; padding: 14px 8px; text-align: center; }
+  .stat .v { font-size: 1.6rem; font-weight: 900; color: var(--highlight-color); line-height: 1.1; }
+  .stat .v small { font-size: .8rem; color: var(--text-secondary); font-weight: 700; }
+  .stat .l { margin-top: 6px; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-secondary); }
+  .chart-box { background: var(--bg-color); border: 1px solid var(--border-subtle); border-radius: 16px; padding: 12px 8px 6px; margin-top: 12px; }
+  .chart-box svg { width: 100%; height: auto; display: block; }
+  .chart-box .legend { display: flex; justify-content: center; gap: 18px; font-size: .75rem; color: var(--text-secondary); padding: 4px 0 6px; flex-wrap: wrap; }
+  .chart-box .legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; background: var(--highlight-color); }
+  .chart-box .legend i.dash { background: repeating-linear-gradient(90deg, var(--text-secondary) 0 4px, transparent 4px 7px); }
+  .chart-empty { text-align: center; padding: 22px 10px; color: var(--text-secondary); font-size: .9rem; }
+  @media (max-width: 560px) { .stat .v { font-size: 1.3rem; } }
+</style>
 <script>
   // Même thème que le portfolio (même domaine => même localStorage)
   (function () {
@@ -38,6 +58,17 @@
     <!-- Accueil -->
     <section id="home" class="card">
       <p>30 questions tirées au hasard dans une banque de <b id="total">69</b>. Les questions de la fiche de révision (★) sont tirées en priorité, et les questions déjà vues sont évitées tant qu'il en reste de nouvelles.</p>
+
+      <label class="field" for="name">Ton prénom</label>
+      <input id="name" class="name-input" type="text" maxlength="30" placeholder="Ex : Émilien" autocomplete="off" list="names">
+      <datalist id="names"></datalist>
+
+      <div id="homeStats" hidden>
+        <h3 class="section">Mes statistiques</h3>
+        <div class="stats-grid" id="homeNums"></div>
+        <div class="chart-box" id="homeChart"></div>
+      </div>
+
       <label class="field" for="course">Cours</label>
       <select id="course">
         <option value="all">Tous (mélange)</option>
@@ -46,8 +77,9 @@
         <option value="Sigfox">Sigfox</option>
       </select>
       <p class="muted" id="seenInfo" style="margin-top:12px"></p>
-      <button id="start" class="primary">Nouveau QCM</button>
-      <button id="reset" class="link">Réinitialiser l'historique</button>
+      <button id="start" class="primary" disabled>Nouveau QCM</button>
+      <button id="reset" class="link">Réinitialiser l'historique des questions</button>
+      <button id="resetScores" class="link">Effacer mes scores</button>
     </section>
 
     <!-- Question -->
@@ -65,12 +97,16 @@
 
     <!-- Résultat -->
     <section id="result" class="card" hidden>
-      <h2 style="margin-top:0;text-align:center">Résultat</h2>
+      <h2 style="margin-top:0;text-align:center" id="resTitle">Résultat</h2>
       <div class="scores">
         <div class="score-box"><div class="big" id="s30"></div><div class="lbl">Note sur 30</div></div>
         <div class="score-box"><div class="big" id="s20"></div><div class="lbl">Note sur 20</div></div>
       </div>
       <p class="verdict" id="verdict"></p>
+
+      <h3 class="section">Mon évolution</h3>
+      <div class="stats-grid" id="resNums"></div>
+      <div class="chart-box" id="resChart"></div>
 
       <h3 class="section">Par cours</h3>
       <div id="byCourse"></div>
@@ -90,6 +126,19 @@
   <footer class="app-footer"><p>© 2026 Émilien Vitry-Lhotte</p></footer>
 </div>
 
+<!-- Popup pour les diapos -->
+<div id="slideModal" class="modal" hidden>
+  <div class="modal-content">
+    <button class="close-modal" id="closeModal" type="button" aria-label="Fermer">&times;</button>
+    <img id="slideImg" src="" alt="Diapositive du cours">
+    <div class="modal-nav">
+      <button type="button" class="nav-btn" id="slidePrev" aria-label="Diapo précédente">‹</button>
+      <span id="slideCaption"></span>
+      <button type="button" class="nav-btn" id="slideNext" aria-label="Diapo suivante">›</button>
+    </div>
+  </div>
+</div>
+
 <script src="/QCM-IOT/questions.js"></script>
 <script>
 (function () {
@@ -99,7 +148,7 @@
     return;
   }
 
-  const N = 30, KEY = "qcm-iot-seen-v2", PRIO_RATIO = 0.7, LETTERS = ["A", "B", "C", "D"];
+  const N = 30, KEY = "qcm-iot-seen-v2", HKEY = "qcm-iot-scores-v1", NKEY = "qcm-iot-name-v1", PRIO_RATIO = 0.7, LETTERS = ["A", "B", "C", "D"];
   const $ = id => document.getElementById(id);
   const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
@@ -110,7 +159,73 @@
   try { seen = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(seen)); } catch (e) {} };
 
-  let set = [], i = 0, score = 0, answers = [], choice = null, validated = false, shownOpts = [];
+  /* ---------- Profils & scores ---------- */
+  let hist = {};   // { "prénom (minuscules)": { name: "Prénom", runs: [{t, s, n, c}] } }
+  try { hist = JSON.parse(localStorage.getItem(HKEY) || "{}"); } catch (e) {}
+  const saveHist = () => { try { localStorage.setItem(HKEY, JSON.stringify(hist)); } catch (e) {} };
+  const pkey = n => n.trim().toLowerCase();
+  const curName = () => $("name").value.trim();
+  const runsOf = n => (hist[pkey(n)] && hist[pkey(n)].runs) || [];
+  const note20 = r => r.s / r.n * 20;
+
+  function numsBox(box, runs) {
+    box.innerHTML = "";
+    const v = runs.map(note20), avg = v.reduce((a, b) => a + b, 0) / v.length;
+    [[fmt(avg), "Moyenne /20"], [fmt(Math.max(...v)), "Meilleure /20"], [String(runs.length), "QCM faits"]].forEach(([val, lbl]) => {
+      const s = el("div", "stat"), big = el("div", "v", val);
+      if (lbl !== "QCM faits") big.appendChild(el("small", "", " / 20"));
+      s.appendChild(big); s.appendChild(el("div", "l", lbl));
+      box.appendChild(s);
+    });
+  }
+
+  // Graphique SVG : évolution des notes (/20) + ligne de moyenne
+  function drawChart(box, runs) {
+    box.innerHTML = "";
+    if (runs.length < 2) { box.appendChild(el("p", "chart-empty", runs.length ? "Fais au moins un deuxième QCM pour voir ta courbe d'évolution 📈" : "Aucun QCM pour l'instant.")); return; }
+    const data = runs.slice(-30), W = 600, H = 230, p = { l: 34, r: 16, t: 16, b: 26 };
+    const x = i => p.l + i * (W - p.l - p.r) / (data.length - 1);
+    const y = v => p.t + (1 - v / 20) * (H - p.t - p.b);
+    const vals = data.map(note20), avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const pts = vals.map((v, i) => [x(i), y(v)]);
+    const line = pts.map((q, i) => (i ? "L" : "M") + q[0].toFixed(1) + " " + q[1].toFixed(1)).join(" ");
+    const area = line + ` L${pts[pts.length - 1][0].toFixed(1)} ${y(0)} L${pts[0][0].toFixed(1)} ${y(0)} Z`;
+    let g = "";
+    [0, 5, 10, 15, 20].forEach(t => {
+      g += `<line x1="${p.l}" x2="${W - p.r}" y1="${y(t)}" y2="${y(t)}" stroke="var(--border-subtle)" stroke-width="1"/>` +
+           `<text x="${p.l - 8}" y="${y(t) + 4}" text-anchor="end" font-size="11" fill="var(--text-secondary)">${t}</text>`;
+    });
+    const step = Math.ceil(data.length / 8);
+    data.forEach((r, i) => {
+      if (i % step === 0 || i === data.length - 1)
+        g += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="var(--text-secondary)">${runs.length - data.length + i + 1}</text>`;
+    });
+    const dots = pts.map((q, i) => {
+      const d = new Date(data[i].t).toLocaleDateString("fr-FR");
+      return `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="${i === pts.length - 1 ? 6 : 4}" fill="var(--bg-color)" stroke="var(--highlight-color)" stroke-width="2.5"><title>QCM ${runs.length - data.length + i + 1} · ${d} : ${data[i].s}/${data[i].n} (${fmt(vals[i])}/20)</title></circle>`;
+    }).join("");
+    box.innerHTML =
+      `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Évolution des notes">
+        <defs><linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--highlight-color)" stop-opacity=".35"/><stop offset="1" stop-color="var(--highlight-color)" stop-opacity="0"/></linearGradient></defs>
+        ${g}
+        <line x1="${p.l}" x2="${W - p.r}" y1="${y(avg)}" y2="${y(avg)}" stroke="var(--text-secondary)" stroke-width="1.5" stroke-dasharray="5 5"/>
+        <path d="${area}" fill="url(#ga)"/>
+        <path d="${line}" fill="none" stroke="var(--highlight-color)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+        ${dots}
+      </svg>
+      <div class="legend"><span><i></i>Note /20</span><span><i class="dash"></i>Moyenne (${fmt(avg)})</span><span>N° du QCM en abscisse</span></div>`;
+  }
+
+  function homeStats() {
+    const n = curName(), runs = n ? runsOf(n) : [];
+    $("homeStats").hidden = !runs.length;
+    if (runs.length) { numsBox($("homeNums"), runs); drawChart($("homeChart"), runs); }
+    $("start").disabled = !n;
+    $("names").innerHTML = "";
+    Object.values(hist).forEach(h => { const o = document.createElement("option"); o.value = h.name; $("names").appendChild(o); });
+  }
+
+  let set = [], i = 0, score = 0, answers = [], choice = null, validated = false, shownOpts = [], player = "";
 
   /* ---------- Thème & scroll ---------- */
   const themeBtn = $("theme");
@@ -143,6 +258,9 @@
 
   /* ---------- Tirage ---------- */
   function start() {
+    player = curName();
+    if (!player) { $("name").focus(); return; }
+    try { localStorage.setItem(NKEY, player); } catch (e) {}
     const c = $("course").value;
     const pool = bank.filter(q => c === "all" || q.course === c);
     const size = Math.min(N, pool.length);
@@ -166,11 +284,18 @@
   }
 
   /* ---------- Question ---------- */
+  // Note live : moyenne ramenée sur 20 d'après les questions déjà validées
+  function liveScore() {
+    const done = answers.length;
+    const note = done ? fmt(score / done * 20) + " / 20" : "– / 20";
+    $("score").innerHTML = `Score : ${score}/${done} · <b style="color:var(--highlight-color);font-size:1.05rem">Note : ${note}</b>`;
+  }
+
   function render() {
     const q = set[i];
     choice = null; validated = false;
     $("counter").textContent = `Question ${i + 1} / ${set.length}`;
-    $("score").textContent = `Score : ${score}`;
+    liveScore();
     $("progress").style.width = (i / set.length * 100) + "%";
     $("tag").textContent = q.course + (q.prio ? " · ★ Fiche" : "");
     $("question").textContent = q.q;
@@ -221,7 +346,7 @@
     ex.appendChild(el("small", "", "Source : " + q.why));
     ex.hidden = false;
 
-    $("score").textContent = `Score : ${score}`;
+    liveScore();
     $("progress").style.width = ((i + 1) / set.length * 100) + "%";
     $("validate").hidden = true;
     $("next").textContent = i === set.length - 1 ? "Voir le résultat" : "Question suivante";
@@ -236,14 +361,28 @@
   /* ---------- Résultat ---------- */
   function finish() {
     show("result");
-    const n = set.length, note20 = score / n * 20;
+    const n = set.length, n20 = score / n * 20;
+
+    // Enregistrement du score dans le profil
+    const k = pkey(player);
+    hist[k] = hist[k] || { name: player, runs: [] };
+    hist[k].name = player;
+    hist[k].runs.push({ t: Date.now(), s: score, n, c: $("course").value });
+    saveHist();
+    const runs = hist[k].runs;
+
+    $("resTitle").textContent = `Résultat de ${player}`;
     $("s30").innerHTML = `${score}<small> / ${n}</small>`;
-    $("s20").innerHTML = `${fmt(note20)}<small> / 20</small>`;
+    $("s20").innerHTML = `${fmt(n20)}<small> / 20</small>`;
+    const avgPrev = runs.length > 1 ? runs.slice(0, -1).map(note20).reduce((a, b) => a + b, 0) / (runs.length - 1) : null;
     $("verdict").textContent =
-      note20 >= 16 ? "Excellent, le cours est maîtrisé 🔥" :
-      note20 >= 14 ? "Très bien, presque parfait 👏" :
-      note20 >= 10 ? "C'est bon, mais revois les erreurs ci-dessous 📖" :
-                     "À retravailler : relis le cours et refais un QCM 💪";
+      (n20 >= 16 ? "Excellent, le cours est maîtrisé 🔥" :
+       n20 >= 14 ? "Très bien, presque parfait 👏" :
+       n20 >= 10 ? "C'est bon, mais revois les erreurs ci-dessous 📖" :
+                   "À retravailler : relis le cours et refais un QCM 💪") +
+      (avgPrev !== null ? (n20 >= avgPrev ? "  ·  au-dessus de ta moyenne 📈" : "  ·  en dessous de ta moyenne 📉") : "");
+    numsBox($("resNums"), runs);
+    drawChart($("resChart"), runs);
 
     const per = {};
     answers.forEach(a => { const p = per[a.q.course] = per[a.q.course] || [0, 0]; p[1]++; if (a.ok) p[0]++; });
@@ -278,6 +417,15 @@
       if (!a.ok) c.appendChild(el("p", "ans given-ko", "Ta réponse : " + a.given));
       c.appendChild(el("p", "ans right", (a.ok ? "Ta réponse (juste) : " : "Bonne réponse : ") + a.q.good));
       c.appendChild(el("p", "src", "Source : " + a.q.why));
+
+      // Bouton « Voir la diapo » si la source cite un numéro de slide
+      const sl = slidesOf(a.q.why);
+      if (sl.length) {
+        const btn = el("button", "secondary slide-btn", "📑 Voir la diapo " + sl.join(", "));
+        btn.type = "button";
+        btn.onclick = () => openSlide(a.q.course, sl[0]);
+        c.appendChild(btn);
+      }
       box.appendChild(c);
     });
   }
@@ -286,20 +434,82 @@
   $("start").onclick = start;
   $("validate").onclick = validate;
   $("next").onclick = next;
-  $("again").onclick = () => { show("home"); info(); };
+  $("again").onclick = () => { show("home"); info(); homeStats(); };
   $("course").onchange = info;
+  $("name").oninput = homeStats;
   $("reset").onclick = () => { seen = []; save(); info(); };
+  $("resetScores").onclick = () => {
+    const n = curName();
+    if (!n || !runsOf(n).length) return;
+    if (confirm(`Effacer tous les scores de ${n} ?`)) { delete hist[pkey(n)]; saveHist(); homeStats(); }
+  };
   document.querySelectorAll(".filter-btn").forEach(b => b.onclick = () => {
     document.querySelectorAll(".filter-btn").forEach(x => x.classList.toggle("active", x === b));
     corrections(b.dataset.f);
   });
   addEventListener("keydown", e => {
+    if (!$("home").hidden && e.key === "Enter" && document.activeElement === $("name")) { e.preventDefault(); start(); return; }
     if ($("quiz").hidden) return;
     if (e.key >= "1" && e.key <= "4") select(+e.key - 1);
     else if (e.key === "Enter") { e.preventDefault(); validated ? next() : validate(); }
   });
 
-  info();
+  /* ---------- Popup diapos ---------- */
+  // Nombre de diapos par cours + diapos absentes du PDF (numérotation à trous)
+  const DECKS = { LPWAN: { max: 52, gaps: [] }, LoRa: { max: 108, gaps: [86, 87, 88, 89, 90, 91, 92, 93] }, Sigfox: { max: 51, gaps: [] } };
+  let curDeck = null, curSlide = 0;
+
+  // "Slide 49-51" -> [49,50,51] ; "Slide 16, 29" -> [16,29] ; sans numéro -> []
+  function slidesOf(src) {
+    const m = /slides?\s*(\d+(?:\s*[-–,]\s*\d+)*)/i.exec(src || "");
+    if (!m) return [];
+    const out = [];
+    m[1].split(",").forEach(part => {
+      const r = part.split(/[-–]/).map(x => parseInt(x, 10));
+      if (r.length === 2 && r[1] >= r[0] && r[1] - r[0] < 10) for (let k = r[0]; k <= r[1]; k++) out.push(k);
+      else out.push(r[0]);
+    });
+    return out;
+  }
+
+  function paintSlide() {
+    const d = DECKS[curDeck];
+    $("slideImg").alt = "Diapositive " + curSlide + " du cours " + curDeck;
+    $("slideImg").src = `/QCM-IOT/slides/${curDeck}_${curSlide}.jpg`;
+    $("slideCaption").textContent = `${curDeck} · diapo ${curSlide} / ${d.max}`;
+    $("slidePrev").disabled = stepSlide(-1) === null;
+    $("slideNext").disabled = stepSlide(1) === null;
+  }
+  function stepSlide(dir) {
+    const d = DECKS[curDeck];
+    let n = curSlide + dir;
+    while (n >= 1 && n <= d.max && d.gaps.includes(n)) n += dir;
+    return n >= 1 && n <= d.max ? n : null;
+  }
+  function openSlide(deck, num) {
+    if (!DECKS[deck]) return;
+    curDeck = deck; curSlide = num;
+    paintSlide();
+    $("slideModal").hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+  function closeSlide() { $("slideModal").hidden = true; document.body.style.overflow = ""; }
+  function moveSlide(dir) { const n = stepSlide(dir); if (n !== null) { curSlide = n; paintSlide(); } }
+
+  $("closeModal").onclick = closeSlide;
+  $("slidePrev").onclick = () => moveSlide(-1);
+  $("slideNext").onclick = () => moveSlide(1);
+  $("slideModal").onclick = e => { if (e.target === $("slideModal")) closeSlide(); };
+  addEventListener("keydown", e => {
+    if ($("slideModal").hidden) return;
+    if (e.key === "Escape") closeSlide();
+    else if (e.key === "ArrowLeft") moveSlide(-1);
+    else if (e.key === "ArrowRight") moveSlide(1);
+    else if (e.key === "Enter") e.stopImmediatePropagation();
+  }, true);
+
+  try { $("name").value = localStorage.getItem(NKEY) || ""; } catch (e) {}
+  info(); homeStats();
 })();
 </script>
 </body>
