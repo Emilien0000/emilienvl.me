@@ -2,7 +2,7 @@
 // 8e champ = 1 → question issue de la fiche de révision : tirée en priorité (~70 % du QCM).
 // L'ordre des réponses est mélangé automatiquement à l'affichage.
 const QUESTIONS = [
-// ───────── LPWAN ─────────
+// ───────── LPWAN ─────────-
   ["LPWAN","Quelle est la définition de l'IoT donnée dans le cours ?","L'extension du monde virtuel (Internet) au monde réel (objets physiques)","Un réseau unique et homogène reliant tous les objets","Le remplacement d'Internet par un réseau radio","Un protocole de routage pour capteurs","Slide 5"],
   ["LPWAN","Pourquoi l'IoT se développe-t-il aujourd'hui ? (coût des modules)","Un module LoRa/Sigfox coûte ~2 € contre ~20 € en GSM/GPRS","Un module LoRa/Sigfox coûte ~40 €, comme la 4G","Les modules GSM sont devenus gratuits","Les abonnements LPWAN sont de 200 €/an","Slide 13"],
   ["LPWAN","Quelle autonomie visée pour un détecteur de place de parking dans la chaussée ?","Jusqu'à 10 ans sans changer la batterie","6 mois","1 an","50 ans","Slide 17-18"],
