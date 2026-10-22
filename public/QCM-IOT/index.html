@@ -57,7 +57,7 @@
 
     <!-- Accueil -->
     <section id="home" class="card">
-      <p>30 questions tirées au hasard dans une banque de <b id="total">69</b>. Les questions de la fiche de révision (★) sont tirées en priorité, et les questions déjà vues sont évitées tant qu'il en reste de nouvelles.</p>
+      <p>30 questions tirées au hasard dans une banque de <b id="total">69</b>. Les questions de la fiche de révision (★) sont tirées en priorité, et les questions déjà vues sont évitées tant qu'il en reste de nouvelles. <b>Les questions auxquelles tu as répondu faux reviennent systématiquement</b> (🔁) jusqu'à ce que tu les réussisses.</p>
 
       <label class="field" for="name">Ton prénom</label>
       <input id="name" class="name-input" type="text" maxlength="30" placeholder="Ex : Émilien" autocomplete="off" list="names">
@@ -78,6 +78,7 @@
       </select>
       <p class="muted" id="seenInfo" style="margin-top:12px"></p>
       <button id="start" class="primary" disabled>Nouveau QCM</button>
+      <button id="redo" class="secondary" hidden></button>
       <button id="reset" class="link">Réinitialiser l'historique des questions</button>
       <button id="resetScores" class="link">Effacer mes scores</button>
     </section>
@@ -159,6 +160,28 @@
   try { seen = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(seen)); } catch (e) {} };
 
+  /* ---------- Erreurs à revoir (par prénom) ---------- */
+  const MKEY = "qcm-iot-missed-v1";
+  let missedMap = {};   // { "prénom": [ids de questions ratées] }
+  try { missedMap = JSON.parse(localStorage.getItem(MKEY) || "{}"); } catch (e) {}
+  const saveMissed = () => { try { localStorage.setItem(MKEY, JSON.stringify(missedMap)); } catch (e) {} };
+  const missedOf = n => (n && missedMap[n.trim().toLowerCase()]) || [];
+  function setMissed(n, id, bad) {
+    const k = n.trim().toLowerCase(), l = missedMap[k] || [];
+    const has = l.includes(id);
+    if (bad && !has) l.push(id);
+    if (!bad && has) l.splice(l.indexOf(id), 1);
+    missedMap[k] = l; saveMissed();
+  }
+  let redoIds = [];
+  function redoBtn() {
+    const n = curName(), c = $("course").value;
+    const cnt = missedOf(n).filter(id => bank[id] && (c === "all" || bank[id].course === c)).length;
+    const b = $("redo");
+    b.hidden = !cnt;
+    b.textContent = `🔁 Revoir mes erreurs (${cnt})`;
+  }
+
   /* ---------- Profils & scores ---------- */
   let hist = {};   // { "prénom (minuscules)": { name: "Prénom", runs: [{t, s, n, c}] } }
   try { hist = JSON.parse(localStorage.getItem(HKEY) || "{}"); } catch (e) {}
@@ -221,6 +244,7 @@
     $("homeStats").hidden = !runs.length;
     if (runs.length) { numsBox($("homeNums"), runs); drawChart($("homeChart"), runs); }
     $("start").disabled = !n;
+    redoBtn();
     $("names").innerHTML = "";
     Object.values(hist).forEach(h => { const o = document.createElement("option"); o.value = h.name; $("names").appendChild(o); });
   }
@@ -254,16 +278,25 @@
     const n = pool.filter(q => seen.includes(q.id)).length;
     $("total").textContent = bank.length;
     $("seenInfo").textContent = `Déjà vues dans cette sélection : ${n} / ${pool.length}`;
+    redoBtn();
   }
 
   /* ---------- Tirage ---------- */
-  function start() {
+  function start(onlyMissed) {
     player = curName();
     if (!player) { $("name").focus(); return; }
     try { localStorage.setItem(NKEY, player); } catch (e) {}
     const c = $("course").value;
-    const pool = bank.filter(q => c === "all" || q.course === c);
-    const size = Math.min(N, pool.length);
+    const fullPool = bank.filter(q => c === "all" || q.course === c);
+    const missed = fullPool.filter(q => missedOf(player).includes(q.id));
+    if (onlyMissed === true && !missed.length) return;
+    // 1) Les questions ratées reviennent en premier (toutes, jusqu'à N)
+    const redoSet = shuffle(missed).slice(0, N);
+    redoIds = redoSet.map(q => q.id);
+    if (onlyMissed === true) { set = redoSet; i = 0; score = 0; answers = []; show("quiz"); render(); return; }
+    // 2) Le reste du QCM est tiré comme d'habitude
+    const pool = fullPool.filter(q => !redoIds.includes(q.id));
+    const size = Math.min(N, fullPool.length) - redoSet.length;
 
     // Les questions de la fiche (prio) sont tirées en priorité (~70 %), le reste complète.
     // Dans chaque groupe : les questions jamais vues d'abord.
@@ -273,11 +306,11 @@
       return fresh.concat(old).slice(0, n);
     };
     const prio = pool.filter(q => q.prio), rest = pool.filter(q => !q.prio);
-    let nP = Math.min(prio.length, Math.round(size * PRIO_RATIO));
-    let nR = Math.min(rest.length, size - nP);
-    nP = Math.min(prio.length, size - nR);           // si pas assez de "reste", on prend plus de prio
+    let nP = Math.min(prio.length, Math.round(Math.max(size, 0) * PRIO_RATIO));
+    let nR = Math.max(0, Math.min(rest.length, size - nP));
+    nP = Math.max(0, Math.min(prio.length, size - nR));           // si pas assez de "reste", on prend plus de prio
     const needReset = pool.filter(q => !seen.includes(q.id)).length < size;
-    set = shuffle(pick(prio, nP).concat(pick(rest, nR)));
+    set = shuffle(redoSet.concat(pick(prio, nP).concat(pick(rest, nR))));
     if (needReset) seen = seen.filter(id => !pool.some(q => q.id === id)); // cycle terminé
     i = 0; score = 0; answers = [];
     show("quiz"); render();
@@ -297,7 +330,7 @@
     $("counter").textContent = `Question ${i + 1} / ${set.length}`;
     liveScore();
     $("progress").style.width = (i / set.length * 100) + "%";
-    $("tag").textContent = q.course + (q.prio ? " · ★ Fiche" : "");
+    $("tag").textContent = q.course + (q.prio ? " · ★ Fiche" : "") + (redoIds.includes(q.id) ? " · 🔁 À revoir" : "");
     $("question").textContent = q.q;
     $("explain").hidden = true;
     $("validate").hidden = false; $("validate").disabled = true;
@@ -328,6 +361,7 @@
     const q = set[i], given = shownOpts[choice], ok = given === q.good;
     if (ok) score++;
     answers.push({ q, given, ok });
+    setMissed(player, q.id, !ok);
     if (!seen.includes(q.id)) seen.push(q.id);
     save();
 
@@ -431,12 +465,13 @@
   }
 
   /* ---------- Événements ----------- */
-  $("start").onclick = start;
+  $("start").onclick = () => start(false);
+  $("redo").onclick = () => start(true);
   $("validate").onclick = validate;
   $("next").onclick = next;
   $("again").onclick = () => { show("home"); info(); homeStats(); };
   $("course").onchange = info;
-  $("name").oninput = homeStats;
+  $("name").oninput = () => { homeStats(); };
   $("reset").onclick = () => { seen = []; save(); info(); };
   $("resetScores").onclick = () => {
     const n = curName();
@@ -448,7 +483,7 @@
     corrections(b.dataset.f);
   });
   addEventListener("keydown", e => {
-    if (!$("home").hidden && e.key === "Enter" && document.activeElement === $("name")) { e.preventDefault(); start(); return; }
+    if (!$("home").hidden && e.key === "Enter" && document.activeElement === $("name")) { e.preventDefault(); start(false); return; }
     if ($("quiz").hidden) return;
     if (e.key >= "1" && e.key <= "4") select(+e.key - 1);
     else if (e.key === "Enter") { e.preventDefault(); validated ? next() : validate(); }
