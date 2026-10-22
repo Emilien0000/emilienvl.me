@@ -37,7 +37,7 @@
 
     <!-- Accueil -->
     <section id="home" class="card">
-      <p>30 questions tirées au hasard dans une banque de <b id="total">90</b>. Les questions déjà vues sont évitées tant qu'il en reste de nouvelles.</p>
+      <p>30 questions tirées au hasard dans une banque de <b id="total">69</b>. Les questions de la fiche de révision (★) sont tirées en priorité, et les questions déjà vues sont évitées tant qu'il en reste de nouvelles.</p>
       <label class="field" for="course">Cours</label>
       <select id="course">
         <option value="all">Tous (mélange)</option>
@@ -99,13 +99,13 @@
     return;
   }
 
-  const N = 30, KEY = "qcm-lpwan-seen", LETTERS = ["A", "B", "C", "D"];
+  const N = 30, KEY = "qcm-iot-seen-v2", PRIO_RATIO = 0.7, LETTERS = ["A", "B", "C", "D"];
   const $ = id => document.getElementById(id);
   const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
   const fmt = n => n.toFixed(1).replace(".", ",").replace(",0", "");
 
-  const bank = QUESTIONS.map((q, id) => ({ id, course: q[0], q: q[1], good: q[2], opts: [q[2], q[3], q[4], q[5]], why: q[6] }));
+  const bank = QUESTIONS.map((q, id) => ({ id, course: q[0], q: q[1], good: q[2], opts: [q[2], q[3], q[4], q[5]], why: q[6], prio: !!q[7] }));
   let seen = [];
   try { seen = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(seen)); } catch (e) {} };
@@ -146,13 +146,21 @@
     const c = $("course").value;
     const pool = bank.filter(q => c === "all" || q.course === c);
     const size = Math.min(N, pool.length);
-    const fresh = shuffle(pool.filter(q => !seen.includes(q.id)));
-    if (fresh.length < size) {
-      const old = shuffle(pool.filter(q => seen.includes(q.id)));
-      set = fresh.concat(old).slice(0, size);
-      seen = seen.filter(id => !pool.some(q => q.id === id)); // cycle terminé
-    } else set = fresh.slice(0, size);
-    set = shuffle(set);
+
+    // Les questions de la fiche (prio) sont tirées en priorité (~70 %), le reste complète.
+    // Dans chaque groupe : les questions jamais vues d'abord.
+    const pick = (list, n) => {
+      const fresh = shuffle(list.filter(q => !seen.includes(q.id)));
+      const old = shuffle(list.filter(q => seen.includes(q.id)));
+      return fresh.concat(old).slice(0, n);
+    };
+    const prio = pool.filter(q => q.prio), rest = pool.filter(q => !q.prio);
+    let nP = Math.min(prio.length, Math.round(size * PRIO_RATIO));
+    let nR = Math.min(rest.length, size - nP);
+    nP = Math.min(prio.length, size - nR);           // si pas assez de "reste", on prend plus de prio
+    const needReset = pool.filter(q => !seen.includes(q.id)).length < size;
+    set = shuffle(pick(prio, nP).concat(pick(rest, nR)));
+    if (needReset) seen = seen.filter(id => !pool.some(q => q.id === id)); // cycle terminé
     i = 0; score = 0; answers = [];
     show("quiz"); render();
   }
@@ -164,7 +172,7 @@
     $("counter").textContent = `Question ${i + 1} / ${set.length}`;
     $("score").textContent = `Score : ${score}`;
     $("progress").style.width = (i / set.length * 100) + "%";
-    $("tag").textContent = q.course;
+    $("tag").textContent = q.course + (q.prio ? " · ★ Fiche" : "");
     $("question").textContent = q.q;
     $("explain").hidden = true;
     $("validate").hidden = false; $("validate").disabled = true;
