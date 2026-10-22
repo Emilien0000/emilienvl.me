@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QCM LPWAN · LoRa · Sigfox</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header><h1>QCM IoT</h1><p class="sub">LPWAN · LoRa · Sigfox</p></header>
+
+  <section id="home" class="card">
+    <p>30 questions tirées au hasard dans une banque de <b id="total">90</b>. Les questions déjà vues sont évitées tant qu'il en reste de nouvelles.</p>
+    <label>Cours
+      <select id="course">
+        <option value="all">Tous (mélange)</option>
+        <option value="LPWAN">LPWAN</option>
+        <option value="LoRa">LoRa / LoRaWAN</option>
+        <option value="Sigfox">Sigfox</option>
+      </select>
+    </label>
+    <p class="muted" id="seenInfo"></p>
+    <button id="start" class="primary">Nouveau QCM</button>
+    <button id="reset" class="link">Réinitialiser l'historique</button>
+  </section>
+
+  <section id="quiz" class="card" hidden>
+    <div class="top"><span id="counter"></span><span id="score"></span></div>
+    <div class="bar"><div id="progress"></div></div>
+    <span class="tag" id="tag"></span>
+    <h2 id="question"></h2>
+    <div id="options"></div>
+    <p id="explain" class="explain" hidden></p>
+    <button id="next" class="primary" hidden>Suivant</button>
+  </section>
+
+  <section id="result" class="card" hidden>
+    <h2>Résultat</h2>
+    <p class="big" id="final"></p>
+    <div id="byCourse"></div>
+    <h3>Questions ratées</h3>
+    <div id="wrong"></div>
+    <button id="again" class="primary">Nouveau QCM</button>
+  </section>
+</main>
+<script src="questions.js"></script>
+<script>
+const N = 30, KEY = "qcm-lpwan-seen";
+const $ = id => document.getElementById(id);
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const bank = QUESTIONS.map((q, id) => ({ id, course: q[0], q: q[1], good: q[2], opts: [q[2], q[3], q[4], q[5]], why: q[6] }));
+let seen = [];
+try { seen = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(seen)); } catch (e) {} };
+
+let set = [], i = 0, score = 0, wrong = [], perCourse = {}, locked = false;
+
+function show(id) { ["home", "quiz", "result"].forEach(s => $(s).hidden = s !== id); }
+function info() {
+  const c = $("course").value, pool = bank.filter(q => c === "all" || q.course === c);
+  const n = pool.filter(q => seen.includes(q.id)).length;
+  $("total").textContent = bank.length;
+  $("seenInfo").textContent = `Déjà vues dans cette sélection : ${n} / ${pool.length}`;
+}
+
+function start() {
+  const c = $("course").value;
+  const pool = bank.filter(q => c === "all" || q.course === c);
+  const size = Math.min(N, pool.length);
+  let fresh = shuffle(pool.filter(q => !seen.includes(q.id)));
+  if (fresh.length < size) {           // pas assez de nouvelles : on complète avec des anciennes
+    const old = shuffle(pool.filter(q => seen.includes(q.id)));
+    set = fresh.concat(old).slice(0, size);
+    seen = seen.filter(id => !pool.some(q => q.id === id)); // cycle terminé → on repart à zéro
+  } else set = fresh.slice(0, size);
+  set = shuffle(set);
+  i = 0; score = 0; wrong = []; perCourse = {};
+  show("quiz"); render();
+}
+
+function render() {
+  const q = set[i]; locked = false;
+  $("counter").textContent = `Question ${i + 1} / ${set.length}`;
+  $("score").textContent = `Score : ${score}`;
+  $("progress").style.width = (i / set.length * 100) + "%";
+  $("tag").textContent = q.course;
+  $("question").textContent = q.q;
+  $("explain").hidden = true; $("next").hidden = true;
+  const box = $("options"); box.innerHTML = "";
+  shuffle(q.opts).forEach(o => {
+    const b = document.createElement("button");
+    b.className = "opt"; b.textContent = o;
+    b.onclick = () => answer(b, o);
+    box.appendChild(b);
+  });
+}
+
+function answer(btn, o) {
+  if (locked) return; locked = true;
+  const q = set[i], ok = o === q.good;
+  perCourse[q.course] = perCourse[q.course] || [0, 0];
+  perCourse[q.course][1]++;
+  if (ok) { score++; perCourse[q.course][0]++; } else wrong.push({ q, given: o });
+  if (!seen.includes(q.id)) seen.push(q.id);
+  document.querySelectorAll(".opt").forEach(b => {
+    b.disabled = true;
+    if (b.textContent === q.good) b.classList.add("good");
+  });
+  if (!ok) btn.classList.add("bad");
+  $("score").textContent = `Score : ${score}`;
+  $("explain").textContent = (ok ? "✔ Correct. " : "✘ Réponse : " + q.good + ". ") + "(" + q.why + ")";
+  $("explain").hidden = false;
+  $("next").textContent = i === set.length - 1 ? "Voir le résultat" : "Suivant";
+  $("next").hidden = false;
+  save();
+}
+
+function finish() {
+  show("result");
+  const pct = Math.round(score / set.length * 100);
+  $("final").textContent = `${score} / ${set.length} (${pct} %)`;
+  $("byCourse").innerHTML = Object.entries(perCourse).map(([k, v]) => `<p><b>${k}</b> : ${v[0]} / ${v[1]}</p>`).join("");
+  $("wrong").innerHTML = wrong.length ? "" : "<p>Aucune erreur, bravo 🎉</p>";
+  wrong.forEach(w => {
+    const d = document.createElement("div"); d.className = "w";
+    const t = (s, tag) => { const e = document.createElement(tag); e.textContent = s; d.appendChild(e); };
+    t(w.q.q, "b"); t("Ta réponse : " + w.given, "p"); t("Bonne réponse : " + w.q.good, "p");
+    $("wrong").appendChild(d);
+  });
+}
+
+$("start").onclick = start;
+$("again").onclick = () => { show("home"); info(); };
+$("next").onclick = () => { i++; i < set.length ? render() : finish(); };
+$("course").onchange = info;
+$("reset").onclick = () => { seen = []; save(); info(); };
+info();
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+:root{--bg:#f4f5f7;--card:#fff;--text:#1d2330;--muted:#6b7280;--line:#d8dce3;--accent:#c8102e;--good:#1f9d55;--goodbg:#e3f6ec;--bad:#d03b3b;--badbg:#fbe6e6}
+@media (prefers-color-scheme:dark){:root{--bg:#14171d;--card:#1e222b;--text:#e8eaef;--muted:#9aa3b2;--line:#323846;--goodbg:#173627;--badbg:#3b1d1d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:680px;margin:0 auto;padding:20px 16px 48px}
+header{text-align:center;margin-bottom:16px}
+h1{margin:0;color:var(--accent)}
+.sub{margin:0;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px}
+[hidden]{display:none!important}
+select{display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+.muted{color:var(--muted);font-size:.9rem}
+button{font:inherit;cursor:pointer}
+.primary{display:block;width:100%;margin-top:14px;padding:12px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600}
+.primary:hover{opacity:.9}
+.link{display:block;margin:10px auto 0;background:none;border:0;color:var(--muted);text-decoration:underline}
+.top{display:flex;justify-content:space-between;color:var(--muted);font-size:.9rem}
+.bar{height:6px;background:var(--line);border-radius:3px;margin:8px 0 14px;overflow:hidden}
+#progress{height:100%;width:0;background:var(--accent);transition:width .3s}
+.tag{display:inline-block;font-size:.75rem;padding:2px 8px;border:1px solid var(--line);border-radius:99px;color:var(--muted)}
+h2{font-size:1.2rem;margin:10px 0 14px}
+.opt{display:block;width:100%;text-align:left;margin-bottom:8px;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+.opt:hover:not(:disabled){border-color:var(--accent)}
+.opt.good{background:var(--goodbg);border-color:var(--good)}
+.opt.bad{background:var(--badbg);border-color:var(--bad)}
+.explain{font-size:.92rem;color:var(--muted)}
+.big{font-size:2rem;font-weight:700;margin:6px 0}
+.w{border-top:1px solid var(--line);padding:10px 0}
+.w p{margin:2px 0;font-size:.92rem}
