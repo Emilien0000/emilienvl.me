@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Révision Architecture des Réseaux</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="/archi/style.css">
+<style>
+  input.txt, textarea.txt {
+    display: block; width: 100%; margin: 8px 0 4px; padding: 13px 16px; border-radius: 14px;
+    border: 1.5px solid var(--border-subtle); background: var(--bg-color); color: var(--text-main);
+    font: inherit; font-weight: 600; outline: none; transition: border-color .2s;
+  }
+  input.txt:focus, textarea.txt:focus { border-color: var(--highlight-color); }
+  textarea.txt { min-height: 84px; resize: vertical; }
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0 6px; }
+  .stat { background: var(--bg-color); border: 1px solid var(--border-subtle); border-radius: 16px; padding: 14px 8px; text-align: center; }
+  .stat .v { font-size: 1.6rem; font-weight: 900; color: var(--highlight-color); line-height: 1.1; }
+  .stat .l { margin-top: 6px; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-secondary); }
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .mode { text-align: left; padding: 16px 18px; border-radius: 16px; border: 1.5px solid var(--border-subtle); background: var(--bg-color); color: var(--text-main); transition: all .2s ease; }
+  .mode:hover { border-color: var(--highlight-color); transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+  .mode b { display: block; font-size: 1rem; margin-bottom: 4px; }
+  .mode span { font-size: .82rem; color: var(--text-secondary); line-height: 1.4; }
+  .top .link { display: inline-block; margin: 0; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  table.fill { width: 100%; border-collapse: collapse; margin: 14px 0 4px; font-size: .88rem; }
+  table.fill th, table.fill td { border: 1px solid var(--border-subtle); padding: 8px; text-align: left; vertical-align: middle; }
+  table.fill th { background: var(--bg-color); font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); }
+  table.fill input { width: 100%; min-width: 70px; padding: 6px 8px; border-radius: 8px; border: 1.5px solid var(--border-subtle); background: var(--bg-color); color: var(--text-main); font: inherit; }
+  table.fill input.good { border-color: var(--good); background: var(--good-bg); }
+  table.fill input.bad { border-color: var(--bad); background: var(--bad-bg); }
+  .tablewrap { overflow-x: auto; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 16px; min-height: 44px; }
+  .chip { padding: 9px 16px; border-radius: var(--radius-pill); border: 1.5px solid var(--border-subtle); background: var(--bg-color); color: var(--text-main); font-weight: 600; font-size: .9rem; transition: all .2s ease; }
+  .chip:hover { border-color: var(--highlight-color); color: var(--highlight-color); }
+  ol.answer { list-style: none; counter-reset: n; margin: 8px 0 14px; padding: 0; min-height: 44px; }
+  ol.answer li { counter-increment: n; margin-bottom: 8px; }
+  ol.answer li button { width: 100%; text-align: left; padding: 10px 16px; border-radius: 12px; border: 1.5px solid var(--highlight-color); background: rgba(var(--highlight-rgb), .08); color: var(--text-main); font-weight: 600; }
+  ol.answer li button::before { content: counter(n) ". "; color: var(--highlight-color); font-weight: 800; }
+  ol.answer li button.good { border-color: var(--good); background: var(--good-bg); }
+  ol.answer li button.bad { border-color: var(--bad); background: var(--bad-bg); }
+  /* Jeu des couches */
+  .stack { display: grid; gap: 6px; margin: 14px 0 6px; align-items: stretch; }
+  .stack-h { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; text-align: center; padding: 6px 2px; color: var(--text-secondary); }
+  .stack-h.col0 { color: var(--highlight-color); } .stack-h.col1 { color: #8e6bd8; } .stack-h.col2 { color: #e69a2e; }
+  .stack-n { display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: .9rem; color: var(--text-secondary); }
+  .slot { min-height: 46px; padding: 6px 8px; border-radius: 12px; border: 2px dashed var(--border-subtle); background: var(--bg-color); color: var(--text-secondary); font-size: .8rem; font-weight: 700; line-height: 1.25; transition: all .2s ease; }
+  .slot:hover:not(.locked) { border-color: var(--highlight-color); }
+  .slot.filled { border-style: solid; color: var(--text-main); }
+  .slot.col0.filled { border-color: var(--highlight-color); background: rgba(var(--highlight-rgb), .1); }
+  .slot.col1.filled { border-color: #8e6bd8; background: rgba(142, 107, 216, .12); }
+  .slot.col2.filled { border-color: #e69a2e; background: rgba(230, 154, 46, .12); }
+  .slot.locked { cursor: default; }
+  .slot.good.filled { border-color: var(--good); background: var(--good-bg); }
+  .slot.bad.filled, .slot.bad { border-color: var(--bad); background: var(--bad-bg); }
+  .slot.shake { animation: shake .3s; }
+  @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+  .gchip { padding: 8px 14px; border-radius: var(--radius-pill); border: 2px solid var(--border-subtle); background: var(--bg-color); color: var(--text-main); font-weight: 700; font-size: .82rem; cursor: grab; transition: all .15s ease; }
+  .gchip.col0 { border-color: var(--highlight-color); } .gchip.col1 { border-color: #8e6bd8; } .gchip.col2 { border-color: #e69a2e; }
+  .gchip.sel { transform: translateY(-2px); box-shadow: 0 0 0 4px rgba(var(--highlight-rgb), .3); }
+  @media (max-width: 560px) { .modes, .row2 { grid-template-columns: 1fr; } .stat .v { font-size: 1.3rem; } .slot { font-size: .7rem; padding: 4px; } .gchip { font-size: .74rem; padding: 7px 10px; } }
+</style>
+<script>
+  (function () {
+    var dark = false;
+    try {
+      var s = localStorage.getItem('portfolio_dark');
+      dark = s !== null ? s === 'true' : matchMedia('(prefers-color-scheme: dark)').matches;
+    } catch (e) {}
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  })();
+</script>
+</head>
+<body>
+<div class="scroll-progress-track"><div id="pageProgress"></div></div>
+
+<div class="app-container">
+  <header class="app-header">
+    <a class="logo" href="/home">EVL.</a>
+    <div class="header-right">
+      <a class="back-link" href="/archi/">← Retour au QCM</a>
+      <button class="darkmode-toggle" id="theme" aria-label="Changer de thème" title="Changer de thème">🌙</button>
+    </div>
+  </header>
+
+  <main>
+    <h1 class="hero-title">Mode <span class="highlight">Révision</span></h1>
+    <p class="hero-subtitle">Apprendre autrement qu'avec un QCM : rappel actif, répétition espacée, manipulation</p>
+
+    <section id="menu" class="card">
+      <p>Un QCM teste la <b>reconnaissance</b> ; ici tu travailles le <b>rappel</b> (produire la réponse seul), ce qui est bien plus proche d'un vrai examen. Les flashcards et le QCM à rappel libre partagent ta progression (cartes à revoir selon le principe de Leitner : plus tu réussis, plus la carte revient tard).</p>
+
+      <label class="field" for="name">Ton prénom</label>
+      <input id="name" class="txt" type="text" maxlength="30" placeholder="Ex : Émilien" autocomplete="off">
+
+      <div class="stats-grid" id="lstats"></div>
+      <p class="muted" id="lhelp"></p>
+
+      <div class="modes" id="modes"></div>
+      <button id="resetL" class="link">Réinitialiser ma progression flashcards</button>
+    </section>
+
+    <section id="stage" class="card" hidden></section>
+  </main>
+
+  <footer class="app-footer"><p>© 2026 Émilien Vitry-Lhotte</p></footer>
+</div>
+
+<script src="/archi/questions.js"></script>
+<script>
+(function () {
+  if (typeof QUESTIONS === "undefined") {
+    document.getElementById("menu").innerHTML = "<p><b>Erreur :</b> questions.js n'a pas pu être chargé.</p>";
+    return;
+  }
+
+  /* ---------- Outils ---------- */
+  const $ = id => document.getElementById(id);
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
+  const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const pick = a => a[Math.random() * a.length | 0];
+  const norm = s => String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+  const LETTERS = ["A", "B", "C", "D"];
+
+  const bank = QUESTIONS.map((q, id) => ({ id, course: q[0], q: q[1], good: q[2], opts: [q[2], q[3], q[4], q[5]], why: q[6], prio: q[7] || 0 }));
+
+  /* ---------- Thème & scroll ---------- */
+  const isDark = () => document.documentElement.getAttribute("data-theme") === "dark";
+  const paintTheme = () => { $("theme").textContent = isDark() ? "☀️" : "🌙"; };
+  $("theme").onclick = () => {
+    const d = !isDark();
+    document.documentElement.setAttribute("data-theme", d ? "dark" : "light");
+    try { localStorage.setItem("portfolio_dark", String(d)); } catch (e) {}
+    paintTheme();
+  };
+  paintTheme();
+  addEventListener("scroll", () => {
+    const e = document.documentElement, max = e.scrollHeight - e.clientHeight;
+    $("pageProgress").style.width = (max > 0 ? e.scrollTop / max * 100 : 0) + "%";
+  }, { passive: true });
+
+  /* ---------- Répétition espacée (Leitner, 5 boîtes) ---------- */
+  const NKEY = "qcm-archi-name-v1", LKEY = "qcm-archi-leitner-v1", DAY = 86400000;
+  const INT = [0, 1, 3, 7, 14, 30]; // jours avant la prochaine révision selon la boîte (1..5)
+  let L = {};
+  try { L = JSON.parse(localStorage.getItem(LKEY) || "{}"); } catch (e) {}
+  const saveL = () => { try { localStorage.setItem(LKEY, JSON.stringify(L)); } catch (e) {} };
+  const me = () => $("name").value.trim().toLowerCase();
+  const cards = () => (L[me()] = L[me()] || {});
+
+  function grade(id, ok) {
+    const c = cards(), s = c[id] || { b: 0 };
+    const b = ok ? Math.min(5, Math.max(s.b || 0, 1) + 1) : 1;
+    c[id] = { b, due: Date.now() + INT[b] * DAY };
+    saveL();
+  }
+
+  // Cartes dues (boîtes basses d'abord) + quelques nouvelles (priorité cours > diapo)
+  function session(max, maxNew) {
+    const c = cards(), now = Date.now();
+    const due = shuffle(bank.filter(q => c[q.id] && c[q.id].due <= now)).sort((a, b) => c[a.id].b - c[b.id].b);
+    const fresh = shuffle(bank.filter(q => !c[q.id])).sort((a, b) => b.prio - a.prio).slice(0, maxNew);
+    return shuffle(due.slice(0, max).concat(fresh)).slice(0, max);
+  }
+
+  /* ---------- Squelette d'un écran ---------- */
+  function stage(title, right, pct) {
+    const s = $("stage");
+    s.innerHTML = ""; s.hidden = false; $("menu").hidden = true;
+    const top = el("div", "top");
+    const back = el("button", "link", "← Menu"); back.onclick = toMenu;
+    top.appendChild(back); top.appendChild(el("span", "", title)); top.appendChild(el("span", "", right || ""));
+    s.appendChild(top);
+    if (pct !== undefined) {
+      const bar = el("div", "bar"), p = el("div"); p.id = "progress"; p.style.width = pct + "%";
+      bar.appendChild(p); s.appendChild(bar);
+    } else s.appendChild(el("div", "", "")).style.height = "16px";
+    scrollTo({ top: 0, behavior: "smooth" });
+    return s;
+  }
+  function endScreen(title, ok, total, again) {
+    const s = stage(title, "Terminé", 100);
+    s.appendChild(el("h2", "", "Session terminée 🎉"));
+    s.appendChild(el("p", "", total ? `${ok} / ${total} réussies du premier coup.` : "Bien joué."));
+    const a = el("button", "primary", "Rejouer"); a.onclick = again; s.appendChild(a);
+    const m = el("button", "secondary", "Retour au menu"); m.onclick = toMenu; s.appendChild(m);
+  }
+  function toMenu() { $("stage").hidden = true; $("menu").hidden = false; renderMenu(); scrollTo({ top: 0, behavior: "smooth" }); }
+  const needName = () => { if (!$("name").value.trim()) { $("name").focus(); return true; } try { localStorage.setItem(NKEY, $("name").value.trim()); } catch (e) {} return false; };
+
+  /* ================= MODE 1 : FLASHCARDS ================= */
+  function runFlash() {
+    if (needName()) return;
+    let list = session(20, 10);
+    if (!list.length) list = shuffle(bank).slice(0, 15); // rien de dû : révision libre
+    const queue = list.slice(), requeued = new Set(), total = list.length;
+    let done = 0, okc = 0;
+
+    const step = () => {
+      if (!queue.length) return endScreen("Flashcards", okc, total, runFlash);
+      const c = queue[0], st = cards()[c.id];
+      const s = stage(`Flashcards · reste ${queue.length}`, `Réussies : ${okc}/${done}`, done / total * 100);
+      s.appendChild(el("span", "tag", c.course + (st ? ` · Boîte ${st.b}/5` : " · Nouvelle") + (requeued.has(c.id) ? " · 🔁 on retente" : "")));
+      s.appendChild(el("h2", "", c.q));
+      const ta = el("textarea", "txt"); ta.placeholder = "Écris ta réponse de tête (facultatif, mais c'est là que tu apprends)…"; s.appendChild(ta);
+      const reveal = el("button", "primary", "Voir la réponse"); s.appendChild(reveal);
+      reveal.onclick = () => {
+        reveal.remove(); ta.readOnly = true;
+        const ex = el("div", "explain"); ex.appendChild(el("strong", "", "Réponse")); ex.appendChild(el("span", "", c.good)); ex.appendChild(el("small", "", "Source : " + c.why));
+        s.appendChild(ex);
+        s.appendChild(el("p", "hint", "Sois honnête : « Su » seulement si tu l'avais en tête avant de regarder."));
+        const row = el("div", "row2");
+        const ko = el("button", "secondary", "✘ Pas su"), ok = el("button", "primary", "✔ Su");
+        ko.style.marginTop = ok.style.marginTop = "12px";
+        row.appendChild(ko); row.appendChild(ok); s.appendChild(row);
+        const answer = good => {
+          const first = !requeued.has(c.id);
+          if (first) grade(c.id, good);
+          queue.shift();
+          if (!good && first) { requeued.add(c.id); queue.splice(Math.min(3, queue.length), 0, c); }
+          else { done++; if (good && first) okc++; }
+          step();
+        };
+        ko.onclick = () => answer(false); ok.onclick = () => answer(true);
+      };
+      ta.focus();
+    };
+    step();
+  }
+
+  /* ================= MODE 2 : QCM À RAPPEL LIBRE ================= */
+  function runRecall() {
+    if (needName()) return;
+    let list = session(15, 8);
+    if (!list.length) list = shuffle(bank).slice(0, 15);
+    let i = 0, score = 0;
+
+    const ask = () => {
+      if (i >= list.length) return endScreen("QCM à rappel libre", score, list.length, runRecall);
+      const q = list[i];
+      const s = stage(`Question ${i + 1} / ${list.length}`, `Score : ${score}/${i}`, i / list.length * 100);
+      s.appendChild(el("span", "tag", q.course));
+      s.appendChild(el("h2", "", q.q));
+      s.appendChild(el("p", "muted", "Étape 1 : formule ta réponse sans voir les choix."));
+      const ta = el("textarea", "txt"); ta.placeholder = "Ta réponse de tête…"; s.appendChild(ta);
+      const go = el("button", "primary", "J'ai ma réponse → voir les choix"); s.appendChild(go);
+      go.onclick = () => choices(q, ta.value.trim());
+      ta.focus();
+    };
+
+    const choices = (q, mine) => {
+      const s = stage(`Question ${i + 1} / ${list.length}`, `Score : ${score}/${i}`, i / list.length * 100);
+      s.appendChild(el("span", "tag", q.course));
+      s.appendChild(el("h2", "", q.q));
+      if (mine) s.appendChild(el("p", "muted", "Ta réponse libre : « " + mine + " »"));
+      const box = el("div"); s.appendChild(box);
+      let locked = false;
+      shuffle(q.opts).forEach((o, k) => {
+        const b = el("button", "opt"); b.type = "button";
+        b.appendChild(el("span", "key", LETTERS[k])); b.appendChild(el("span", "", o));
+        b.onclick = () => {
+          if (locked) return; locked = true;
+          const ok = o === q.good;
+          if (ok) score++;
+          grade(q.id, ok);
+          box.querySelectorAll(".opt").forEach(x => { x.disabled = true; });
+          [...box.children].forEach(x => { if (x.lastChild.textContent === q.good) x.classList.add("good"); });
+          if (!ok) b.classList.add("bad");
+          const ex = el("div", "explain " + (ok ? "ok" : "ko"));
+          ex.appendChild(el("strong", "", ok ? "✔ Bonne réponse" : "✘ Mauvaise réponse"));
+          if (!ok) ex.appendChild(el("span", "", "Bonne réponse : " + q.good));
+          ex.appendChild(el("small", "", "Source : " + q.why));
+          s.appendChild(ex);
+          const nx = el("button", "primary", i === list.length - 1 ? "Terminer" : "Question suivante");
+          nx.onclick = () => { i++; ask(); }; s.appendChild(nx);
+        };
+        box.appendChild(b);
+      });
+    };
+    ask();
+  }
+
+  /* ================= MODE 3 : CALCULS IP ================= */
+  const ip2n = a => a.reduce((x, y) => x * 256 + y, 0);
+  const n2ip = n => [24, 16, 8, 0].map(sh => Math.floor(n / 2 ** sh) % 256).join(".");
+  const maskN = c => c === 0 ? 0 : (0xFFFFFFFF << (32 - c)) >>> 0;
+  const b8 = n => n.toString(2).padStart(8, "0");
+  const randIP = () => { const t = rnd(0, 2); return t === 0 ? [10, rnd(0, 255), rnd(0, 255), rnd(1, 254)] : t === 1 ? [172, rnd(16, 31), rnd(0, 255), rnd(1, 254)] : [192, 168, rnd(0, 255), rnd(1, 254)]; };
+  const CALC_TYPES = ["net", "bc", "hosts", "mask", "prefix", "first", "last", "same"];
+
+  function genCalc() {
+    const ip = randIP(), c = rnd(18, 29), ipn = ip2n(ip), m = maskN(c);
+    const net = (ipn & m) >>> 0, size = 2 ** (32 - c), bc = (net + size - 1) >>> 0, ipS = ip.join(".");
+    const detail = () => {
+      if (c % 8 === 0) return "";
+      const k = Math.floor(c / 8), mo = (m >>> (24 - 8 * k)) & 255;
+      return ` Octet n°${k + 1} : ${ip[k]} = ${b8(ip[k])} ET ${mo} = ${b8(mo)} → ${ip[k] & mo}.`;
+    };
+    const eq = show => x => x === show;
+    switch (pick(CALC_TYPES)) {
+      case "net": { const show = n2ip(net); return { q: `Quelle est l'adresse réseau de ${ipS}/${c} ?`, ph: "ex : 192.168.1.0", show, check: eq(show), expl: `Masque /${c} = ${n2ip(m)}. Adresse réseau = IP ET masque.${detail()}` }; }
+      case "bc": { const show = n2ip(bc); return { q: `Quelle est l'adresse de broadcast de ${ipS}/${c} ?`, ph: "ex : 192.168.1.255", show, check: eq(show), expl: `Réseau = ${n2ip(net)}. Le broadcast met tous les bits hôtes (${32 - c}) à 1.${detail()}` }; }
+      case "hosts": { const show = String(size - 2); return { q: `Combien d'hôtes utilisables dans un réseau /${c} ?`, ph: "un nombre", show, check: eq(show), expl: `${32 - c} bits hôtes → 2^${32 - c} − 2 = ${size - 2} (on retire l'adresse réseau et le broadcast).` }; }
+      case "mask": { const show = n2ip(m); return { q: `Quel est le masque décimal pointé du préfixe /${c} ?`, ph: "ex : 255.255.255.0", show, check: eq(show), expl: `${c} bits à 1 puis ${32 - c} bits à 0 → ${show}.` }; }
+      case "prefix": {
+        const N = rnd(5, 1000), h = Math.ceil(Math.log2(N + 2)), p = 32 - h, show = "/" + p;
+        return { q: `Quel préfixe (/n) donne le plus petit réseau pouvant contenir ${N} hôtes ?`, ph: "ex : /24", show, check: x => x.replace(/^\//, "") === String(p), expl: `Il faut 2^h − 2 ≥ ${N} : h = ${h} bits hôtes (2^${h} − 2 = ${2 ** h - 2}) → /${p}.` };
+      }
+      case "first": { const show = n2ip(net + 1); return { q: `Quelle est la première adresse hôte utilisable de ${ipS}/${c} ?`, ph: "ex : 192.168.1.1", show, check: eq(show), expl: `Réseau = ${n2ip(net)} ; première hôte = réseau + 1.${detail()}` }; }
+      case "last": { const show = n2ip(bc - 1); return { q: `Quelle est la dernière adresse hôte utilisable de ${ipS}/${c} ?`, ph: "ex : 192.168.1.254", show, check: eq(show), expl: `Broadcast = ${n2ip(bc)} ; dernière hôte = broadcast − 1.${detail()}` }; }
+      default: {
+        const same = Math.random() < 0.5;
+        const nb = same ? (net + rnd(1, size - 2)) >>> 0 : (net + size * rnd(1, 3) + rnd(1, size - 2)) >>> 0;
+        const netB = (nb & m) >>> 0, show = same ? "oui" : "non";
+        return { q: `A = ${ipS}/${c} et B = ${n2ip(nb)}. Sont-ils dans le même réseau ? (oui/non)`, ph: "oui ou non", show, check: x => x.startsWith(show[0]), expl: `Réseau de A : ${n2ip(net)} ; réseau de B : ${n2ip(netB)} avec le masque /${c}.` };
+      }
+    }
+  }
+
+  function runCalc() {
+    let score = 0, n = 0;
+    const next = () => {
+      const p = genCalc(), s = stage("Calculs IP", `Score : ${score}/${n}`);
+      s.appendChild(el("span", "tag", "Adressage IPv4 · sans calculatrice !"));
+      s.appendChild(el("h2", "", p.q));
+      const inp = el("input", "txt"); inp.placeholder = p.ph; inp.autocomplete = "off"; s.appendChild(inp);
+      const ex = el("div", "explain"); ex.hidden = true; s.appendChild(ex);
+      const b = el("button", "primary", "Vérifier"); s.appendChild(b);
+      let checked = false;
+      const act = () => {
+        if (checked) { next(); return; }
+        if (!inp.value.trim()) return;
+        checked = true; n++;
+        const ok = p.check(norm(inp.value));
+        if (ok) score++;
+        ex.className = "explain " + (ok ? "ok" : "ko"); ex.innerHTML = "";
+        ex.appendChild(el("strong", "", ok ? "✔ Correct" : "✘ Faux — réponse : " + p.show));
+        ex.appendChild(el("small", "", p.expl));
+        ex.hidden = false; b.textContent = "Question suivante"; inp.readOnly = true;
+      };
+      b.onclick = act; inp.onkeydown = e => { if (e.key === "Enter") act(); };
+      inp.focus();
+    };
+    next();
+  }
+
+  /* ================= MODE 4 : TABLEAUX À COMPLÉTER ================= */
+  const B = (a, show) => ({ a, show });
+  const TABLES = [
+    { title: "Modèle OSI ↔ TCP/IP ↔ PDU ↔ adressage", head: ["N°", "Couche OSI", "Couche TCP/IP", "PDU", "Adressage"], rows: [
+      ["7", B(/^application$/, "Application"), "Application", B(/^(data|donnees?)$/, "Data"), "—"],
+      ["6", "Présentation", B(/^application$/, "Application"), "Data", "—"],
+      ["5", "Session", B(/^application$/, "Application"), B(/^(data|donnees?)$/, "Data"), "—"],
+      ["4", B(/^transport$/, "Transport"), "Transport", B(/^segments?$/, "Segment"), B(/^ports?$/, "Port")],
+      ["3", B(/^(reseau|network)$/, "Réseau"), "Internet", B(/^paquets?$/, "Paquet"), B(/^(ip|adresse ip)$/, "IP")],
+      ["2", B(/liaison|data ?link/, "Liaison de données"), "Network Access", B(/^trames?$/, "Trame"), B(/^(mac|adresse mac)$/, "MAC")],
+      ["1", "Physique", B(/^network access$/, "Network Access"), B(/^bits?$/, "Bits"), "—"]
+    ] },
+    { title: "TCP vs UDP", head: ["Critère", "TCP", "UDP"], rows: [
+      ["Taille de l'en-tête", B(/^20( octets?)?$/, "20 octets"), B(/^8( octets?)?$/, "8 octets")],
+      ["Fiable (ACK, retransmission, ordre) ?", B(/^oui$/, "Oui"), B(/^non$/, "Non")],
+      ["Vitesse", B(/lent|moins rapide/, "Plus lent"), B(/^(plus )?rapide$/, "Plus rapide")],
+      ["Exemples d'usage", B(/http|ftp|smtp|mail|web|fichier/, "HTTP/HTTPS, FTP, SMTP"), B(/dns|voip|streaming/, "DNS, VoIP, Streaming")]
+    ] },
+    { title: "Ports connus", head: ["Protocole", "Port(s)"], rows: [
+      ["HTTP", B(/^80$/, "80")], ["SMTP", B(/^25$/, "25")], ["POP", B(/^110$/, "110")],
+      ["FTP", B(/20.*21|21.*20/, "20 et 21")], ["DNS", B(/^53$/, "53")],
+      [B(/^http$/, "HTTP"), "80"], [B(/^dns$/, "DNS"), "53"], [B(/^pop3?$/, "POP"), "110"]
+    ] },
+    { title: "Adresses : MAC, IP, Port", head: ["Adresse", "Couche", "Mot-clé du rôle"], rows: [
+      ["MAC", B(/^(2|deux)$/, "2"), B(/carte|local/, "Carte réseau / « Qui suis-je localement ? »")],
+      ["IP", B(/^(3|trois)$/, "3"), B(/rout|reseau/, "Position dans le réseau / routage")],
+      ["Port", B(/^(4|quatre)$/, "4"), B(/service|appli|conversation/, "Service applicatif visé")]
+    ] },
+    { title: "Types de communication IPv4", head: ["Type", "Destinataire(s)"], rows: [
+      ["Unicast", B(/(un|1) (seul )?(autre )?hote|hote vers hote|un seul/, "D'un hôte vers un autre hôte")],
+      ["Broadcast", B(/tous/, "Tous les hôtes du réseau")],
+      ["Multicast", B(/groupe/, "Un groupe spécifique d'hôtes")]
+    ] }
+  ];
+
+  function runTable(idx) {
+    const t = TABLES[idx], s = stage("Tableaux à compléter", `${idx + 1} / ${TABLES.length}`);
+    s.appendChild(el("h2", "", t.title));
+    s.appendChild(el("p", "muted", "Remplis les cases vides de mémoire (sans accents obligatoires), puis vérifie."));
+    const wrap = el("div", "tablewrap"), tb = el("table", "fill"), blanks = [];
+    const hr = el("tr"); t.head.forEach(h => hr.appendChild(el("th", "", h))); tb.appendChild(hr);
+    t.rows.forEach(r => {
+      const tr = el("tr");
+      r.forEach(cell => {
+        const td = el("td");
+        if (typeof cell === "string") td.textContent = cell;
+        else { const inp = el("input"); inp.autocomplete = "off"; td.appendChild(inp); blanks.push({ inp, cell }); }
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+    wrap.appendChild(tb); s.appendChild(wrap);
+    const msg = el("p", "verdict"); s.appendChild(msg);
+    const row = el("div", "row2"), chk = el("button", "primary", "Vérifier"), sol = el("button", "secondary", "Voir les réponses");
+    chk.style.marginTop = sol.style.marginTop = "12px"; row.appendChild(chk); row.appendChild(sol); s.appendChild(row);
+    const nx = el("button", "secondary", "Autre tableau"); nx.onclick = () => runTable((idx + 1) % TABLES.length); s.appendChild(nx);
+    chk.onclick = () => {
+      let ok = 0;
+      blanks.forEach(b => { const g = b.cell.a.test(norm(b.inp.value)); b.inp.classList.toggle("good", g); b.inp.classList.toggle("bad", !g); if (g) ok++; });
+      msg.textContent = `${ok} / ${blanks.length} cases justes` + (ok === blanks.length ? " 🎉" : " — corrige les cases rouges ou affiche les réponses.");
+    };
+    sol.onclick = () => blanks.forEach(b => { if (!b.cell.a.test(norm(b.inp.value))) { b.inp.value = b.cell.show; b.inp.classList.add("bad"); b.inp.classList.remove("good"); } });
+  }
+
+  /* ================= MODE 5 : REMETTRE DANS L'ORDRE ================= */
+  const ORDERS = [
+    { t: "Les 7 couches OSI, de la 7 à la 1", items: ["Application", "Présentation", "Session", "Transport", "Réseau", "Liaison de données", "Physique"] },
+    { t: "Encapsulation d'un e-mail, de la donnée au média", items: ["Data", "Segment (header transport)", "Paquet (header réseau)", "Trame (header + trailer)", "Bits sur le média"] },
+    { t: "Le processus DHCP (DORA)", items: ["Discover", "Offer", "Request", "Acknowledge"] },
+    { t: "Le processus de communication", items: ["Créer la donnée utile", "Segmenter et encapsuler", "Transporter", "Décapsuler et réassembler", "Envoyer à l'application concernée"] },
+    { t: "Les étapes pour adresser un réseau", items: ["Hiérarchisation", "Dimensionnement", "Adressage"] },
+    { t: "Hiérarchie de l'Internet, du cœur vers le client", items: ["Tiers 1 (backbone)", "Tiers 2", "Tiers 3", "Client final"] }
+  ];
+
+  function runOrder(idx) {
+    const o = ORDERS[idx], s = stage("Remettre dans l'ordre", `${idx + 1} / ${ORDERS.length}`);
+    s.appendChild(el("h2", "", o.t));
+    s.appendChild(el("p", "muted", "Clique sur les éléments dans le bon ordre. Clique sur un élément placé pour le retirer."));
+    let pool = shuffle(o.items), ans = [], checked = false;
+    const ol = el("ol", "answer"), chips = el("div", "chips"), msg = el("p", "verdict");
+    const chk = el("button", "primary", "Vérifier"); chk.disabled = true;
+    s.appendChild(ol); s.appendChild(chips); s.appendChild(msg); s.appendChild(chk);
+    const nx = el("button", "secondary", "Autre exercice"); nx.onclick = () => runOrder((idx + 1) % ORDERS.length); s.appendChild(nx);
+    const draw = () => {
+      ol.innerHTML = ""; chips.innerHTML = "";
+      ans.forEach((it, k) => { const li = el("li"), b = el("button", "", it); b.type = "button"; if (checked) b.classList.add(it === o.items[k] ? "good" : "bad"); b.onclick = () => { if (checked) return; ans.splice(k, 1); pool.push(it); draw(); }; li.appendChild(b); ol.appendChild(li); });
+      pool.forEach(it => { const b = el("button", "chip", it); b.type = "button"; b.onclick = () => { if (checked) return; pool.splice(pool.indexOf(it), 1); ans.push(it); draw(); }; chips.appendChild(b); });
+      chk.disabled = pool.length > 0 || checked;
+    };
+    chk.onclick = () => {
+      checked = true;
+      const ok = ans.every((it, k) => it === o.items[k]);
+      msg.textContent = ok ? "✔ Parfait 🎉" : "✘ Pas tout à fait. Bon ordre : " + o.items.join(" → ");
+      draw();
+    };
+    draw();
+  }
+
+  /* ================= MODE 6 : JEU DES COUCHES (visuel) ================= */
+  const GAME_COLS = {
+    osi: { title: "Modèle OSI", blocks: ["Application", "Présentation", "Session", "Transport", "Réseau", "Liaison de données", "Physique"].map((n, i) => ({ label: n, hi: 7 - i, lo: 7 - i })) },
+    tcp: { title: "TCP/IP", blocks: [["Application", 7, 5], ["Transport", 4, 4], ["Internet", 3, 3], ["Network Access", 2, 1]].map(([n, hi, lo]) => ({ label: n, hi, lo })) },
+    pdu: { title: "PDU", blocks: [["Data", 7, 5], ["Segment", 4, 4], ["Paquet", 3, 3], ["Trame", 2, 2], ["Bits", 1, 1]].map(([n, hi, lo]) => ({ label: n, hi, lo })) }
+  };
+  const LEVELS = [
+    { t: "Niveau 1 · Empile les 7 couches OSI", cols: ["osi"], given: [] },
+    { t: "Niveau 2 · Aligne les couches TCP/IP sur le modèle OSI", cols: ["osi", "tcp"], given: ["osi"] },
+    { t: "Niveau 3 · Reconstruis tout : OSI, TCP/IP et PDU", cols: ["osi", "tcp", "pdu"], given: [] }
+  ];
+
+  function runGame(lv) {
+    const L = LEVELS[lv], s = stage("Jeu des couches", `Niveau ${lv + 1} / ${LEVELS.length}`);
+    s.appendChild(el("h2", "", L.t));
+    s.appendChild(el("p", "muted", "Glisse chaque étiquette dans la bonne case (ou clique l'étiquette, puis la case). Clique une case remplie pour la vider. Les numéros à gauche sont les couches OSI."));
+    const blocks = [];
+    L.cols.forEach((c, ci) => GAME_COLS[c].blocks.forEach(b => blocks.push({ key: c + ":" + b.label, col: c, ci, label: b.label, hi: b.hi, lo: b.lo, locked: L.given.includes(c) })));
+    const chips = blocks.filter(b => !b.locked).map(b => ({ id: b.key, label: b.label, ci: b.ci }));
+    const byId = {}; blocks.forEach(b => { byId[b.key] = b; });
+    const placed = {}; blocks.forEach(b => { if (b.locked) placed[b.key] = b.key; });
+    const order = shuffle(chips);
+    let sel = null, checked = false;
+
+    const grid = el("div", "stack"); grid.style.gridTemplateColumns = `28px repeat(${L.cols.length}, 1fr)`;
+    const poolBox = el("div", "chips"), msg = el("p", "verdict");
+    s.appendChild(grid); s.appendChild(el("p", "muted", "Étiquettes à placer :")); s.appendChild(poolBox); s.appendChild(msg);
+
+    const tryPlace = (chipId, b) => {
+      const chip = chips.find(c => c.id === chipId);
+      if (!chip || b.locked) return false;
+      if (chip.ci !== b.ci) return false;
+      Object.keys(placed).forEach(k => { if (placed[k] === chipId) delete placed[k]; });
+      placed[b.key] = chipId; sel = null; checked = false; msg.textContent = ""; draw();
+      return true;
+    };
+    const draw = () => {
+      grid.innerHTML = "";
+      const put = (node, col, r0, r1) => { node.style.gridColumn = String(col); node.style.gridRow = r1 ? `${r0} / ${r1}` : String(r0); grid.appendChild(node); return node; };
+      put(el("div", "stack-h", ""), 1, 1);
+      L.cols.forEach((c, ci) => put(el("div", "stack-h col" + ci, GAME_COLS[c].title), ci + 2, 1));
+      for (let n = 7; n >= 1; n--) put(el("div", "stack-n", String(n)), 1, 9 - n);
+      blocks.forEach(b => {
+        const cid = placed[b.key];
+        const d = el("button", "slot col" + b.ci + (cid ? " filled" : "") + (b.locked ? " locked" : ""), cid ? byId[cid].label : "?");
+        d.type = "button";
+        if (checked && !b.locked) d.classList.add(cid === b.key ? "good" : "bad");
+        d.onclick = () => {
+          if (b.locked) return;
+          if (sel) { if (!tryPlace(sel, b)) { d.classList.add("shake"); setTimeout(() => d.classList.remove("shake"), 320); } }
+          else if (cid) { delete placed[b.key]; checked = false; msg.textContent = ""; draw(); }
+        };
+        d.ondragover = e => { if (!b.locked) e.preventDefault(); };
+        d.ondrop = e => { e.preventDefault(); const id = e.dataTransfer.getData("text/plain"); if (id && !tryPlace(id, b)) { d.classList.add("shake"); setTimeout(() => d.classList.remove("shake"), 320); } };
+        put(d, b.ci + 2, 9 - b.hi, 10 - b.lo);
+      });
+      poolBox.innerHTML = "";
+      const used = new Set(Object.values(placed));
+      order.filter(c => !used.has(c.id)).forEach(c => {
+        const b = el("button", "gchip col" + c.ci, c.label); b.type = "button"; b.draggable = true;
+        if (sel === c.id) b.classList.add("sel");
+        b.onclick = () => { sel = sel === c.id ? null : c.id; draw(); };
+        b.ondragstart = e => { e.dataTransfer.setData("text/plain", c.id); sel = null; };
+        poolBox.appendChild(b);
+      });
+      if (!poolBox.children.length) poolBox.appendChild(el("span", "muted", "Toutes les étiquettes sont placées : clique sur Vérifier."));
+    };
+
+    const row = el("div", "row2"), chk = el("button", "primary", "Vérifier"), sol = el("button", "secondary", "Voir la solution");
+    chk.style.marginTop = sol.style.marginTop = "12px"; row.appendChild(chk); row.appendChild(sol); s.appendChild(row);
+    const nx = el("button", "secondary", lv === LEVELS.length - 1 ? "Recommencer au niveau 1" : "Niveau suivant →"); nx.onclick = () => runGame((lv + 1) % LEVELS.length); s.appendChild(nx);
+    chk.onclick = () => {
+      const free = blocks.filter(b => !b.locked), ok = free.filter(b => placed[b.key] === b.key).length;
+      checked = true; draw();
+      msg.textContent = ok === free.length ? "✔ Parfait, tout est bien placé 🎉" : `${ok} / ${free.length} bien placées — corrige les cases rouges.`;
+    };
+    sol.onclick = () => { blocks.forEach(b => { placed[b.key] = b.key; }); checked = true; draw(); msg.textContent = "Voilà la solution. Refais le niveau pour la mémoriser !"; };
+    draw();
+  }
+
+  /* ---------- Menu ---------- */
+  const MODES = [
+    ["🃏 Flashcards espacées", "Cartes dues + nouvelles. Les ratées reviennent, les réussies s'espacent (1, 3, 7, 14, 30 jours).", runFlash],
+    ["✍️ QCM à rappel libre", "Tu réponds de tête d'abord, les 4 choix n'apparaissent qu'après.", runRecall],
+    ["🧮 Calculs IP", "Adresse réseau, broadcast, hôtes, masques, préfixe : généré au hasard, à l'infini.", () => runCalc()],
+    ["📋 Tableaux à compléter", "OSI/TCP-IP/PDU, TCP vs UDP, ports, adresses… à reconstruire de mémoire.", () => runTable(rnd(0, TABLES.length - 1))],
+    ["🔀 Remettre dans l'ordre", "Couches OSI, encapsulation, DORA, processus de communication.", () => runOrder(rnd(0, ORDERS.length - 1))],
+    ["🧱 Jeu des couches", "Empile visuellement OSI, aligne TCP/IP en face et ajoute les PDU (3 niveaux, glisser-déposer).", () => runGame(0)]
+  ];
+  MODES.forEach(([t, d, fn]) => {
+    const b = el("button", "mode"); b.type = "button";
+    b.appendChild(el("b", "", t)); b.appendChild(el("span", "", d));
+    b.onclick = fn; $("modes").appendChild(b);
+  });
+
+  function renderMenu() {
+    const n = me(), c = n ? (L[n] || {}) : {}, now = Date.now();
+    const due = bank.filter(q => c[q.id] && c[q.id].due <= now).length;
+    const fresh = bank.filter(q => !c[q.id]).length;
+    const master = bank.filter(q => c[q.id] && c[q.id].b >= 4).length;
+    const box = $("lstats"); box.innerHTML = "";
+    [[due, "À revoir aujourd'hui"], [fresh, "Jamais vues"], [master + " / " + bank.length, "Bien maîtrisées"]].forEach(([v, l]) => {
+      const s = el("div", "stat"); s.appendChild(el("div", "v", String(v))); s.appendChild(el("div", "l", l)); box.appendChild(s);
+    });
+    $("lhelp").textContent = n ? "Conseil : 15 à 20 minutes par jour battent 3 heures la veille de l'examen." : "Entre ton prénom pour suivre ta progression (flashcards et QCM à rappel libre).";
+  }
+  $("name").oninput = renderMenu;
+  $("resetL").onclick = () => { const n = me(); if (n && confirm("Réinitialiser la progression flashcards de " + $("name").value.trim() + " ?")) { delete L[n]; saveL(); renderMenu(); } };
+
+  try { $("name").value = localStorage.getItem(NKEY) || ""; } catch (e) {}
+  renderMenu();
+})();
+</script>
+</body>
+</html>
