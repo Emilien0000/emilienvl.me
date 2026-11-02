@@ -7,6 +7,12 @@ const QUESTIONS = [
   ["Introduction","Que signifie « tolérance aux fautes » dans un réseau ?","Si un routeur tombe en panne, la donnée prend un autre chemin","Le réseau corrige automatiquement les fautes de frappe","Le réseau bloque tout le trafic en cas de panne","Le réseau chiffre les données en cas d'erreur","Cahier - Introduction", 2],
   ["Introduction","Quels sont les facteurs externes qui affectent la communication ?","La qualité du chemin, le nombre de messages simultanés, le nombre de changements de forme du message","La taille, la complexité et l'importance du message","Le coût, l'environnement, les équipements et la distance","Les règles, le support, le message et les équipements","Cahier - Introduction", 2],
   ["Introduction","Parmi ces choix, lequel est un facteur interne affectant la communication réseau ?","La taille du message","La qualité du chemin","Le nombre de messages transmis simultanément","Le nombre de fois où le message change de forme","Cahier - Introduction", 2],
+  ["Introduction","Quel pilier du réseau consiste à prioriser certains flux, comme le streaming ?","QoS","Tolérance aux fautes","Sécurité","Scalabilité","Cahier - Résumé",4],
+  ["Introduction","Quel pilier garantit que le réseau continue de fonctionner si un équipement tombe en panne ?","Tolérance aux fautes","QoS","Scalabilité","Sécurité","Cahier - Résumé",4],
+  ["Introduction","Quel pilier permet au réseau de grandir (plus d'utilisateurs, plus d'équipements) sans perdre en performance ?","Scalabilité","QoS","Sécurité","Tolérance aux fautes","Cahier - Résumé",4],
+  ["Introduction","Lequel de ces éléments ne fait PAS partie des 4 piliers d'un réseau ?","Le routage","QoS","Sécurité","Scalabilité","Cahier - Résumé",4],
+  ["Introduction","La sécurité physique (badge, armoire verrouillée...) se rattache à quel pilier du réseau ?","Sécurité","QoS","Scalabilité","Tolérance aux fautes","Cahier - Résumé",4],
+  ["Introduction","Quels sont les facteurs internes qui affectent la communication ?","La taille, la complexité et l'importance du message","La qualité du chemin, le nombre de messages simultanés et le nombre de changements de forme","Le coût, l'environnement, les équipements et la distance","Les règles, le support, le message et les équipements","Cahier - Introduction",2],
 
 // ───────── COMMUNICATION & MÉDIAS ─────────
   ["Communication","De quoi a-t-on besoin pour communiquer ?","Un émetteur, un récepteur, des règles (langage, vitesse...) et un support (média)","Un routeur, un switch et un pare-feu","Une adresse IP et une adresse MAC","Un serveur DNS et un serveur DHCP","Cahier - Communication", 2],
@@ -28,11 +34,25 @@ const QUESTIONS = [
   ["Modèles","Quelles sont les couches qui présentent les parallèles clés entre OSI et TCP/IP ?","Transport et Réseau","Application et Physique","Session et Liaison","Présentation et Transport","Cahier - Résumé", 4],
   ["Modèles","Quels sont les avantages d'utiliser un modèle en couches ?","Aide à la conception, concurrence entre fabricants, langage commun","Réduit la complexité matérielle mais bloque l'innovation","Augmente la bande passante automatiquement","Il n'y a aucun avantage technique","Cahier - Modèle en couches", 2],
   ["Modèles","Comment est défini le modèle TCP/IP ?","Il est ouvert et défini par des RFC","Il est propriétaire et défini par un constructeur","Il est secret et réservé aux FAI","Il est défini par l'IANA uniquement","Cahier - Modèle en couches", 2],
+  ["Modèles","Dans le modèle TCP/IP, quelle couche représente les données à l'utilisateur, avec l'encodage et le contrôle du dialogue ?","Application","Transport","Internet","Network Access","Cahier - Résumé",4],
+  ["Modèles","Quelle couche TCP/IP supporte la communication entre des équipements variés à travers des réseaux variés ?","Transport","Application","Internet","Network Access","Cahier - Résumé",4],
+  ["Modèles","Combien de couches OSI sont regroupées dans la couche Application de TCP/IP ?","3","1","2","4","Cahier - Résumé",4],
+  ["Modèles","Quel est le numéro de la couche Transport dans le modèle OSI ?","4","3","5","2","Cahier - Résumé",4],
+  ["Modèles","Quel est le numéro de la couche Réseau dans le modèle OSI ?","3","4","2","5","Cahier - Résumé",4],
+  ["Modèles","Quelle est la couche numéro 2 du modèle OSI ?","Liaison de données (Data Link)","Physique","Réseau","Session","Cahier - Résumé",4],
+  ["Modèles","Quelle est la couche numéro 1 du modèle OSI ?","Physique","Liaison de données","Réseau","Application","Cahier - Résumé",4],
+  ["Modèles","Quel est l'ordre des couches OSI de la 7 à la 1 ?","Application, Présentation, Session, Transport, Réseau, Liaison de données, Physique","Application, Session, Présentation, Transport, Réseau, Liaison de données, Physique","Application, Présentation, Session, Réseau, Transport, Liaison de données, Physique","Physique, Liaison de données, Réseau, Transport, Session, Présentation, Application","Cahier - Résumé",4],
+  ["Modèles","À quelle couche TCP/IP appartient la couche OSI Présentation ?","Application","Transport","Internet","Network Access","Cahier - Résumé",4],
+  ["Modèles","À quelle couche TCP/IP appartient la couche OSI Session ?","Application","Transport","Internet","Network Access","Cahier - Résumé",4],
+  ["Modèles","Quelle couche OSI correspond à la couche Transport de TCP/IP ?","Transport (couche 4)","Réseau (couche 3)","Session (couche 5)","Liaison de données (couche 2)","Cahier - Résumé",4],
 
 // ───────── SÉCURITÉ PHYSIQUE ─────────
   ["Sécurité","Quelle mesure relève de la sécurité physique d'un réseau ?","Le contrôle d'accès (badge, vidéosurveillance)","Le chiffrement des mots de passe","L'installation d'un antivirus","La mise à jour du système d'exploitation","Cahier - Résumé", 4],
   ["Sécurité","Quelles protections matérielles sont citées pour la sécurité physique ?","Armoire verrouillée, salle serveurs dédiée, protection contre les sinistres (onduleur)","Pare-feu logiciel, antivirus, VPN","Mots de passe forts et double authentification","Sauvegardes dans le cloud","Cahier - Résumé", 4],
   ["Sécurité","À quoi sert un onduleur dans le cadre de la sécurité physique ?","À protéger les équipements contre les sinistres (coupures de courant...)","À filtrer les paquets entrants","À attribuer des adresses IP","À chiffrer les communications","Cahier - Résumé", 4],
+  ["Sécurité","Lequel de ces éléments ne relève PAS de la sécurité physique ?","Un antivirus","Une armoire verrouillée","Une salle serveurs dédiée","La vidéosurveillance","Cahier - Résumé",4],
+  ["Sécurité","Pourquoi place-t-on les serveurs dans une salle dédiée et des armoires verrouillées ?","Pour limiter l'accès physique aux équipements","Pour augmenter le débit du réseau","Pour attribuer automatiquement des adresses IP","Pour traduire les adresses privées en publiques","Cahier - Résumé",4],
+  ["Sécurité","Quelles sont les mesures de sécurité physique citées dans le résumé ?","Contrôle d'accès (badge, vidéosurveillance), armoire verrouillée, protection contre les sinistres (onduleur...), salle serveurs dédiée","Pare-feu, antivirus, chiffrement, VPN","Mots de passe, DHCP, DNS, NAT","Routage, QoS, VLSM, segmentation","Cahier - Résumé",4],
 
 // ───────── DÉFINITIONS ─────────
   ["Définitions","Qu'est-ce qu'un média (support) de communication ?","Le chemin que prend la donnée","L'adresse d'un équipement","Un protocole de routage","Le format d'un message","Cahier - Définitions", 2],
@@ -50,6 +70,9 @@ const QUESTIONS = [
   ["Équipements","Quel est le rôle d'un équipement final (PC, imprimante...) dans un réseau ?","Servir d'interface entre l'humain et le réseau","Régénérer les signaux électriques","Appliquer la qualité de service (QoS) et filtrer","Transporter les paquets IP","Cahier - Communiquer sur un réseau", 2],
   ["Équipements","Quel est le rôle d'un équipement intermédiaire (Hub, Switch...) ?","Régénérer les signaux, appliquer la QoS et filtrer","Servir d'interface avec l'humain","Générer la donnée utile","Afficher les pages web","Cahier - Communiquer sur un réseau", 2],
   ["Équipements","Quel équipement relie plusieurs réseaux entre eux ?","Le routeur","Le hub","L'imprimante","Le câble UTP","Cahier - Routage", 2],
+  ["Équipements","Quels sont des exemples d'équipements finaux ?","PC, imprimante...","Hub, switch","Câble cuivre, fibre optique","Serveur DNS, serveur DHCP","Cahier - Communiquer sur un réseau",2],
+  ["Équipements","Quels sont des exemples d'équipements intermédiaires ?","Hub, switch","PC, imprimante","Navigateur, client mail","Câble cuivre, fibre optique","Cahier - Communiquer sur un réseau",2],
+  ["Équipements","Quel équipement est représenté par un mur de briques dans les schémas du cahier ?","Le pare-feu","Le routeur","Le switch","Le serveur","Cahier - Définitions",2],
 
 // ───────── ADRESSES ─────────
   ["Adresses","À quelle couche correspond l'adresse MAC ?","Couche 2","Couche 3","Couche 4","Couche 1","Cahier - Modèle en couches", 2],
@@ -72,6 +95,12 @@ const QUESTIONS = [
   ["Encapsulation","Que fait l'hôte de destination lors de la décapsulation ?","Il vérifie l'adresse et remonte le PDU","Il ajoute de nouveaux headers","Il choisit le prochain routeur","Il supprime la donnée utile","Cahier - Couche 3", 2],
   ["Encapsulation","Le routage est assuré par les routeurs : que devient le PDU pendant ce transfert ?","Il reste intact","Il est décapsulé jusqu'à la couche 7","Il est converti en bits puis supprimé","Il est compressé","Cahier - Couche 3", 2],
   ["Encapsulation","Quels sont les 4 processus fondamentaux de la couche Réseau ?","Adressage, Encapsulation, Routage, Décapsulation","Segmentation, Transmission, Réception, Affichage","Discover, Offer, Request, Acknowledge","Codage, Compression, Chiffrement, Routage","Cahier - Couche 3", 3],
+  ["Encapsulation","Que devient la donnée (DATA) au début de l'encapsulation, avant l'ajout des headers ?","Elle est segmentée en plusieurs morceaux","Elle est chiffrée","Elle est convertie en adresse MAC","Elle est envoyée telle quelle en un seul bloc","Cahier - Encapsulation et décapsulation",3],
+  ["Encapsulation","Qu'ajoute la couche 2 en plus du header, à la fin de la trame ?","Un trailer (fin de trame)","Un header de transport","Une adresse IP source","Un numéro de port","Cahier - Encapsulation et décapsulation",3],
+  ["Encapsulation","Quel est l'ordre de l'encapsulation d'un e-mail (Data) ?","Data → Transport header (segment) → Network header (paquet) → Frame header + trailer (trame) → bits","Data → Frame header → Network header → Transport header → bits","Data → Network header → Transport header → Frame → bits","Bits → Trame → Paquet → Segment → Data","Cahier - Encapsulation",3],
+  ["Encapsulation","Sous quelle forme la trame est-elle finalement placée sur le média physique ?","En bits","En paquets","En segments","En adresses MAC","Cahier - Encapsulation",3],
+  ["Encapsulation","Que fait-on à l'étape 2 du processus de communication ?","On segmente et on encapsule la donnée (on rajoute des infos)","On crée la donnée utile","On décapsule et on réassemble","On envoie la donnée à l'application concernée","Cahier - Processus de communication",3],
+  ["Encapsulation","Quelle étape du processus de communication suit le transport ?","La réception","La création de la donnée utile","La segmentation","L'envoi à l'application concernée","Cahier - Processus de communication",3],
 
 // ───────── COUCHE 7 - APPLICATION ─────────
   ["Application","Quel est le rôle de la couche Application ?","Faire l'interface avec les applications utilisateurs","Router les paquets entre réseaux","Transmettre des bits bruts","Encapsuler les paquets en trames","Cahier - Couche 7", 2],
@@ -94,6 +123,14 @@ const QUESTIONS = [
   ["Application","Quels ports utilise le protocole FTP ?","20 et 21","25 et 110","80 et 443","53 et 67","Cahier - Ports connus", 3],
   ["Application","Quel est le port du DNS ?","53","80","25","110","Cahier - Couche 4", 3],
   ["Application","Combien de ports un serveur peut-il écouter ?","Plusieurs ports","Un seul port","Aucun port, il ne fait qu'émettre","Deux ports uniquement : 80 et 25","Cahier - Couche 7", 2],
+  ["Application","Quels services réseau relèvent de la couche Application ?","Web, mail, transfert de fichiers","Routage, adressage, passerelle","Câblage, signaux, connecteurs","Segmentation, fiabilité, contrôle de flux","Cahier - Couche 7",2],
+  ["Application","Quel protocole utilise par défaut le port 80 ?","HTTP","SMTP","FTP","DNS","Cahier - Couche 7",3],
+  ["Application","Quel protocole utilise par défaut le port 25 ?","SMTP","HTTP","POP","DNS","Cahier - Couche 7",3],
+  ["Application","Quel protocole utilise par défaut le port 110 ?","POP","SMTP","FTP","Telnet","Cahier - Couche 7",3],
+  ["Application","Quel protocole utilise par défaut les ports 20 et 21 ?","FTP","HTTP","POP","SMTP","Cahier - Couche 7",3],
+  ["Application","Quel protocole utilise par défaut le port 53 ?","DNS","HTTP","FTP","POP","Cahier - Couche 4",3],
+  ["Application","Dans le DHCP, quel message correspond à la réponse « Oui » du serveur au client ?","Offer","Discover","Request","Acknowledge","Cahier - Couche 7",3],
+  ["Application","Dans le DHCP, quel message vient juste après l'Offer ?","Request","Discover","Acknowledge","Offer","Cahier - Couche 7",3],
 
 // ───────── COUCHE 4 - TRANSPORT ─────────
   ["Transport","Quel est le rôle de la couche Transport ?","Segmentation, fiabilité, contrôle du flux","Acheminement des paquets entre réseaux","Transmission de bits bruts","Interface avec les applications","Cahier - Couche 4", 2],
@@ -112,6 +149,9 @@ const QUESTIONS = [
   ["Transport","À quoi correspond le « contrôle de flux » ?","À la régulation des débits","À la retransmission des données perdues","À la numérotation des segments","À l'établissement d'une session","Cahier - Couche 4", 2],
   ["Transport","Que permet le multiplexage des connexions ?","Gérer plusieurs conversations simultanées grâce aux numéros de port","Découper un réseau en sous-réseaux","Traduire les adresses privées","Attribuer des adresses IP","Cahier - Couche 4", 2],
   ["Transport","Quel organisme attribue les numéros de ports ?","L'IANA","L'IEEE","L'IETF","L'ARCEP","Cahier - Couche 4", 3],
+  ["Transport","Quelle est la taille de l'en-tête UDP ?","8 octets","20 octets","4 octets","32 octets","Cahier - Couche 4",3],
+  ["Transport","Quelle est la taille de l'en-tête TCP ?","20 octets","8 octets","4 octets","64 octets","Cahier - Couche 4",3],
+  ["Transport","Quelle caractéristique de TCP permet de renvoyer une donnée perdue ?","La retransmission","Le multiplexage","La fragmentation","Le routage","Cahier - TCP vs UDP",3],
 
 // ───────── COUCHE 3 - RÉSEAU ─────────
   ["Réseau","Quel est le rôle de la couche Réseau ?","L'acheminement des paquets entre réseaux","La segmentation et la fiabilité","L'interface avec les applications","La transmission des bits bruts","Cahier - Couche 3", 2],
@@ -130,6 +170,9 @@ const QUESTIONS = [
   ["Réseau","Dans l'architecture de l'Internet, qu'est-ce qu'un réseau de Tiers 1 ?","Un fournisseur connecté directement au backbone (global et rapide)","Un client final","Un fournisseur qui achète de la bande passante au Tiers 2","Un réseau local (LAN) d'entreprise","Cahier - Tiers", 2],
   ["Réseau","Chez qui un fournisseur de Tiers 2 achète-t-il sa connectivité ?","Chez un Tiers 1","Chez un Tiers 3","Il ne l'achète pas, il la produit","Chez un client final","Cahier - Tiers", 2],
   ["Réseau","Chez qui un fournisseur de Tiers 3 achète-t-il sa connectivité ?","Chez un Tiers 2","Chez un Tiers 1 uniquement","Chez un autre Tiers 3","Chez l'IANA","Cahier - Tiers", 2],
+  ["Réseau","Quelles sont les deux grandes catégories d'adresses IP ?","Publiques et privées","Locales et distantes","Unicast et multicast","IPv4 et MAC","Cahier - Couche 3",2],
+  ["Réseau","Quel est l'effet de la segmentation sur le broadcast ?","Moins de trafic de broadcast","Plus de trafic de broadcast","Aucun effet","Le broadcast devient du unicast","Cahier - Couche 3",2],
+  ["Réseau","Quelle est la première étape pour adresser un réseau ?","La hiérarchisation","Le dimensionnement","L'adressage","Le routage","Cahier - Couche 3",2],
 
 // ───────── ROUTAGE ─────────
   ["Routage","Que fait-on si la destination n'est pas dans mon réseau local ?","J'envoie le paquet au routeur","J'envoie le paquet à tous les hôtes","J'abandonne le paquet immédiatement","J'envoie le paquet au serveur DNS","Cahier - Routage", 3],
@@ -155,10 +198,44 @@ const QUESTIONS = [
   ["Liaison","De quoi est composée une trame ?","Headers, data, fin de trame","Segment, port, adresse IP","Bits, signaux, connecteurs","Next-hop, metric, destination","Cahier - Couche 2", 2],
   ["Liaison","Que représente une topologie physique ?","Tous les équipements du réseau","Uniquement certains équipements, sans les clients","Les adresses IP et masques de chaque hôte","Les protocoles utilisés par couche","Cahier - Couche 2", 2],
   ["Liaison","Que représente une topologie logique ?","Uniquement certains équipements (pas les clients), avec adresses IP et masque","Tous les équipements physiques du réseau","Le câblage détaillé des salles","La liste des ports ouverts","Cahier - Couche 2", 2],
+  ["Liaison","Quels sont les 2 services de la couche Liaison de données ?","Accéder au support et contrôler le placement des données","Segmenter et réassembler les données","Adresser en IP et router","Coder et chiffrer les données","Cahier - Couche 2",2],
+  ["Liaison","Que fait la méthode de contrôle d'accès au support ?","Elle met la trame sur le support","Elle choisit l'adresse IP de destination","Elle segmente les données","Elle traduit les noms de domaine","Cahier - Couche 2",2],
+  ["Liaison","Quels modes de duplex le cuivre supporte-t-il ?","Half-duplex et full-duplex","Uniquement half-duplex","Uniquement full-duplex","Aucun des deux","Cahier - Couche 2",2],
+  ["Liaison","Comment circulent les données dans une liaison point à point en half-duplex ?","Dans un seul sens à la fois","Dans les deux sens simultanément","Uniquement en broadcast","Uniquement vers un groupe","Cahier - Couche 2",2],
 
 // ───────── COUCHE 1 - PHYSIQUE ─────────
   ["Physique","Quel est le rôle de la couche Physique ?","Transmettre des bits bruts sur les éléments physiques","Encapsuler les paquets en trames","Acheminer les paquets entre réseaux","Segmenter les données","Cahier - Couche 1", 2],
   ["Physique","Quels sont les éléments clés de la couche Physique ?","Signaux électriques, câblage, connecteurs, normes, encodage et synchronisation des bits","Adresse MAC, trames, CSMA/CD","Adresse IP, routage, MTU","Ports, TCP, UDP","Cahier - Couche 1", 2],
   ["Physique","Quels types de câblage et supports sont cités pour la couche Physique ?","Cuivre (UTP/STP), fibre optique, sans fil","Câble coaxial uniquement","Bluetooth et USB","Satellite uniquement","Cahier - Couche 1", 2],
-  ["Physique","Quels organismes de normalisation sont cités pour la couche Physique ?","IEEE, ISO, ITU","IANA, ICANN, W3C","ARCEP, CNIL, ANSSI","IETF, IANA, RFC","Cahier - Couche 1", 2]
+  ["Physique","Quels organismes de normalisation sont cités pour la couche Physique ?","IEEE, ISO, ITU","IANA, ICANN, W3C","ARCEP, CNIL, ANSSI","IETF, IANA, RFC","Cahier - Couche 1", 2],
+
+// ───────── QUESTIONS DU COURS / DIAPO (Priorité 1) ─────────
+  ["Réseau","Combien de bits composent une adresse IPv4 standard ?","32 bits","48 bits","64 bits","128 bits","Cours - Diapo",1],
+  ["Application","Lors de l'étape 'Discover' du protocole DHCP, comment le client envoie-t-il sa requête sur le réseau local ?","En Broadcast (à tous les hôtes)","En Unicast (directement au serveur)","En Multicast (à un groupe spécifique)","En Anycast","Cours - Diapo",1],
+  ["Transport","Dans le protocole TCP, à quoi sert l'accusé de réception (ACK) ?","À confirmer à l'émetteur que les segments ont bien été reçus","À chiffrer la conversation","À attribuer un numéro de port dynamiquement","À fermer la session définitivement","Cours - Diapo",1],
+  ["Encapsulation","Comment s'appelle le processus utilisé par l'hôte récepteur lorsqu'il retire les en-têtes couche par couche ?","La décapsulation","L'encapsulation","La segmentation","Le multiplexage","Cours - Diapo",1],
+  ["Physique","Quelle est l'unité de mesure standard pour exprimer la bande passante ou le débit d'un réseau ?","Le bit par seconde (bps)","L'octet par seconde (o/s)","Le Hertz (Hz)","Le Baud","Cours - Diapo",1],
+  ["Routage","Qu'est-ce qu'une table de routage ?","Une base de données dans le routeur listant les réseaux connus et comment les joindre","Une liste des adresses MAC des équipements locaux","Un registre des noms de domaine (DNS)","La liste des ports ouverts sur un pare-feu","Cours - Diapo",1],
+  ["Modèles","Quel protocole de la couche Internet (modèle TCP/IP) est utilisé pour tester la connectivité, notamment avec la commande 'ping' ?","ICMP","HTTP","ARP","UDP","Cours - Diapo",1],
+  ["Liaison","Quel équipement réseau utilise une table d'adresses MAC pour transférer les trames de manière intelligente ?","Un Switch (commutateur)","Un Hub (concentrateur)","Un Routeur","Un Serveur DHCP","Cours - Diapo",1],
+  ["Transport","Quelle est la plage des 'ports bien connus' (Well-Known Ports), comme le port 80 pour HTTP ?","De 0 à 1023","De 1024 à 49151","De 49152 à 65535","De 1 à 100","Cours - Diapo",1],
+  ["Réseau","Selon le cours, le protocole IP est qualifié de \"Best Effort\" et non fiable. Qu'est-ce que cela signifie ?","Il ne garantit pas la réception des paquets et ne gère pas la récupération des erreurs","Il choisit toujours le chemin le plus long","Il nécessite une connexion établie avant l'envoi","Il ne peut être utilisé que sur la fibre optique","Diapo - Slide 109",1],
+  ["Adressage","Dans l'adressage IPv4 historique (classful), quelle est la plage du premier octet pour une adresse de Classe B ?","128 à 191","1 à 127","192 à 223","224 à 239","Diapo - Slide 175",1],
+  ["Adressage","Quel est le masque de sous-réseau par défaut d'une adresse IPv4 de Classe C ?","255.255.255.0","255.0.0.0","255.255.0.0","255.255.255.255","Diapo - Slide 175",1],
+  ["Physique","Comment les signaux sont-ils représentés sur un support en fibre optique à la couche Physique ?","Par des impulsions lumineuses (patterns of light)","Par des impulsions électriques","Par des transmissions radio","Par des ondes sonores","Diapo - Slide 264",1],
+  ["Équipements","Quel est l'avantage principal d'un Switch par rapport à un Hub dans un réseau local (LAN) ?","Il segmente les domaines de collision et dédie de la bande passante à chaque port","Il est beaucoup moins cher à l'achat","Il convertit les adresses privées en adresses publiques","Il diffuse systématiquement les trames sur tous les ports","Diapo - Slides 287-288",1],
+  ["Câblage","Quel type de câble UTP faut-il typiquement utiliser pour connecter directement deux équipements de même type (ex: switch à switch) ?","Un câble croisé (crossover)","Un câble droit (straight-through)","Un câble console","Un câble à fibre optique","Diapo - Slide 303",1],
+  ["Liaison","Quelle est la différence entre topologie physique et logique selon la couche 2 ?","Physique = disposition des câbles, Logique = façon dont le réseau transfère les trames d'un nœud à l'autre","Physique = adresses IP, Logique = adresses MAC","Physique = modèle OSI, Logique = modèle TCP/IP","Il n'y a aucune différence, les deux termes sont synonymes","Diapo - Slide 223",1],
+  ["Liaison","Quel standard de l'IEEE régit les communications sans fil courantes de type Wi-Fi avec le protocole d'accès CSMA/CA ?","802.11","802.3","802.15","802.16","Diapo - Slide 235",1],
+  ["Modèles","À la couche Liaison de Données (Data Link), quel terme est utilisé pour désigner le PDU (Protocol Data Unit) ?","La trame (Frame)","Le paquet (Packet)","Le segment","La donnée (Data)","Diapo - Slide 61",1],
+  ["Réseau","Quelle commande permet de tracer le chemin parcouru par un paquet jusqu'à sa destination ?","tracert (ou traceroute)","ping","ipconfig","nslookup","Diapo - Slide 208",1],
+  ["Liaison","Qu'est-ce qu'un « nœud » (node) dans le contexte de la couche 2 ?","Un équipement réseau connecté à un support de transmission commun (média)","Une adresse IP attribuée à un routeur","Un paquet de données fractionné","Le câble qui relie deux routeurs","Diapo - Slide 210",1],
+  ["Liaison","Quelles sont les deux sous-couches typiques de la couche Liaison de Données (ex: standard IEEE 802) ?","LLC (Logical Link Control) et MAC (Media Access Control)","TCP et UDP","IPv4 et IPv6","CSMA/CD et CSMA/CA","Diapo - Slide 216",1],
+  ["Liaison","Dans la structure d'une trame, à quoi sert le champ FCS (Frame Check Sequence) situé dans le trailer ?","À vérifier si des erreurs se sont produites pendant la transmission","À identifier l'adresse MAC source","À indiquer la priorité du trafic (QoS)","À définir le protocole de couche supérieure (IPv4, IPv6...)","Diapo - Slide 231",1],
+  ["Liaison","Lequel de ces protocoles de couche 2 est spécifiquement utilisé sur les réseaux locaux (LAN) ?","Ethernet (802.3)","PPP (Point-to-Point Protocol)","HDLC","Frame Relay","Diapo - Slide 232",1],
+  ["Physique","Dans un câble en cuivre à paires torsadées non blindées (UTP), pourquoi les fils sont-ils torsadés ?","Pour annuler les interférences électromagnétiques (EMI) externes et la diaphonie (crosstalk)","Pour augmenter la résistance mécanique du câble","Pour réduire le coût de fabrication","Pour permettre le passage d'un courant électrique de forte puissance (PoE)","Diapo - Slide 275",1],
+  ["Physique","Quelle catégorie de câble UTP est couramment utilisée pour les installations FastEthernet (100BASE-TX) ?","Catégorie 5 (Cat5) ou Cat5e","Catégorie 3 (Cat3)","Câble coaxial","Fibre optique monomode","Diapo - Slide 275",1],
+  ["Liaison","Quelle attaque ARP consiste à envoyer de faux messages ARP pour associer l'adresse MAC de l'attaquant à l'adresse IP d'une victime (ex: la passerelle par défaut) ?","ARP Poisoning (ou ARP Spoofing)","Ping of Death","DHCP Snooping","VLAN Hopping","Diapo - Slide 261",1],
+  ["Liaison","Comment peut-on se prémunir contre l'ARP Poisoning ?","En utilisant des tables ARP statiques, l'isolation réseau ou la sécurité des switchs (ex: Dynamic ARP Inspection)","En installant un antivirus sur le serveur web","En désactivant le protocole IPv6","En augmentant la taille du MTU","Diapo - Slide 261",1],
+  ["Physique","Quel composant est souvent situé à la frontière entre le réseau d'un client (DTE) et le réseau étendu du fournisseur d'accès (DCE) sur une liaison série WAN ?","Un CSU/DSU","Un Hub","Un point d'accès Wi-Fi","Un Switch de niveau 2","Diapo - Slide 307",1]
 ];
